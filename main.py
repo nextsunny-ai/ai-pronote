@@ -429,5 +429,9 @@ async def transcribe(
 
 if __name__ == "__main__":
     import uvicorn
-    print("[AI PRONOTE] 서버 시작: http://localhost:8765")
-    uvicorn.run(app, host="127.0.0.1", port=8765, log_level="info")
+    # ★ host=0.0.0.0 = 같은 Wi-Fi 안 = 모바일·iPad에서도 접근 가능
+    # (= 본 IP 확인: 맥 = `ipconfig getifaddr en0` / Win = `ipconfig`)
+    HOST = os.environ.get("PRONOTE_HOST", "0.0.0.0")
+    PORT = int(os.environ.get("PRONOTE_PORT", "8765"))
+    print(f"[AI PRONOTE] 서버 시작: http://localhost:{PORT}  (LAN 접근 가능)")
+    uvicorn.run(app, host=HOST, port=PORT, log_level="info")

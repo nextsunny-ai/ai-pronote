@@ -4,6 +4,36 @@
 
 ---
 
+## ★ V1.1 신기능 (2026-05-14): Drive 자동 처리 path
+
+**모바일·iPad에서 어디서나 사용 가능:**
+
+```
+모바일/iPad = 회의 녹음
+    ↓
+Google Drive → SUNNY_TEAM/AI_PRONOTE/inbox/ 업로드
+    ↓
+맥미니 24/7 워커 (pronote_drive_watcher.py) = 30초 폴링
+    ↓
+받아쓰기 + Claude OAuth 회의록 정리 (= 비용 0)
+    ↓
+결과 = Drive AI_PRONOTE/results/{날짜_시간_원본명}/ 저장
+   ├─ 회의록.md
+   ├─ 받아쓰기_full.txt
+   ├─ 받아쓰기_segments.json
+   └─ 메타.json
+    ↓
+텔레그램 한국어 알림 + Drive 앱에서 결과 확인
+```
+
+**워커 시작 (= 맥미니 1회):**
+```bash
+pm2 start ~/sunny-team-worker/pronote_drive_watcher.py --name pronote-watcher --interpreter python3
+pm2 save
+```
+
+---
+
 ## ★ 설치 (5분, Windows)
 
 ### 빠른 설치 (다른 프로그램처럼)
