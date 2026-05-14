@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.env.local
+uploads/
+results/
+.ai-pronote/
+server.log
+server.err.log
+node_modules/
+*.bak
+.claude-flow/
