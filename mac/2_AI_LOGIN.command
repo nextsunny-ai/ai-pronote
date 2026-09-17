@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 echo "사용할 AI 로그인을 선택하세요."
+echo "AI 연결 없이 바로 시작할 수 있습니다."
+echo "녹음, 영상, 받아쓰기, 필기는 그대로 사용할 수 있습니다."
+echo "AI 회의록, 받아쓰기 정확도 향상, 에이전트 기능이 필요할 때 연결하세요."
 echo "1) Claude   2) ChatGPT/Codex"
 echo "Gemini는 앱 설정의 공식 API(BYOK)로만 연결합니다."
 read -r -p "번호: " choice

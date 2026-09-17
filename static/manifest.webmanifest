@@ -11,14 +11,14 @@
   "lang": "ko",
   "categories": ["productivity", "business", "utilities"],
   "icons": [
-    { "src": "/static/icons/v15-wave-note/full-72.png", "sizes": "72x72", "type": "image/png" },
-    { "src": "/static/icons/v15-wave-note/full-96.png", "sizes": "96x96", "type": "image/png" },
-    { "src": "/static/icons/v15-wave-note/full-128.png", "sizes": "128x128", "type": "image/png" },
-    { "src": "/static/icons/v15-wave-note/full-144.png", "sizes": "144x144", "type": "image/png" },
-    { "src": "/static/icons/v15-wave-note/full-152.png", "sizes": "152x152", "type": "image/png" },
-    { "src": "/static/icons/v15-wave-note/full-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/static/icons/v15-wave-note/full-256.png", "sizes": "256x256", "type": "image/png" },
-    { "src": "/static/icons/v15-wave-note/full-384.png", "sizes": "384x384", "type": "image/png" },
-    { "src": "/static/icons/v15-wave-note/full-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/static/icons/v15-pro-note/full-72.png", "sizes": "72x72", "type": "image/png" },
+    { "src": "/static/icons/v15-pro-note/full-96.png", "sizes": "96x96", "type": "image/png" },
+    { "src": "/static/icons/v15-pro-note/full-128.png", "sizes": "128x128", "type": "image/png" },
+    { "src": "/static/icons/v15-pro-note/full-144.png", "sizes": "144x144", "type": "image/png" },
+    { "src": "/static/icons/v15-pro-note/full-152.png", "sizes": "152x152", "type": "image/png" },
+    { "src": "/static/icons/v15-pro-note/full-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icons/v15-pro-note/full-256.png", "sizes": "256x256", "type": "image/png" },
+    { "src": "/static/icons/v15-pro-note/full-384.png", "sizes": "384x384", "type": "image/png" },
+    { "src": "/static/icons/v15-pro-note/full-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }

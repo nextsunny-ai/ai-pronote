@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>AI PRONOTE — 회의·노트·AI 비서</title>
-<link rel="icon" type="image/png" href="/static/icons/v15-wave-note/full-192.png" />
+<link rel="icon" type="image/png" href="/static/icons/v15-pro-note/full-192.png" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2701,7 +2701,7 @@
   }
 </style>
 <link rel="manifest" href="/static/manifest.webmanifest" />
-<link rel="apple-touch-icon" href="/static/icons/v15-wave-note/full-192.png" />
+<link rel="apple-touch-icon" href="/static/icons/v15-pro-note/full-192.png" />
 <meta name="theme-color" content="#1A1A1A" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -2766,7 +2766,7 @@ if ('serviceWorker' in navigator) {
   <div class="login-split">
     <div class="login-art">
       <div class="login-art-brand">
-        <img class="brand-product-icon" src="/static/icons/v15-wave-note/full-64.png" alt="" />
+        <img class="brand-product-icon" src="/static/icons/v15-pro-note/full-64.png" alt="" />
         AI PRONOTE
       </div>
       <div class="login-art-content">
@@ -2820,7 +2820,7 @@ if ('serviceWorker' in navigator) {
 
   <aside class="sidebar">
     <div class="brand">
-      <img class="brand-logo brand-product-icon" src="/static/icons/v15-wave-note/full-64.png" alt="" />
+      <img class="brand-logo brand-product-icon" src="/static/icons/v15-pro-note/full-64.png" alt="" />
       <div class="brand-text">
         AI PRONOTE
         <small>프로노트</small>
@@ -4838,10 +4838,10 @@ if ('serviceWorker' in navigator) {
     },
     engine: {
       eyebrow: '엔진',
-      title: 'Whisper · Claude (BYOK)',
+      title: 'Whisper · 선택한 AI (BYOK)',
       preview: `<ul style="padding-left:18px; margin:0;">
         <li>받아쓰기: Whisper Large v3 / Turbo / Medium 선택</li>
-        <li>요약·정리: Claude (이 PC에 로그인한 내 계정 사용 — 추가 비용 없음)</li>
+        <li>요약·정리: 연결한 Claude·ChatGPT/Codex·Gemini 중 선택</li>
         <li>100% 로컬 처리 옵션 (외부 전송 X)</li>
         <li>화자 분리 (pyannote-audio) on/off</li>
       </ul>`
@@ -4886,7 +4886,7 @@ if ('serviceWorker' in navigator) {
           <button type="button" class="form-chip experimental-cli-choice" data-provider="gemini_cli" data-policy-blocked="true" aria-disabled="true" aria-describedby="aiProviderHint">Gemini CLI — 앱 연결 안 함</button>
           <button type="button" class="form-chip experimental-cli-choice" data-provider="codex_cli">Codex CLI (실험)</button>
         </div>
-        <div class="form-hint" id="aiProviderHint">이 기기에 로그인된 AI를 선택합니다. 로그인 정보는 앱이 복사하거나 저장하지 않습니다.</div>
+        <div class="form-hint" id="aiProviderHint">AI 연결 없이도 녹음·영상·받아쓰기·필기를 사용할 수 있습니다. AI 회의록·정확도 향상·에이전트 기능이 필요할 때 연결하세요. 로그인 정보는 앱이 복사하거나 저장하지 않습니다.</div>
       </div>
     `;
     // AI 엔진 = 설치·로그인 상태 표시 (미설치·미로그인 = 흐리게 + 안내)
@@ -4968,6 +4968,7 @@ if ('serviceWorker' in navigator) {
       else if (next.ai && !['claude', 'codex', 'claude_cli', 'codex_cli'].includes(next.ai.provider)) delete next.ai;
       saveSettings(next);
       refreshTranscribeDisplay();
+      window.__pronoteAIStatus?.refresh?.();
       closeAdminModal();
       const label = model === 'small' ? '빠르게 (small)' : '표준 (medium)';
       const pLabel = ({claude_cli: 'Claude CLI (실험)', codex_cli: 'Codex CLI (실험)'})[provider] || '공식 API BYOK 설정 유지';
@@ -4988,14 +4989,14 @@ if ('serviceWorker' in navigator) {
     }
   }
   refreshTranscribeDisplay();
-  // 선택된 AI 엔진 = 비서·회의록 호출에서 사용 (디폴트 클로드)
+  // 선택된 AI 엔진 = 비서·회의록 호출에서 사용 (미선택이면 AI 기능을 시작하지 않음)
   window.__pronoteGetAIProvider = function () {
     try {
       const value = loadSettings()?.ai?.provider;
       if (value === 'claude') return 'claude_cli';
       if (value === 'codex') return 'codex_cli';
       if (value === 'claude_cli' || value === 'codex_cli') return value;
-      return value ? 'policy_blocked' : 'claude_cli';
+      return 'policy_blocked';
     } catch (e) { return 'policy_blocked'; }
   };
 
@@ -7863,7 +7864,7 @@ if ('serviceWorker' in navigator) {
       try { window.__pronoteResult?.render?.(); } catch {}
     }
 
-    // ─── 받아쓰기 호출 + Claude 회의록 자동 생성 ─────────────────────
+    // ─── 받아쓰기 호출 + 선택한 AI 제공자의 회의록 자동 생성 ──────────
     // ══════════════════════════════════════════════════════════════
     // 서버 작업 따라가기
     //
@@ -8047,7 +8048,12 @@ if ('serviceWorker' in navigator) {
           }
           // pending · running = 계속 기다린다 (서버가 알아서 다시 시도한다)
           if (s.summary_error_kind === 'auth') {
-            updateMeetingProgress(recId, { progress: 'Claude 로그인이 필요합니다 — 로그인하면 회의록을 자동으로 만듭니다' });
+            const provider = window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'policy_blocked';
+            const providerLabel = ({
+              claude_cli: 'Claude', codex_cli: 'ChatGPT/Codex',
+              openai: 'OpenAI API', gemini: 'Gemini API', anthropic: 'Anthropic API'
+            })[provider] || '선택한 AI';
+            updateMeetingProgress(recId, { progress: `${providerLabel} 연결을 확인하세요 — 연결되면 회의록을 다시 만들 수 있습니다` });
             try { window.__pronoteAIStatus?.refresh?.(); } catch {}
           } else if (s.summary_error_kind) {
             updateMeetingProgress(recId, { progress: `AI 회의록 대기 중 — ${s.summary_error || '잠시 후 다시 시도합니다'}` });
@@ -8086,7 +8092,7 @@ if ('serviceWorker' in navigator) {
         fd.append('auto_summarize', r.scenarioKey ? 'true' : 'false');
         fd.append('scenario', r.scenarioKey || 'meeting');
         fd.append('llm_model', 'haiku');
-        fd.append('provider', (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude_cli'));
+        fd.append('provider', (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'policy_blocked'));
         fd.append('external_consent', String(window.__pronoteExternalConsent?.() || false));
         fd.append('title', r.title || '');
         fd.append('attendees', r.attendees || '');
@@ -8132,7 +8138,7 @@ if ('serviceWorker' in navigator) {
           const q = new URLSearchParams({
             scenario: r.scenarioKey || 'meeting',
             llm_model: 'haiku',
-            provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude_cli'),
+            provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'policy_blocked'),
             external_consent: String(window.__pronoteExternalConsent?.() || false),
           });
           await _getJson('/api/summarize/redo/' + r.jobId + '?' + q.toString(), { method: 'POST' });
@@ -8153,7 +8159,7 @@ if ('serviceWorker' in navigator) {
             transcript: r.transcript,
             scenario: r.scenarioKey || 'meeting',
             model: 'haiku',  // 디폴트 Haiku (빠름·정확). 사용자 선택 추후.
-            provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude_cli'),
+            provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'policy_blocked'),
             title: r.title,
             attendees: r.attendees,
             tag: r.tag,
@@ -9364,7 +9370,14 @@ if ('serviceWorker' in navigator) {
         } else if (!need && b) { b.remove(); }
       });
   }
+  function selectedProvider() {
+    return window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'policy_blocked';
+  }
   function openSetup() {
+    if (selectedProvider() !== 'claude_cli') {
+      window.showToast && window.showToast('설정 · 어드민에서 사용할 AI를 연결하세요');
+      return;
+    }
     if (!modal) build();
     check().then(function (s) {
       if (!s) { window.showToast && window.showToast('서버 연결 실패'); return; }
@@ -9375,11 +9388,21 @@ if ('serviceWorker' in navigator) {
   window.__pronoteAIStatus = {
     getState: function () { return lastState; },
     open: openSetup,
-    refresh: function () { return check().then(function (s) { if (s) applyBadges(s.state); return s; }); },
+    refresh: function () {
+      if (selectedProvider() !== 'claude_cli') {
+        applyBadges(null);
+        return Promise.resolve({ state: 'not_applicable' });
+      }
+      return check().then(function (s) { if (s) applyBadges(s.state); return s; });
+    },
   };
 
-  // 페이지 로드 1.5초 후 = 최초 확인
+  // Claude CLI를 사용자가 명시적으로 선택한 경우에만 최초 상태 확인
   function boot() {
+    if (selectedProvider() !== 'claude_cli') {
+      applyBadges(null);
+      return;
+    }
     check().then(function (s) { if (s) applyBadges(s.state); });
     try {
       if (localStorage.getItem('pronote_claude_override') === '1') return;  // 사용자가 자동 체크 무시 선택
@@ -9600,10 +9623,15 @@ if ('serviceWorker' in navigator) {
   var hist = { live: [], solo: [] };
   function send(input, chat, key, withContext) {
     var msg = (input.value || '').trim(); if (!msg) return;
-    // AI 미로그인 = 에러 대신 안내 + 로그인 연결
+    var provider = window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'policy_blocked';
+    if (provider === 'policy_blocked') {
+      bubble(chat, 'AI 연결 없이도 녹음·영상·받아쓰기·필기를 사용할 수 있어요. AI 회의록·정확도 향상·에이전트 기능을 쓰려면 설정 · 어드민에서 Claude, ChatGPT 또는 Gemini를 연결해 주세요.', false, false);
+      return;
+    }
+    // Claude CLI를 선택한 경우에만 Claude 로그인 상태로 요청을 막는다.
     var ai = window.__pronoteAIStatus;
-    if (ai && ai.getState && ai.getState() && ai.getState() !== 'ready') {
-      bubble(chat, 'AI 비서는 클로드 로그인 후 사용 가능합니다. 로그인 화면을 열었어요 — 한 번만 하면 됩니다. (녹음·받아쓰기는 로그인 없이 계속 쓸 수 있습니다)', false, false);
+    if (provider === 'claude_cli' && ai && ai.getState && ai.getState() && ai.getState() !== 'ready') {
+      bubble(chat, 'AI 연결 없이도 녹음·영상·받아쓰기·필기를 사용할 수 있어요. AI 회의록·정확도 향상·에이전트 기능을 쓰려면 설정에서 Claude, ChatGPT 또는 Gemini를 연결해 주세요.', false, false);
       try { ai.open(); } catch (e) {}
       return;
     }
@@ -9613,7 +9641,7 @@ if ('serviceWorker' in navigator) {
     hist[key].push({ role: 'user', text: msg });
     fetch(API, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ message: msg, context: withContext ? getContext() : '', history: hist[key].slice(-8), name: asstName(), expertise: (window.__pronoteAgentExpertise || ''), provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude_cli'), external_consent: Boolean(window.__pronoteExternalConsent?.()) })
+      body: JSON.stringify({ message: msg, context: withContext ? getContext() : '', history: hist[key].slice(-8), name: asstName(), expertise: (window.__pronoteAgentExpertise || ''), provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'policy_blocked'), external_consent: Boolean(window.__pronoteExternalConsent?.()) })
     }).then(function (res) {
       return res.json().then(function (data) { return { ok: res.ok, data: data }; });
     }).then(function (r) {

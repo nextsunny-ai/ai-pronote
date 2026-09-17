@@ -14,10 +14,12 @@
 - Python 계약·보안·회귀 테스트 79개 통과
 - Chromium E2E 132개 통과: 1440px, 1280px, iPad 834px, 모바일 390px
 - Windows RC31 새 압축 해제 환경에서 의존성 설치 및 핵심 모듈 확인 통과
+- Windows 물리 LGE Camera와 내장 마이크로 앱 녹화 로직을 실행해 영상 WebM 816,849바이트, 별도 MP3 음성 44,137바이트, 3초 회의 기록 생성과 부분 받아쓰기·MP3 변환을 확인
 - ZIP 사용자 데이터·비밀키 파일 검사 0건, Mac 실행 파일 권한 0755 확인
 
 ## 남은 제한
 
 - Mac 패키지는 실제 Mac 장비 실행, 마이크·카메라 권한, 장시간 녹음 검증이 완료되지 않았습니다.
+- Windows 장시간 녹음·절전 복귀 검증은 아직 완료되지 않았습니다.
 - Mac 앱은 Apple Developer ID 코드 서명·공증 전입니다.
 - CLI 로그인은 Claude와 Codex의 실험 기능이며, Gemini는 공식 Gemini API(BYOK) 방식만 지원합니다.
