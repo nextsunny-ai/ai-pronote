@@ -61,6 +61,17 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("...cameraStream.getVideoTracks()", HTML)
         self.assertIn("state.cameraStream?.getTracks().forEach", HTML)
 
+    def test_live_view_opens_only_after_media_recorder_starts(self):
+        start_call = HTML.index("recordingStarted = !!(window.__pronoteRecording")
+        start_result = HTML.index("if (!recordingStarted) return;", start_call)
+        live_view = HTML.index("switchView('live')", start_result)
+        self.assertLess(start_call, start_result)
+        self.assertLess(start_result, live_view)
+        self.assertIn("await window.__pronoteRecording.start('realtime'", HTML)
+        self.assertIn("마이크·카메라 연결 중…", HTML)
+        self.assertNotIn("REC · 00:23:14", HTML)
+        self.assertNotIn("녹음 중 · 00:23:14", HTML)
+
     def test_file_import_uses_one_validated_flow(self):
         self.assertIn('id="libraryUploadBtn"', HTML)
         self.assertIn('id="libraryEmptyUploadBtn"', HTML)

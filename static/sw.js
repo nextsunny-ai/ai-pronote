@@ -1,5 +1,5 @@
 // AI PRONOTE service worker = 정적 자산 캐시 (offline 일부 지원)
-const CACHE_NAME = 'ai-pronote-v15-wave-note-2';
+const CACHE_NAME = 'ai-pronote-v15-wave-note-3';
 const PRECACHE = [
   '/',
   '/static/manifest.webmanifest',
