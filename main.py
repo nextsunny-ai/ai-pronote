@@ -22,7 +22,7 @@ import urllib.request
 import urllib.error
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 # pythonw.exe (콘솔 X) 환경 = sys.stdout/stderr = None → print() 즉사 방지
 # 디버그 = 로그 파일로 redirect (server.log·server.err.log 살리기)
@@ -746,6 +746,7 @@ class SummarizeRequest(BaseModel):
 class TitleRequest(BaseModel):
     transcript: str
     model: str = "haiku"  # 제목은 가벼운 작업 = haiku 디폴트
+    provider: Literal["claude_cli", "codex_cli"] = "claude_cli"
     external_consent: bool = False
 
 
@@ -861,13 +862,14 @@ def get_model(size: str):
     return _model_cache[size]
 
 
-def generate_title(transcript: str, model_alias: str = "haiku") -> str:
+def generate_title(transcript: str, model_alias: str = "haiku",
+                   provider: str = "claude_cli") -> str:
     """받아쓰기 → 회의록 제목 한 줄 (★ V1.3)."""
     excerpt = (transcript or "").strip()[:4000]
     if not excerpt:
         return ""
-    raw = call_claude(
-        TITLE_SYSTEM,
+    raw = call_llm(
+        provider, TITLE_SYSTEM,
         "위 입력 받아쓰기 텍스트를 보고 회의록 제목을 한 줄로 지어라.",
         excerpt, model_alias=model_alias, timeout=120,
     )
@@ -1060,15 +1062,21 @@ def llm_title(req: TitleRequest):
         raise HTTPException(403, "외부 AI 전송 동의가 필요합니다")
     t0 = time.time()
     try:
-        title = generate_title(req.transcript, model_alias=req.model)
+        title = generate_title(req.transcript, model_alias=req.model, provider=req.provider)
     except Exception as e:
         log(f"제목 생성 실패: {e}", "ERROR")
         raise _llm_http_error(e)
     if not title:
         raise HTTPException(500, "제목 생성 결과 비어있음")
+    provider_id = req.provider
+    model_name = req.model if provider_id == "claude_cli" else "configured-default"
+    model_id = (CLAUDE_MODELS.get(req.model) if provider_id == "claude_cli"
+                else "codex-cli-configured-default")
     return {
         "title": title,
-        "model": req.model,
+        "provider": provider_id,
+        "model": model_name,
+        "model_id": model_id,
         "elapsed_sec": round(time.time() - t0, 1),
     }
 
@@ -1088,7 +1096,7 @@ def build_summary(transcript: str, scenario: str = "meeting",
     title_auto = False
     if not title and auto_title:
         try:
-            title = generate_title(transcript, model_alias="haiku")
+            title = generate_title(transcript, model_alias="haiku", provider=provider)
             title_auto = bool(title)
         except Exception as e:
             log(f"자동 제목 생략(오류): {e}", "WARN")
@@ -1113,10 +1121,15 @@ def build_summary(transcript: str, scenario: str = "meeting",
         "system prompt 형식대로 한국어로 정리하라.",
         content, model_alias=model_alias,
     )
+    provider_id = (provider or "").strip().lower()
+    model_name = model_alias if provider_id == "claude_cli" else "configured-default"
+    model_id = (CLAUDE_MODELS.get(model_alias) if provider_id == "claude_cli"
+                else "codex-cli-configured-default" if provider_id == "codex_cli" else None)
     return {
         "scenario": scenario,
-        "model": model_alias,
-        "model_id": CLAUDE_MODELS.get(model_alias),
+        "provider": provider_id,
+        "model": model_name,
+        "model_id": model_id,
         "elapsed_sec": round(time.time() - t0, 1),
         "title": title,
         "title_auto": title_auto,

@@ -2,7 +2,7 @@
 
 ## Supported release
 
-AI PRONOTE RC27 is a private external beta. It is unsigned and not approved for unrestricted public deployment. Security fixes are applied only to the latest published beta release.
+AI PRONOTE RC28 is a private external beta. It is unsigned and not approved for unrestricted public deployment. Security fixes are applied only to the latest published beta release.
 
 ## Reporting a vulnerability
 
