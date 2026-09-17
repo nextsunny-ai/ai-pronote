@@ -5353,13 +5353,12 @@ if ('serviceWorker' in navigator) {
       </button>
     `).join('');
     grid.querySelectorAll('[data-meeting-id]').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const id = btn.dataset.meetingId;
-        localStorage.setItem('ai_pronote.current_view_meeting.v1', id);
-        window.PronoteInk?.switchMeeting?.(id).catch(() => {});
-        if (typeof switchView === 'function') switchView('result');
+        const switched = await window.__pronoteSwitchMyNoteMeeting?.(id);
+        if (!switched) return;
         // 내 노트 카드 = 풀 페이지 노트 모드로 자동 진입
-        setTimeout(() => window.__pronoteShowMyNoteFullPage?.(), 50);
+        if (typeof switchView === 'function') switchView('result-mynote');
       });
     });
   }
@@ -6701,8 +6700,16 @@ if ('serviceWorker' in navigator) {
     }
     showMeetingMode(); // 디폴트
     // 외부 호출
-    window.__pronoteShowMyNoteMode = showMyNoteMode;
-    window.__pronoteShowMyNoteFullPage = () => showMyNoteMode({ back: false, fullPage: true });
+    window.__pronoteShowMyNoteMode = opts => {
+      if (!loadCurrentNote()) return false;
+      showMyNoteMode(opts);
+      return true;
+    };
+    window.__pronoteShowMyNoteFullPage = () => {
+      if (!loadCurrentNote()) return false;
+      showMyNoteMode({ back: false, fullPage: true });
+      return true;
+    };
     window.__pronoteShowMeetingMode = showMeetingMode;
 
     function updateMeta() {
@@ -6725,9 +6732,9 @@ if ('serviceWorker' in navigator) {
     // ── 회의별 노트 로드·저장 ──
     // 현재 보고 있는 회의(current_view_meeting)의 note 필드를 읽고/쓴다.
     // 회의가 없으면(단독 메모 등) = 옛 글로벌 draft 키 사용.
-    function getCurMeetingRef() {
+    function getCurMeetingRef(meetingId) {
       try {
-        const id = localStorage.getItem('ai_pronote.current_view_meeting.v1');
+        const id = arguments.length > 0 ? meetingId : localStorage.getItem('ai_pronote.current_view_meeting.v1');
         if (!id) return null;
         const arr = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
         const m = arr.find(x => x.id === id);
@@ -6743,8 +6750,24 @@ if ('serviceWorker' in navigator) {
       });
       return template.innerHTML;
     }
+    let loadedMeetingId = null;
+    let noteDirty = false;
+    let autoSaveTimer;
+    function currentMeetingId() {
+      return localStorage.getItem('ai_pronote.current_view_meeting.v1') || null;
+    }
     function loadCurrentNote() {
-      const ref = getCurMeetingRef();
+      const nextMeetingId = currentMeetingId();
+      if (noteDirty && loadedMeetingId === nextMeetingId) return true;
+      if (noteDirty && !persistCurrentNote(loadedMeetingId)) {
+        if (loadedMeetingId) localStorage.setItem('ai_pronote.current_view_meeting.v1', loadedMeetingId);
+        else localStorage.removeItem('ai_pronote.current_view_meeting.v1');
+        window.PronoteInk?.switchMeeting?.(loadedMeetingId || 'draft').catch(() => {});
+        showToast('노트를 저장하지 못해 화면 이동을 중단했습니다. 저장 공간을 확인해 주세요.');
+        return false;
+      }
+      clearTimeout(autoSaveTimer);
+      const ref = getCurMeetingRef(nextMeetingId);
       if (ref) {
         content.innerHTML = sanitizeNoteHtml(ref.m.note || '');
       } else {
@@ -6753,22 +6776,73 @@ if ('serviceWorker' in navigator) {
           content.innerHTML = sanitizeNoteHtml(draft || '');
         } catch { content.innerHTML = ''; }
       }
+      loadedMeetingId = nextMeetingId;
+      noteDirty = false;
       updateMeta();
+      return true;
     }
-    function persistCurrentNote() {
+    function persistCurrentNote(meetingId = loadedMeetingId || currentMeetingId()) {
       const html = sanitizeNoteHtml(content.innerHTML);
       if (html !== content.innerHTML) content.innerHTML = html;
-      const ref = getCurMeetingRef();
+      const ref = getCurMeetingRef(meetingId);
       if (ref) {
         ref.m.note = html;
-        try { localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(ref.arr)); return true; } catch { return false; }
+        try {
+          localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(ref.arr));
+          noteDirty = false;
+          return true;
+        } catch { return false; }
       }
-      try { localStorage.setItem(NOTE_DRAFT_KEY, html); return true; } catch { return false; }
+      try {
+        localStorage.setItem(NOTE_DRAFT_KEY, html);
+        noteDirty = false;
+        return true;
+      } catch { return false; }
+    }
+    let noteSwitchInProgress = false;
+    async function switchNoteMeeting(nextMeetingId) {
+      if (noteSwitchInProgress) {
+        showToast('노트를 전환하고 있습니다. 잠시 후 다시 선택해 주세요.');
+        return false;
+      }
+      noteSwitchInProgress = true;
+      const previousMeetingId = currentMeetingId();
+      try {
+        if (noteDirty && !persistCurrentNote(loadedMeetingId)) {
+          showToast('노트를 저장하지 못해 화면 이동을 중단했습니다. 저장 공간을 확인해 주세요.');
+          return false;
+        }
+        clearTimeout(autoSaveTimer);
+        try {
+          if (nextMeetingId) localStorage.setItem('ai_pronote.current_view_meeting.v1', nextMeetingId);
+          else localStorage.removeItem('ai_pronote.current_view_meeting.v1');
+        } catch {
+          showToast('노트를 전환하지 못했습니다. 저장 공간을 확인해 주세요.');
+          return false;
+        }
+        loadCurrentNote();
+        try {
+          await window.PronoteInk?.switchMeeting?.(nextMeetingId || 'draft');
+        } catch {
+          try {
+            if (previousMeetingId) localStorage.setItem('ai_pronote.current_view_meeting.v1', previousMeetingId);
+            else localStorage.removeItem('ai_pronote.current_view_meeting.v1');
+            loadCurrentNote();
+            await window.PronoteInk?.switchMeeting?.(previousMeetingId || 'draft');
+          } catch {}
+          showToast('필기 데이터를 불러오지 못해 화면 이동을 중단했습니다.');
+          return false;
+        }
+        return true;
+      } finally {
+        noteSwitchInProgress = false;
+      }
     }
     // 시작 시 = 현재 회의 노트(없으면 옛 draft) 복원
     loadCurrentNote();
     // 외부 호출 (결과 화면 렌더 시 동기화)
     window.__pronoteNote = { loadCurrent: loadCurrentNote, persist: persistCurrentNote };
+    window.__pronoteSwitchMyNoteMeeting = switchNoteMeeting;
 
     const saveBtn = document.getElementById('mynoteSaveBtn');
     if (saveBtn) {
@@ -6778,10 +6852,11 @@ if ('serviceWorker' in navigator) {
       });
     }
     // 자동 저장 (편집 멈춘 후 1초)
-    let autoSaveTimer;
     content.addEventListener('input', () => {
+      noteDirty = true;
       clearTimeout(autoSaveTimer);
-      autoSaveTimer = setTimeout(persistCurrentNote, 1000);
+      const targetMeetingId = loadedMeetingId;
+      autoSaveTimer = setTimeout(() => persistCurrentNote(targetMeetingId), 1000);
     });
 
     // 다운로드 = .txt
@@ -6899,12 +6974,11 @@ if ('serviceWorker' in navigator) {
         </button>
       `).join('');
       listItems.querySelectorAll('[data-meeting-id]').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
           const id = btn.dataset.meetingId;
-          localStorage.setItem('ai_pronote.current_view_meeting.v1', id);
-          window.PronoteInk?.switchMeeting?.(id).catch(() => {});
+          const switched = await switchNoteMeeting(id);
+          if (!switched) return;
           listMenu.classList.remove('open');
-          loadCurrentNote();
           updateFullpageMeta();
           showToast('노트를 불러왔습니다');
         });

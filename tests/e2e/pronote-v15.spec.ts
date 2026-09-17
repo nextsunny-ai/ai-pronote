@@ -362,6 +362,126 @@ test.describe('필기 저장·복원 계약', () => {
     await seedSyntheticMeeting(page);
   });
 
+  test('필기만 만든 노트는 새로고침 뒤 상세 화면에서 본문까지 다시 열린다', async ({ page }) => {
+    await openApp(page);
+    await page.locator('#homeNoteOnlyCard').click();
+    await page.locator('#standaloneNoteTitleInput').fill('단독 필기 복원 시험');
+    await page.locator('#standaloneNoteContent').fill('새로고침 뒤에도 보여야 하는 비민감 시험 본문입니다.');
+    await page.locator('#standaloneNoteSave').click();
+    await expect(page.locator('#mynotesGrid')).toContainText('단독 필기 복원 시험');
+
+    const saved = await page.evaluate(() => {
+      const meetings = localStorage.getItem('ai_pronote.meetings.v1') || '[]';
+      const note = JSON.parse(meetings).find((item: { title?: string }) => item.title === '단독 필기 복원 시험');
+      return { meetings, noteId: note.id as string };
+    });
+    await page.addInitScript(data => {
+      localStorage.setItem('ai_pronote.meetings.v1', data.meetings);
+      localStorage.setItem('ai_pronote.current_view_meeting.v1', data.noteId);
+    }, saved);
+
+    await page.reload();
+    await openNavView(page, 'result-mynote');
+    await expect(page.locator('#view-result')).toHaveClass(/active/);
+    await expect(page.locator('#mynoteBlockContent')).toContainText('새로고침 뒤에도 보여야 하는 비민감 시험 본문입니다.');
+
+    await page.locator('#mynoteBlockContent').fill('자동저장 1초 전에도 보존되어야 하는 수정 본문입니다.');
+    await openNavView(page, 'home');
+    await openNavView(page, 'result-mynote');
+    await expect(page.locator('#mynoteBlockContent')).toContainText('자동저장 1초 전에도 보존되어야 하는 수정 본문입니다.');
+
+    await page.evaluate(noteB => {
+      const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+      meetings.push(noteB);
+      localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(meetings));
+      localStorage.setItem('ai_pronote.current_view_meeting.v1', noteB.id);
+    }, {
+      id: 'note-b', title: '두 번째 노트', tag: '단독 메모', date: '2026-09-18',
+      note: '<p>두 번째 노트 본문입니다.</p>', standalone: true
+    });
+    await openNavView(page, 'result-mynote');
+    await expect(page.locator('#mynoteBlockContent')).toContainText('두 번째 노트 본문입니다.');
+    const firstNote = await page.evaluate(noteId => {
+      const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+      return meetings.find((item: { id: string }) => item.id === noteId);
+    }, saved.noteId);
+    expect(firstNote.note).toContain('자동저장 1초 전에도 보존되어야 하는 수정 본문입니다.');
+  });
+
+  test('전역 임시 노트에서 회의 노트로 이동해도 두 저장 대상을 섞지 않는다', async ({ page }) => {
+    await openApp(page);
+    await page.evaluate(() => {
+      localStorage.removeItem('ai_pronote.current_view_meeting.v1');
+      localStorage.setItem('ai_pronote.note_draft.v1', '<p>전역 임시 노트</p>');
+    });
+    await openNavView(page, 'result-mynote');
+    await expect(page.locator('#mynoteBlockContent')).toContainText('전역 임시 노트');
+    await page.locator('#mynoteBlockContent').fill('저장 대상이 섞이면 안 되는 임시 노트 수정본');
+    await page.evaluate(() => {
+      const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+      meetings.push({ id: 'note-target-b', title: '대상 B', note: '<p>B 원본</p>', standalone: true });
+      localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(meetings));
+      localStorage.setItem('ai_pronote.current_view_meeting.v1', 'note-target-b');
+      (window as typeof window & { __pronoteShowMyNoteFullPage: () => boolean }).__pronoteShowMyNoteFullPage();
+    });
+    await expect(page.locator('#mynoteBlockContent')).toContainText('B 원본');
+    const values = await page.evaluate(() => ({
+      draft: localStorage.getItem('ai_pronote.note_draft.v1'),
+      meeting: JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]').find((m: { id: string }) => m.id === 'note-target-b')
+    }));
+    expect(values.draft).toContain('임시 노트 수정본');
+    expect(values.meeting.note).toBe('<p>B 원본</p>');
+  });
+
+  test('노트 전환 전 저장 실패 시 입력을 유지하고 화면 이동을 중단한다', async ({ page }) => {
+    await openApp(page);
+    await page.evaluate(() => {
+      const meetings = [
+        { id: 'note-save-a', title: '노트 A', note: '<p>A 원본</p>', standalone: true },
+        { id: 'note-save-b', title: '노트 B', note: '<p>B 원본</p>', standalone: true }
+      ];
+      localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(meetings));
+      localStorage.setItem('ai_pronote.current_view_meeting.v1', 'note-save-a');
+    });
+    await openNavView(page, 'result-mynote');
+    await page.locator('#mynoteBlockContent').fill('저장 실패 시 사라지면 안 되는 A 수정본');
+    const switched = await page.evaluate(() => {
+      const original = Storage.prototype.setItem;
+      (window as typeof window & { __inkMeetingSwitches?: Array<string | null> }).__inkMeetingSwitches = [];
+      const ink = (window as typeof window & { PronoteInk?: { switchMeeting?: (id: string | null) => Promise<void> } }).PronoteInk;
+      if (ink) ink.switchMeeting = async (id: string | null) => {
+        (window as typeof window & { __inkMeetingSwitches: Array<string | null> }).__inkMeetingSwitches.push(id);
+      };
+      Storage.prototype.setItem = function(key: string, value: string) {
+        if (key === 'ai_pronote.meetings.v1') throw new DOMException('quota', 'QuotaExceededError');
+        return original.call(this, key, value);
+      };
+      return (window as typeof window & { __pronoteSwitchMyNoteMeeting: (id: string) => Promise<boolean> }).__pronoteSwitchMyNoteMeeting('note-save-b');
+    });
+    expect(switched).toBe(false);
+    await expect(page.locator('#mynoteBlockContent')).toContainText('저장 실패 시 사라지면 안 되는 A 수정본');
+    await expect(page.getByRole('status')).toContainText('화면 이동을 중단했습니다');
+    expect(await page.evaluate(() => localStorage.getItem('ai_pronote.current_view_meeting.v1'))).toBe('note-save-a');
+    expect(await page.evaluate(() => (window as typeof window & { __inkMeetingSwitches: Array<string | null> }).__inkMeetingSwitches)).toEqual([]);
+  });
+
+  test('필기 로드 중 빠른 중복 선택이 회의 상태를 교차시키지 않는다', async ({ page }) => {
+    await openApp(page);
+    const result = await page.evaluate(async () => {
+      localStorage.setItem('ai_pronote.current_view_meeting.v1', 'note-race-a');
+      let releaseInk!: () => void;
+      const inkPending = new Promise<void>(resolve => { releaseInk = resolve; });
+      const ink = (window as typeof window & { PronoteInk?: { switchMeeting?: (id: string | null) => Promise<void> } }).PronoteInk;
+      if (ink) ink.switchMeeting = async () => inkPending;
+      const api = (window as typeof window & { __pronoteSwitchMyNoteMeeting: (id: string) => Promise<boolean> }).__pronoteSwitchMyNoteMeeting;
+      const first = api('note-race-b');
+      const second = await api('note-race-c');
+      releaseInk();
+      return { first: await first, second, current: localStorage.getItem('ai_pronote.current_view_meeting.v1') };
+    });
+    expect(result).toEqual({ first: true, second: false, current: 'note-race-b' });
+  });
+
   test('필기 탭, 도구, 캔버스, undo/redo와 회의별 IndexedDB 저장을 제공한다', async ({ page }) => {
     await openApp(page);
     await openNavView(page, 'result-mynote');
