@@ -44,6 +44,7 @@ from pronote_p0 import (
     MAX_UPLOAD_BYTES,
     JobQueueView,
     allowed_upload,
+    purge_managed_data,
     safe_data_root,
 )
 from provider_api import ProviderRegistry
@@ -735,6 +736,10 @@ class SetupRequest(BaseModel):
     step: str  # "install" | "login"
 
 
+class PurgeDataRequest(BaseModel):
+    confirmation: str
+
+
 IPAD_MODE = os.environ.get("PRONOTE_IPAD_MODE", "false").lower() == "true"
 LAN_TOKEN = os.environ.get("PRONOTE_LAN_TOKEN", "")
 LAN_SESSION_SECONDS = max(300, min(int(os.environ.get("PRONOTE_LAN_SESSION_SECONDS", "14400")), 86400))
@@ -747,6 +752,7 @@ _IPAD_BLOCKED_PATHS = {
     "/api/auth/config",
     "/api/auth/mark-logged-in",
     "/api/auth/clear-session",
+    "/api/data/purge",
 }
 
 app = FastAPI(title="AI PRONOTE V1.5")
@@ -1285,6 +1291,8 @@ _job_state_lock = threading.RLock()
 _summary_claim_lock = threading.Lock()
 MAX_PENDING_JOBS = 8
 _upload_reservations = 0
+_maintenance_mode = False
+_active_data_operations = 0
 JOB_ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
 
 JOB_ACTIVE = ("queued", "running")
@@ -1357,6 +1365,8 @@ def _active_job_count() -> int:
 def _reserve_queue_slot() -> None:
     global _upload_reservations
     with _job_state_lock:
+        if _maintenance_mode:
+            raise HTTPException(503, "데이터 정리 중입니다. 잠시 후 다시 시도해 주세요")
         if _active_job_count() + _upload_reservations >= MAX_PENDING_JOBS:
             raise HTTPException(429, "처리 대기 작업이 많습니다. 완료 후 다시 시도해 주세요")
         _upload_reservations += 1
@@ -1366,6 +1376,20 @@ def _release_queue_slot() -> None:
     global _upload_reservations
     with _job_state_lock:
         _upload_reservations = max(0, _upload_reservations - 1)
+
+
+def _begin_data_operation() -> None:
+    global _active_data_operations
+    with _job_state_lock:
+        if _maintenance_mode:
+            raise HTTPException(503, "데이터 정리 중입니다. 잠시 후 다시 시도해 주세요")
+        _active_data_operations += 1
+
+
+def _end_data_operation() -> None:
+    global _active_data_operations
+    with _job_state_lock:
+        _active_data_operations = max(0, _active_data_operations - 1)
 
 
 def _startup_recover_jobs() -> None:
@@ -1479,11 +1503,14 @@ def _next_retry_delay(attempts: int) -> int:
 def _try_summarize(job_id: str) -> bool:
     """그 작업의 회의록을 만들어 저장한다. 성공 True / 나중에 다시 할 것 False."""
     with _summary_claim_lock:
-        job = _job_read(job_id)
-        if job and job.get("summary_status") == "running":
-            return False
-        if job:
-            _job_write(job_id, summary_status="running")
+        with _job_state_lock:
+            if _maintenance_mode:
+                return False
+            job = _job_read(job_id)
+            if job and job.get("summary_status") == "running":
+                return False
+            if job:
+                _job_write(job_id, summary_status="running")
     if not job:
         return False
     if not job.get("external_consent"):
@@ -1556,6 +1583,52 @@ def _try_summarize(job_id: str) -> bool:
     return True
 
 
+def _run_summary_operation(job_id: str) -> bool:
+    _begin_data_operation()
+    try:
+        return _try_summarize(job_id)
+    finally:
+        _end_data_operation()
+
+
+def _summary_thread_entry(job_id: str) -> None:
+    try:
+        _try_summarize(job_id)
+    finally:
+        _end_data_operation()
+
+
+def _start_summary_thread(job_id: str) -> None:
+    _begin_data_operation()
+    try:
+        threading.Thread(target=_summary_thread_entry, args=(job_id,), daemon=True).start()
+    except Exception:
+        _end_data_operation()
+        raise
+
+
+def _process_pending_summary_file(path: Path, now: float) -> None:
+    """Process one retry marker while holding the purge/write reservation."""
+    try:
+        _begin_data_operation()
+    except HTTPException:
+        return
+    try:
+        try:
+            d = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return
+        if d.get("summary_status") != "pending" or (d.get("summary_next_at") or 0) > now:
+            return
+        if d.get("summary_error_kind") == "auth" and not _is_logged_in():
+            _job_write(d["job_id"], summary_next_at=now + 60)
+            return
+        log(f"밀린 회의록 다시 시도: {d.get('filename')} ({d.get('job_id')})")
+        _run_summary_operation(d["job_id"])
+    finally:
+        _end_data_operation()
+
+
 def _summary_guard_loop() -> None:
     """대기열 지킴이 — 인터넷이 돌아오거나 다시 로그인하면 밀린 회의록을 알아서 만든다."""
     while True:
@@ -1563,20 +1636,7 @@ def _summary_guard_loop() -> None:
             time.sleep(30)
             now = time.time()
             for f in sorted(UPLOAD_DIR.glob("*.job.json"), key=lambda x: x.stat().st_mtime):
-                try:
-                    d = json.loads(f.read_text(encoding="utf-8"))
-                except Exception:
-                    continue
-                if d.get("summary_status") != "pending":
-                    continue
-                if (d.get("summary_next_at") or 0) > now:
-                    continue
-                # 로그인이 만료된 상태면 호출해도 같은 결과 = 로그인될 때까지 조용히 기다린다
-                if d.get("summary_error_kind") == "auth" and not _is_logged_in():
-                    _job_write(d["job_id"], summary_next_at=now + 60)
-                    continue
-                log(f"밀린 회의록 다시 시도: {d.get('filename')} ({d.get('job_id')})")
-                _try_summarize(d["job_id"])
+                _process_pending_summary_file(f, now)
         except Exception as e:
             log(f"회의록 지킴이 오류(무시): {e}", "WARN")
 
@@ -1586,11 +1646,20 @@ threading.Thread(target=_summary_guard_loop, daemon=True).start()
 
 def _job_start(job_id: str, upload_path: Path, filename: str,
                language: str, model: str, beam_size: int, diarize: bool) -> None:
-    threading.Thread(
-        target=_job_worker,
-        args=(job_id, upload_path, filename, language, model, beam_size, diarize),
-        daemon=True,
-    ).start()
+    _begin_data_operation()
+    try:
+        def run_worker() -> None:
+            try:
+                _job_worker(job_id, upload_path, filename, language, model, beam_size, diarize)
+            finally:
+                _end_data_operation()
+        threading.Thread(
+            target=run_worker,
+            daemon=True,
+        ).start()
+    except Exception:
+        _end_data_operation()
+        raise
 
 
 @app.get("/api/jobs")
@@ -1693,28 +1762,32 @@ def summarize_redo(job_id: str, scenario: Optional[str] = None,
                    external_consent: bool = False):
     """회의록 다시 만들기 — 화면의 [회의록 다시 만들기] 버튼이 부른다.
     실패하면 대기열에 남아 조건이 회복될 때 서버가 알아서 다시 만든다."""
-    if not external_consent:
-        raise HTTPException(403, "외부 AI 전송 동의가 필요합니다")
-    job = _job_read(job_id)
-    if not job:
-        if not (RESULT_DIR / f"{job_id}.json").exists():
-            raise HTTPException(404, "작업을 찾을 수 없습니다")
-        job = _job_write(job_id, filename=f"{job_id}", status="done",
-                         started_at=time.time(), auto_summarize=True)
-    patch = {"summary_status": "pending", "summary_attempts": 0,
-             "summary_error": None, "summary_error_kind": None,
-             "summary_first_try_at": time.time(), "summary_next_at": None,
-             "auto_summarize": True, "external_consent": True}
-    if scenario:
-        patch["scenario"] = scenario
-    if llm_model:
-        patch["llm_model"] = llm_model
-    if provider:
-        patch["provider"] = provider
-    _job_write(job_id, **patch)
-    threading.Thread(target=_try_summarize, args=(job_id,), daemon=True).start()
-    log(f"회의록 다시 만들기 요청: {job.get('filename')} ({job_id})")
-    return {"job_id": job_id, "summary_status": "pending"}
+    _begin_data_operation()
+    try:
+        if not external_consent:
+            raise HTTPException(403, "외부 AI 전송 동의가 필요합니다")
+        job = _job_read(job_id)
+        if not job:
+            if not (RESULT_DIR / f"{job_id}.json").exists():
+                raise HTTPException(404, "작업을 찾을 수 없습니다")
+            job = _job_write(job_id, filename=f"{job_id}", status="done",
+                             started_at=time.time(), auto_summarize=True)
+        patch = {"summary_status": "pending", "summary_attempts": 0,
+                 "summary_error": None, "summary_error_kind": None,
+                 "summary_first_try_at": time.time(), "summary_next_at": None,
+                 "auto_summarize": True, "external_consent": True}
+        if scenario:
+            patch["scenario"] = scenario
+        if llm_model:
+            patch["llm_model"] = llm_model
+        if provider:
+            patch["provider"] = provider
+        _job_write(job_id, **patch)
+        _start_summary_thread(job_id)
+        log(f"회의록 다시 만들기 요청: {job.get('filename')} ({job_id})")
+        return {"job_id": job_id, "summary_status": "pending"}
+    finally:
+        _end_data_operation()
 
 
 @app.get("/api/summarize/{job_id}")
@@ -1758,36 +1831,109 @@ def list_pending():
 @app.delete("/api/pending/{job_id}")
 def delete_pending(job_id: str):
     """다시 안 하겠다 = 작업 기록만 지운다 (원본 녹음·결과는 그대로 둔다)"""
+    _begin_data_operation()
     try:
         _job_path(job_id).unlink(missing_ok=True)
-    except Exception:
-        pass
-    return {"ok": True}
+        return {"ok": True}
+    finally:
+        _end_data_operation()
+
+
+@app.post("/api/data/purge")
+def purge_local_data(req: PurgeDataRequest, request: Request):
+    """Permanently remove this installation's local meeting data."""
+    if IPAD_MODE:
+        raise HTTPException(403, "iPad companion에서 전체 삭제를 실행할 수 없습니다")
+    client_host = request.client.host if request.client else ""
+    if client_host not in {"127.0.0.1", "::1", "testclient"}:
+        raise HTTPException(403, "이 PC에서만 전체 삭제를 실행할 수 있습니다")
+    expected_origin = f"{request.url.scheme}://{request.headers.get('host', '')}"
+    origin = request.headers.get("origin", "")
+    if origin and origin != expected_origin:
+        raise HTTPException(403, "same-origin request required")
+    if req.confirmation != "AI PRONOTE 데이터 영구 삭제":
+        raise HTTPException(400, "삭제 확인 문구가 일치하지 않습니다")
+    global _maintenance_mode
+    with _job_state_lock:
+        if _maintenance_mode:
+            raise HTTPException(409, "이미 데이터 정리 중입니다")
+        summary_running = any(
+            (_job_read(path.name[:12]) or {}).get("summary_status") == "running"
+            for path in UPLOAD_DIR.glob("*.job.json")
+            if JOB_ID_PATTERN.fullmatch(path.name[:12])
+        )
+        if (_active_job_count() > 0 or _upload_reservations > 0
+                or _active_data_operations > 0 or summary_running):
+            raise HTTPException(409, "처리 중인 작업이 있습니다. 작업 완료 후 다시 시도하세요")
+        _maintenance_mode = True
+
+    try:
+        try:
+            removed_entries = purge_managed_data(DATA_ROOT, (UPLOAD_DIR, RESULT_DIR, LOG_DIR))
+            SESSION_FLAG_PATH.unlink(missing_ok=True)
+        except (OSError, ValueError) as error:
+            return JSONResponse(
+                {"ok": False, "partial": True, "detail": "일부 파일을 지우지 못했습니다. 앱을 종료한 뒤 다시 시도하세요.",
+                 "error_type": type(error).__name__},
+                status_code=500,
+            )
+
+        removed_credentials = []
+        failed_credentials = []
+        try:
+            store = WindowsCredentialStore()
+        except RuntimeError:
+            store = None
+        if store is not None:
+            for provider_name in ("openai", "gemini", "anthropic"):
+                try:
+                    store.delete(provider_name)
+                    removed_credentials.append(provider_name)
+                except Exception as error:
+                    failed_credentials.append(provider_name)
+                    log(f"자격 증명 삭제 실패: {provider_name}: {type(error).__name__}", "WARN")
+        payload = {
+            "ok": not failed_credentials,
+            "partial": bool(failed_credentials),
+            "removed_entries": removed_entries,
+            "removed_credentials": removed_credentials,
+            "failed_credentials": failed_credentials,
+            "note": "외부 CLI 계정 로그인 정보는 해당 CLI에서 별도로 로그아웃해야 합니다.",
+        }
+        return JSONResponse(payload, status_code=207 if failed_credentials else 200)
+    finally:
+        with _job_state_lock:
+            _maintenance_mode = False
 
 
 @app.post("/api/transcribe/redo/{job_id}")
 def transcribe_redo(job_id: str):
     """끊긴 작업 = 저장된 원본 녹음으로 다시 받아쓰기 (뒤에서 처리)"""
-    info = _job_read(job_id)
-    if not info:
-        raise HTTPException(404, "미완료 작업이 없습니다")
-    audio = _job_audio(job_id)
-    if not audio:
-        raise HTTPException(404, "원본 녹음 파일이 없습니다")
-    if info.get("status") in JOB_ACTIVE:
-        return {"job_id": job_id, "status": info.get("status"), "note": "이미 처리 중입니다"}
-    _job_write(job_id, status="queued", phase="대기 중", progress=0,
-               error=None, started_at=time.time())
-    _job_start(job_id, audio, info.get("filename") or audio.name,
-               info.get("language", "ko"), info.get("model", DEFAULT_MODEL),
-               int(info.get("beam_size", 1)), bool(info.get("diarize", False)))
-    log(f"받아쓰기 다시 시작: {info.get('filename')} ({job_id})")
-    return {"job_id": job_id, "status": "queued"}
+    _begin_data_operation()
+    try:
+        info = _job_read(job_id)
+        if not info:
+            raise HTTPException(404, "미완료 작업이 없습니다")
+        audio = _job_audio(job_id)
+        if not audio:
+            raise HTTPException(404, "원본 녹음 파일이 없습니다")
+        if info.get("status") in JOB_ACTIVE:
+            return {"job_id": job_id, "status": info.get("status"), "note": "이미 처리 중입니다"}
+        _job_write(job_id, status="queued", phase="대기 중", progress=0,
+                   error=None, started_at=time.time())
+        _job_start(job_id, audio, info.get("filename") or audio.name,
+                   info.get("language", "ko"), info.get("model", DEFAULT_MODEL),
+                   int(info.get("beam_size", 1)), bool(info.get("diarize", False)))
+        log(f"받아쓰기 다시 시작: {info.get('filename')} ({job_id})")
+        return {"job_id": job_id, "status": "queued"}
+    finally:
+        _end_data_operation()
 
 
 @app.post("/api/export/mp3")
 async def export_mp3(file: UploadFile = File(...)):
     """녹음(webm 등) → MP3 변환 — 어디서나 열리는 형식으로 저장용. 로컬 변환, 비용 0."""
+    _begin_data_operation()
     src = UPLOAD_DIR / f"_mp3src_{uuid.uuid4().hex[:8]}.bin"
     dst = src.with_suffix(".mp3")
     response_ready = False
@@ -1818,8 +1964,13 @@ async def export_mp3(file: UploadFile = File(...)):
         inp.close()
         src.unlink(missing_ok=True)
         response_ready = True
+        def finish_response() -> None:
+            try:
+                dst.unlink(missing_ok=True)
+            finally:
+                _end_data_operation()
         return FileResponse(str(dst), media_type="audio/mpeg", filename="AI_PRONOTE.mp3",
-                            background=BackgroundTask(dst.unlink, missing_ok=True))
+                            background=BackgroundTask(finish_response))
     except HTTPException:
         raise
     except Exception as e:
@@ -1832,6 +1983,8 @@ async def export_mp3(file: UploadFile = File(...)):
                     p.unlink()
             except Exception:
                 pass
+        if not response_ready:
+            _end_data_operation()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1974,15 +2127,17 @@ async def transcribe_partial(
 ):
     """실시간 받아쓰기용 부분 변환 — 독립 webm 청크 1개를 빠르게 텍스트로.
     pending 마커 생성 X (이어하기와 무관한 일회성 처리). 결과 저장 X."""
-    partial_limit = 25 * 1024 * 1024
-    contents = await file.read(partial_limit + 1)
-    if not contents:
-        raise HTTPException(400, "빈 청크")
-    if len(contents) > partial_limit:
-        raise HTTPException(413, "실시간 녹음 청크는 25MB 이하여야 합니다")
-    tmp_path = UPLOAD_DIR / f"_partial_{uuid.uuid4().hex[:8]}.webm"
-    tmp_path.write_bytes(contents)
+    _begin_data_operation()
+    tmp_path = None
     try:
+        partial_limit = 25 * 1024 * 1024
+        contents = await file.read(partial_limit + 1)
+        if not contents:
+            raise HTTPException(400, "빈 청크")
+        if len(contents) > partial_limit:
+            raise HTTPException(413, "실시간 녹음 청크는 25MB 이하여야 합니다")
+        tmp_path = UPLOAD_DIR / f"_partial_{uuid.uuid4().hex[:8]}.webm"
+        tmp_path.write_bytes(contents)
         m = get_model(model)
         kwargs = dict(language=language, beam_size=1, batch_size=8,
                       vad_filter=True, vad_parameters=dict(min_silence_duration_ms=500),
@@ -2015,9 +2170,11 @@ async def transcribe_partial(
         raise HTTPException(500, f"부분 변환 실패: {e}")
     finally:
         try:
-            tmp_path.unlink()
+            if tmp_path is not None:
+                tmp_path.unlink()
         except Exception:
             pass
+        _end_data_operation()
 
 
 @app.post("/api/transcribe")

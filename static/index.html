@@ -4973,7 +4973,7 @@ if ('serviceWorker' in navigator) {
       <div class="form-row" style="border-top:1px solid var(--border); padding-top:var(--space-3); margin-top:var(--space-3);">
         <label class="form-label" style="color:var(--rec-red);">위험 영역</label>
         <button type="button" class="modal-btn" id="acctDelete" style="width:100%; justify-content:center; color:var(--rec-red); border-color:var(--rec-red);">🗑️ 계정 영구 삭제</button>
-        <div class="form-hint">삭제 = 모든 데이터 (회의록·노트·녹음) 영구 삭제. 복구 X.</div>
+        <div class="form-hint">버튼: 이 설치본 데이터 영구 삭제. 회의록·노트·녹음·작업 파일과 공식 API 키를 지우며, 외부 CLI 로그인은 별도로 로그아웃해야 합니다. 온라인 계정 자체는 삭제하지 않습니다.</div>
       </div>
     `;
     adminBody.querySelector('#acctResetPw')?.addEventListener('click', async () => {
@@ -4988,26 +4988,86 @@ if ('serviceWorker' in navigator) {
     adminBody.querySelector('#acctLogout')?.addEventListener('click', async () => {
       if (!confirm('로그아웃 하시겠습니까?')) return;
       try {
-        await window.__pronoteAuth?.signOut?.();
+        const result = await window.__pronoteAuth?.signOut?.();
+        if (result?.error) throw result.error;
         closeAdminModal();
         showToast('로그아웃 됨');
       } catch (e) { showToast('실패: ' + e.message); }
     });
-    adminBody.querySelector('#acctDelete')?.addEventListener('click', async () => {
-      if (!confirm('★ 계정을 영구 삭제하시겠습니까?\n\n모든 회의록·노트·녹음이 삭제됩니다.\n복구 불가능.')) return;
+    const accountDeleteButton = adminBody.querySelector('#acctDelete');
+    if (accountDeleteButton) accountDeleteButton.textContent = '이 설치본 데이터 영구 삭제';
+    accountDeleteButton?.addEventListener('click', async () => {
+      if (window.__pronoteDeletionInProgress) {
+        showToast('데이터 삭제가 이미 진행 중입니다');
+        return;
+      }
+      if (window.__pronoteRecording?.isActive?.()) {
+        showToast('녹음을 먼저 정상 종료한 뒤 삭제하세요');
+        return;
+      }
+      if ((window.__pronoteImportCount || 0) > 0) {
+        showToast('파일 가져오기가 끝난 뒤 삭제하세요');
+        return;
+      }
+      if (!confirm('★ 이 설치본의 데이터를 영구 삭제하시겠습니까?\n\n회의록·노트·녹음·작업 파일과 공식 API 키가 삭제됩니다.\n복구할 수 없습니다.')) return;
       if (!confirm('정말 삭제할까요? (마지막 확인)')) return;
-      // 로컬 데이터 = 즉시 클리어
+      window.__pronoteDeletionInProgress = true;
+      accountDeleteButton.disabled = true;
+      accountDeleteButton.setAttribute('aria-busy', 'true');
+      let purgeResult = null;
       try {
-        // IndexedDB 클리어
+        const purge = await fetch('/api/data/purge', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({confirmation: 'AI PRONOTE 데이터 영구 삭제'})
+        });
+        try { purgeResult = await purge.json(); } catch { purgeResult = {}; }
+        if (!purge.ok && purge.status !== 207) {
+          let detail = '서버 작업 파일을 삭제하지 못했습니다.';
+          detail = purgeResult.detail || detail;
+          throw new Error(detail);
+        }
+      } catch (error) {
+        window.__pronoteDeletionInProgress = false;
+        accountDeleteButton.disabled = false;
+        accountDeleteButton.setAttribute('aria-busy', 'false');
+        showToast('삭제 중단: ' + error.message);
+        return;
+      }
+      // 브라우저 데이터 = 서버 삭제가 확인된 뒤 정리
+      const cleanupErrors = [];
+      try {
         const all = await window.__pronoteDB?.getAll?.();
-        if (all) for (const r of all) await window.__pronoteDB.delete(r.id);
-        // localStorage 클리어
-        ['ai_pronote.meetings.v1','ai_pronote.note_draft.v1','ai_pronote.recordings.v1','ai_pronote.current_meeting.v1','ai_pronote.current_view_meeting.v1','ai_pronote.live_panels.v1','ai_pronote.note_used.v1'].forEach(k => localStorage.removeItem(k));
-        await window.PronoteInk?.clearAll?.();
-      } catch (error) { showToast('로컬 필기 삭제 실패: ' + error.message); return; }
-      // Supabase 계정 = 사용자 본인 직접 = 메일 발송 (admin API 필요 = 별도 페이지)
-      showToast('로컬 데이터 삭제 완료. 서버 계정 = Supabase에서 처리됩니다.');
-      try { await window.__pronoteAuth?.signOut?.(); } catch {}
+        if (all) {
+          const outcomes = await Promise.allSettled(all.map(r => window.__pronoteDB.delete(r.id)));
+          if (outcomes.some(o => o.status === 'rejected')) cleanupErrors.push('녹음 저장소');
+        }
+      } catch { cleanupErrors.push('녹음 저장소'); }
+      try {
+        Object.keys(localStorage).filter(k => k.startsWith('ai_pronote.') || k === 'pronote_claude_override').forEach(k => localStorage.removeItem(k));
+      } catch { cleanupErrors.push('화면 설정'); }
+      try {
+        Object.keys(sessionStorage).filter(k => k.startsWith('ai_pronote.')).forEach(k => sessionStorage.removeItem(k));
+      } catch { cleanupErrors.push('임시 세션'); }
+      try { await window.PronoteInk?.clearAll?.(); } catch { cleanupErrors.push('펜 필기'); }
+      let signOutError = null;
+      try {
+        const result = await window.__pronoteAuth?.signOut?.();
+        if (result?.error) signOutError = result.error;
+      } catch (error) { signOutError = error; }
+      window.__pronoteDeletionInProgress = false;
+      accountDeleteButton.disabled = false;
+      accountDeleteButton.setAttribute('aria-busy', 'false');
+      const failedCredentials = purgeResult?.failed_credentials || [];
+      if (cleanupErrors.length || failedCredentials.length || signOutError) {
+        const parts = [];
+        if (cleanupErrors.length) parts.push('남은 브라우저 데이터: ' + cleanupErrors.join(', '));
+        if (failedCredentials.length) parts.push('삭제 실패 API 키: ' + failedCredentials.join(', '));
+        if (signOutError) parts.push('로그아웃 실패');
+        showToast('일부 삭제를 완료하지 못했습니다 — ' + parts.join(' / ') + '. 앱을 닫고 고객지원에 알려 주세요.');
+      } else {
+        showToast('이 설치본의 로컬 데이터와 공식 API 키를 삭제하고 로그아웃했습니다. CLI 로그인은 별도로 로그아웃하세요.');
+      }
       closeAdminModal();
     });
     adminSave.style.display = '';
@@ -5581,6 +5641,10 @@ if ('serviceWorker' in navigator) {
     }
 
     async function startRecording(mode, opts = {}) {
+      if (window.__pronoteDeletionInProgress) {
+        window.showToast?.('데이터 삭제가 끝날 때까지 녹음을 시작할 수 없습니다');
+        return false;
+      }
       if (state.active) {
         window.showToast?.('이미 녹음 중입니다');
         return false;
@@ -6852,6 +6916,7 @@ if ('serviceWorker' in navigator) {
             scenario: null,  // 시나리오 선택 후 저장
             transcribed: false,
           };
+          if (window.__pronoteDeletionInProgress) throw new Error('데이터 삭제가 시작되어 파일 가져오기를 중단했습니다');
           await dbPut(record);
           ids.push(id);
         } catch (e) {
@@ -6875,6 +6940,11 @@ if ('serviceWorker' in navigator) {
 
     async function importFilesAndChoose(files) {
       if (!files || !files.length) return [];
+      if (window.__pronoteDeletionInProgress) {
+        window.showToast?.('데이터 삭제가 끝날 때까지 파일을 가져올 수 없습니다');
+        return [];
+      }
+      window.__pronoteImportCount = (window.__pronoteImportCount || 0) + 1;
       setFileImportBusy(true);
       window.showToast?.('파일을 안전하게 가져오는 중…');
       try {
@@ -6885,6 +6955,7 @@ if ('serviceWorker' in navigator) {
         }
         return ids;
       } finally {
+        window.__pronoteImportCount = Math.max(0, (window.__pronoteImportCount || 1) - 1);
         setFileImportBusy(false);
       }
     }
@@ -7875,8 +7946,11 @@ if ('serviceWorker' in navigator) {
       libraryFileInput?.addEventListener('change', async e => {
         const files = Array.from(e.target.files || []);
         if (!files.length) return;
-        try { await importFilesAndChoose(files); }
-        finally { e.target.value = ''; }
+        try {
+          await importFilesAndChoose(files);
+        } finally {
+          e.target.value = '';
+        }
       });
 
       // 받아쓰기 페이지의 dictFileInput = 옛 Whisper 호출 핸들러를 우리 라이브러리 흐름으로 인터셉트

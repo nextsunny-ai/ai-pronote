@@ -3,6 +3,7 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Optional
+import shutil
 import time
 
 APP_VERSION = "v1.5.0-p0"
@@ -24,6 +25,31 @@ def safe_data_root(path: Path) -> Path:
     for child in ("uploads", "results", "logs"):
         (root / child).mkdir(parents=True, exist_ok=True)
     return root
+
+def purge_managed_data(data_root: Path, managed_dirs: tuple[Path, ...]) -> int:
+    """Delete app-owned contents while preserving the data root itself."""
+    root = data_root.resolve()
+    removed = 0
+    for directory in managed_dirs:
+        if directory.parent.resolve() != root:
+            raise ValueError("managed data directory must be a direct child of data root")
+        is_junction = getattr(directory, "is_junction", lambda: False)
+        if directory.is_symlink() or is_junction():
+            raise ValueError("managed data directory cannot be a link or junction")
+        if directory.exists() and directory.resolve().parent != root:
+            raise ValueError("managed data directory resolves outside data root")
+        directory.mkdir(parents=True, exist_ok=True)
+        for child in tuple(directory.iterdir()):
+            child_is_junction = getattr(child, "is_junction", lambda: False)
+            if child.is_symlink() or child_is_junction() or child.is_file():
+                child.unlink()
+            elif child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink(missing_ok=True)
+            removed += 1
+        directory.mkdir(parents=True, exist_ok=True)
+    return removed
 
 def allowed_upload(filename: str, size_bytes: int) -> tuple[bool, str]:
     if size_bytes <= 0:

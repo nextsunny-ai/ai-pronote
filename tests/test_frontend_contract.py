@@ -95,6 +95,19 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("64비트 Python", installer)
         self.assertIn("-gt 12", installer)
 
+    def test_permanent_delete_clears_server_and_browser_namespaces(self):
+        self.assertIn("fetch('/api/data/purge'", HTML)
+        self.assertIn("AI PRONOTE 데이터 영구 삭제", HTML)
+        self.assertIn("k.startsWith('ai_pronote.')", HTML)
+        self.assertIn("Object.keys(sessionStorage)", HTML)
+        self.assertIn("window.__pronoteRecording?.isActive?.()", HTML)
+        self.assertIn("window.__pronoteDeletionInProgress", HTML)
+        self.assertIn("Promise.allSettled", HTML)
+        self.assertIn("pronote_claude_override", HTML)
+        self.assertIn("if (result?.error) throw result.error", HTML)
+        self.assertIn("window.__pronoteImportCount", HTML)
+        self.assertIn("accountDeleteButton.setAttribute('aria-busy', 'true')", HTML)
+
 
 if __name__ == "__main__":
     unittest.main()
