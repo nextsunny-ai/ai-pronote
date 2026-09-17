@@ -136,6 +136,19 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("window.__pronoteImportCount", HTML)
         self.assertIn("accountDeleteButton.setAttribute('aria-busy', 'true')", HTML)
 
+    def test_safe_diagnostics_excludes_meeting_content_and_secrets(self):
+        self.assertIn('id="diagnosticExportBtn"', HTML)
+        self.assertIn("format: 'ai-pronote-safe-diagnostics'", HTML)
+        self.assertIn("schema_version: 1", HTML)
+        self.assertIn("'meeting_content', 'transcript', 'summary', 'notes', 'titles', 'filenames'", HTML)
+        self.assertIn("'audio_video_blob', 'credentials_tokens', 'email_name', 'exact_file_paths'", HTML)
+        self.assertIn("safeJsonArrayCount('ai_pronote.meetings.v1')", HTML)
+        self.assertIn('AI_PRONOTE_진단정보_', HTML)
+        self.assertIn('function coarseBrowserEnvironment()', HTML)
+        self.assertNotIn("browser: navigator.userAgent", HTML)
+        self.assertIn('if (diagnosticExportInProgress) return;', HTML)
+        self.assertIn('setTimeout(() => URL.revokeObjectURL(url), 60000)', HTML)
+
 
 if __name__ == "__main__":
     unittest.main()

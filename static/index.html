@@ -2947,6 +2947,13 @@ if ('serviceWorker' in navigator) {
           <div class="admin-card-desc">이메일·이름 변경, 비밀번호 재설정, 로그아웃, 계정 영구 삭제.</div>
           <div class="admin-card-current">현재: <b id="adminCurrentAccount">로그인 안 됨</b></div>
         </button>
+        <button type="button" class="admin-card" id="diagnosticExportBtn">
+          <span class="admin-card-tag ready">사용 가능</span>
+          <div class="admin-card-eyebrow">고객지원</div>
+          <div class="admin-card-title">안전한 진단정보 내보내기</div>
+          <div class="admin-card-desc">오류 확인에 필요한 버전·환경·작업 개수·상태만 JSON으로 저장합니다.</div>
+          <div class="admin-card-current"><b>회의 내용·제목·파일명·키는 제외</b></div>
+        </button>
         <button class="admin-card" data-admin="team">
           <span class="admin-card-tag soon">V1 출시 예정</span>
           <div class="admin-card-eyebrow">팀원 등록</div>
@@ -9665,6 +9672,111 @@ if ('serviceWorker' in navigator) {
       item.setAttribute('aria-pressed', item === button ? 'true' : 'false');
     });
   });
+
+  function safeJsonArrayCount(key) {
+    try {
+      const value = JSON.parse(localStorage.getItem(key) || '[]');
+      return Array.isArray(value) ? value.length : 0;
+    } catch { return 0; }
+  }
+
+  function coarseBrowserEnvironment() {
+    const ua = navigator.userAgent || '';
+    let family = 'Other';
+    let major = 'unknown';
+    let match;
+    if ((match = ua.match(/(?:Edg|EdgiOS)\/(\d+)/))) { family = 'Edge'; major = match[1]; }
+    else if ((match = ua.match(/(?:Chrome|CriOS)\/(\d+)/))) { family = 'Chrome'; major = match[1]; }
+    else if ((match = ua.match(/(?:Firefox|FxiOS)\/(\d+)/))) { family = 'Firefox'; major = match[1]; }
+    else if ((match = ua.match(/Version\/(\d+).*Safari\//))) { family = 'Safari'; major = match[1]; }
+    let os = 'Other';
+    if (/Windows/.test(ua)) os = 'Windows';
+    else if (/(iPhone|iPad|iPod)/.test(ua)) os = 'iOS/iPadOS';
+    else if (/Mac OS/.test(ua)) os = 'macOS';
+    else if (/Android/.test(ua)) os = 'Android';
+    else if (/Linux/.test(ua)) os = 'Linux';
+    return { browser_family: family, browser_major: major, os_family: os };
+  }
+
+  let diagnosticExportInProgress = false;
+  async function exportSafeDiagnostics() {
+    if (diagnosticExportInProgress) return;
+    diagnosticExportInProgress = true;
+    const button = document.getElementById('diagnosticExportBtn');
+    button?.setAttribute('aria-busy', 'true');
+    if (button) button.disabled = true;
+    try {
+      const [healthResult, recordingsResult, storageResult] = await Promise.allSettled([
+        fetch('/api/health', { cache: 'no-store' }).then(response => {
+          if (!response.ok) throw new Error('health_unavailable');
+          return response.json();
+        }),
+        window.__pronoteDB?.getAll?.() || Promise.resolve([]),
+        navigator.storage?.estimate?.() || Promise.resolve({})
+      ]);
+      const health = healthResult.status === 'fulfilled' ? healthResult.value : {};
+      const recordings = recordingsResult.status === 'fulfilled' && Array.isArray(recordingsResult.value)
+        ? recordingsResult.value : [];
+      const storage = storageResult.status === 'fulfilled' ? storageResult.value : {};
+      const roundMb = value => Number.isFinite(value) ? Math.round(value / 1048576) : null;
+      const sourceCount = source => recordings.filter(item => item?.source === source).length;
+      const diagnostics = {
+        format: 'ai-pronote-safe-diagnostics',
+        schema_version: 1,
+        generated_at: new Date().toISOString(),
+        privacy_notice: '전송하기 전에 사용자가 직접 내용을 확인해야 합니다.',
+        excluded_fields: [
+          'meeting_content', 'transcript', 'summary', 'notes', 'titles', 'filenames',
+          'audio_video_blob', 'credentials_tokens', 'email_name', 'exact_file_paths'
+        ],
+        app: {
+          health_status: health.status || (healthResult.status === 'fulfilled' ? 'unknown' : 'unavailable'),
+          version: health.version || 'unknown',
+          device: health.device || 'unknown',
+          default_model: health.default_model || 'unknown'
+        },
+        environment: {
+          ...coarseBrowserEnvironment(),
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+          standalone: !!(window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone)
+        },
+        storage_mb: { usage: roundMb(storage.usage), quota: roundMb(storage.quota) },
+        local_counts: {
+          meetings: safeJsonArrayCount('ai_pronote.meetings.v1'),
+          trash: safeJsonArrayCount('ai_pronote.trash.v1'),
+          recordings_total: recordings.length,
+          recordings_audio: sourceCount('recorded'),
+          recordings_video: sourceCount('recorded-video'),
+          recordings_imported: sourceCount('uploaded'),
+          recordings_recovered: sourceCount('recovered'),
+          recording_drafts: recordings.filter(item => item?.isDraft || item?.id === '__draft_recording__').length
+        },
+        runtime: {
+          recording_active: !!window.__pronoteRecording?.isActive?.(),
+          import_in_progress: Number(window.__pronoteImportCount || 0) > 0,
+          provider: document.getElementById('officialProviderSelect')?.value || 'unknown'
+        }
+      };
+      const blob = new Blob([JSON.stringify(diagnostics, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+      anchor.href = url;
+      anchor.download = `AI_PRONOTE_진단정보_${stamp}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast('민감정보를 제외한 진단정보를 저장했습니다. 보내기 전에 직접 확인하세요.');
+    } catch {
+      showToast('진단정보를 저장하지 못했습니다. 앱을 다시 연 뒤 시도하세요.');
+    } finally {
+      button?.removeAttribute('aria-busy');
+      if (button) button.disabled = false;
+      diagnosticExportInProgress = false;
+    }
+  }
+  document.getElementById('diagnosticExportBtn')?.addEventListener('click', exportSafeDiagnostics);
 })();
 </script>
 <script>

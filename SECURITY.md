@@ -2,7 +2,7 @@
 
 ## Supported release
 
-AI PRONOTE RC25 is a private external beta. It is unsigned and not approved for unrestricted public deployment. Security fixes are applied only to the latest published beta release.
+AI PRONOTE RC26 is a private external beta. It is unsigned and not approved for unrestricted public deployment. Security fixes are applied only to the latest published beta release.
 
 ## Reporting a vulnerability
 
@@ -19,4 +19,3 @@ Do not access, alter, download, or delete another person's data while testing. D
 - For high-risk issues, decide on temporary mitigation or release withdrawal within seven days.
 
 These are beta response targets, not a service-level agreement. Formal-release targets and the responsible security contact must be approved before launch.
-
