@@ -2,8 +2,9 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AI PRONOTE — UI 시안 v4</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>AI PRONOTE — 회의·노트·AI 비서</title>
+<link rel="icon" type="image/png" href="/static/icons/v15-wave-note/full-192.png" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -188,6 +189,8 @@
   .live-body {
     flex: 1; display: grid;
     grid-template-columns: 1fr 1.2fr 400px;
+    grid-template-rows: minmax(0, 1fr); /* v6: 행을 뷰포트 높이로 제약 → 패널 내부 스크롤 발동 */
+    min-height: 0; /* v6: flex 자식 min-height:auto 함정 해제 */
     overflow: hidden; padding-bottom: 88px; /* 플로팅 컨트롤 공간 */
   }
   .panel {
@@ -246,6 +249,7 @@
   .copilot-panel {
     background: var(--bg-deep); border-left: 1px solid var(--border);
     display: flex; flex-direction: column; padding: 0;
+    min-height: 0; /* v6: 그리드/flex 자식이 콘텐츠 높이만큼 커지는 것 방지 → .copilot-chat 스크롤 발동 */
   }
   .copilot-header {
     padding: var(--space-4); border-bottom: 1px solid var(--border);
@@ -320,6 +324,7 @@
   .copilot-input-area {
     padding: var(--space-3); border-top: 1px solid var(--border);
     background: var(--bg-elev); flex-shrink: 0;
+    position: sticky; bottom: 0; z-index: 2; /* v6: 답변이 길어도 입력칸이 항상 패널 하단에 보이게 */
   }
   .copilot-input-bar {
     display: flex; gap: var(--space-2);
@@ -1891,6 +1896,9 @@
     gap: 6px;
   }
   .side-audio-player[hidden] { display: none; }
+  .speed-btn { font-size: 11px; padding: 2px 8px; border: 1px solid var(--border, #ddd); border-radius: 6px; background: transparent; cursor: pointer; color: var(--text-secondary, #666); }
+  .speed-btn:hover { border-color: var(--text-primary, #222); }
+  .speed-btn.active { background: var(--text-primary, #222); color: #fff; border-color: var(--text-primary, #222); }
   .side-audio-player-head {
     display: flex;
     align-items: center;
@@ -2566,8 +2574,13 @@
     .login-art { display: none; }
     .result-shell { grid-template-columns: 1fr !important; }
     .result-side { display: block; margin-top: var(--space-6); }
-    .live-body { grid-template-columns: 1fr !important; }
+    .live-body {
+      grid-template-columns: 1fr !important;
+      grid-template-rows: none !important; /* v6: 좁은 화면 = 세로 스택 */
+      overflow-y: auto !important; /* v6: 스택 시 잘림(overflow:hidden) 대신 컨테이너 스크롤 허용 */
+    }
     .panel { min-height: 200px; }
+    .copilot-panel { min-height: 60vh; } /* v6: 스택 시 AI 비서 채팅에 스크롤 공간 확보 */
     .scenario-grid { grid-template-columns: 1fr !important; }
     .demo-switcher { display: none !important; }
   }
@@ -2612,8 +2625,83 @@
   }
   .mobile-menu-btn { display: none; }
 </style>
+<style id="v15-design-system">
+  :root {
+    --v15-bg: #F7F6F2; --v15-surface: #FFFFFF; --v15-ink: #1C1D1A;
+    --v15-muted: #66675F; --v15-border: #DDDAD1; --v15-warm: #9A735B;
+    --v15-success: #287A55; --v15-warning: #9A651F; --v15-danger: #B13E3E;
+  }
+  :where(button, a, input, textarea, select, [contenteditable="true"]):focus-visible {
+    outline: 3px solid #376A8A; outline-offset: 2px;
+  }
+  .home-trust-strip{display:flex;gap:10px;flex-wrap:wrap;max-width:1000px;margin:-24px 0 28px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--bg-elev);font-size:12px;line-height:1.5;color:var(--text-secondary)}
+  .home-trust-strip strong{color:var(--text-primary)}
+  #homeUploadCard{border:2px solid var(--accent-warm)!important;background:#fffaf5!important;min-height:104px}
+  #homeUploadCard:hover{box-shadow:0 8px 24px rgba(139,91,55,.14);transform:translateY(-1px)}
+  #jobCenterToggle{min-width:118px;font-weight:700}
+  .result-actionbar [data-action="download"]{background:var(--text-primary);color:var(--bg-base);border-color:var(--text-primary)}
+  #jobCenter { background:var(--v15-surface)!important; border-color:var(--v15-border)!important; padding:16px!important; }
+  #jobCenter button, #jobCenterToggle, #meetingResultTabs button { min-height:44px; }
+  #jobCenterClose { width:44px; border:0; border-radius:8px; background:#F0EEE8; font-size:22px; }
+  #jobCenter article { border-color:var(--v15-border)!important; }
+  #jobCenter progress { accent-color:var(--v15-warm); min-height:10px; }
+  #meetingResultTabs { position:sticky; top:0; z-index:10; background:rgba(247,246,242,.96); padding:10px 0; backdrop-filter:blur(8px); }
+  #meetingResultTabs .action-btn[aria-pressed="true"] { background:var(--v15-ink); color:#fff; border-color:var(--v15-ink); }
+  .note-mode-tabs,.ink-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .note-mode-tabs{padding:12px 20px;border-bottom:1px solid var(--v15-border)}
+  .note-mode-tabs button,.ink-toolbar button,.ink-toolbar select{min-height:44px;border:1px solid var(--v15-border);border-radius:8px;padding:8px 12px;background:#fff;color:var(--v15-ink)}
+  .note-mode-tabs button[aria-selected="true"],.ink-toolbar button[aria-pressed="true"]{background:var(--v15-ink);color:#fff}
+  .ink-panel{padding:16px;background:#faf9f5}
+  .ink-toolbar{margin-bottom:10px}.ink-canvas-wrap{position:relative;overflow:hidden;border:1px solid var(--v15-border);border-radius:10px;background:#fff}
+  #inkCanvas{display:block;width:100%;height:auto;aspect-ratio:1200/700;touch-action:none;cursor:crosshair}
+  .ink-time-anchors{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.ink-anchor{min-height:36px;border:1px solid var(--v15-border);border-radius:999px;padding:6px 10px;background:#fff}
+  .provider-panel{margin-top:24px;padding:20px;border:1px solid var(--v15-border);border-radius:12px;background:#fff}.provider-panel select{min-height:44px;padding:8px;border:1px solid var(--v15-border);border-radius:8px}.provider-consent{display:flex;gap:10px;align-items:flex-start;margin:14px 0}.provider-status{font-size:13px;color:var(--v15-muted)}
+  @media (max-width: 1023px) {
+    .sidebar {
+      position:fixed; top:0; left:0; bottom:0; width:260px; z-index:250;
+      transform:translateX(-100%); transition:transform .2s ease;
+      box-shadow:0 0 32px rgba(0,0,0,.18);
+    }
+    body.sidebar-open .sidebar { transform:translateX(0); }
+    body.sidebar-open::after { content:""; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:240; }
+    .app { display:block; }
+    main.main { width:100%; padding-top:56px; }
+    #view-result.view.active { left:0!important; }
+    .mobile-menu-btn { display:flex!important; position:fixed; top:8px; left:8px; z-index:260; width:44px; height:44px; }
+    #view-home { padding:32px 24px 64px!important; }
+    #view-home > div[style*="grid-template-columns:1.4fr"] { grid-template-columns:1fr!important; max-width:none!important; }
+    #view-home .quick-card { min-height:150px!important; }
+    #meetingResultTabs { overflow-x:auto; flex-wrap:nowrap!important; scrollbar-width:thin; }
+    #meetingResultTabs button { flex:0 0 auto; }
+    .result-shell { grid-template-columns:1fr!important; }
+    #view-result, .result-shell, .result-main { width:100%!important; max-width:100%!important; min-width:0!important; }
+    .result-main { padding:24px!important; overflow-x:hidden; }
+    .result-side { margin-top:24px; }
+  }
+  @media (max-width: 639px) {
+    #jobCenter { right:8px!important; bottom:calc(8px + env(safe-area-inset-bottom))!important; width:calc(100vw - 16px)!important; max-height:72vh!important; }
+    #jobCenterToggle { right:12px!important; bottom:calc(12px + env(safe-area-inset-bottom))!important; }
+    .library-card-btn { min-width:44px!important; width:44px!important; min-height:44px!important; height:44px!important; }
+    .home-hero-title, #view-home h1 { font-size:clamp(30px,9vw,40px)!important; line-height:1.14!important; }
+    #view-home { padding:24px 16px 56px!important; }
+    #view-home > div[style*="grid-template-columns:1.4fr"] > div { grid-template-columns:1fr!important; }
+    .result-actionbar .action-btn { min-height:44px; }
+    .result-main { padding:16px!important; }
+    .meeting-info-block { grid-template-columns:1fr!important; }
+    .section-head { align-items:flex-start!important; flex-wrap:wrap; }
+    .notes-search-wrap { width:100%; max-width:100%!important; }
+    .notes-box-head { flex-direction:column; align-items:stretch!important; padding:16px!important; }
+    .notes-box-title-wrap { flex-wrap:wrap; }
+    .notes-search { width:100%; min-width:0; }
+    .notes-search input { min-width:0; width:100%; }
+    #inkCanvas{height:auto}.ink-toolbar>*{flex:1 1 auto}.provider-panel{padding:16px}
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior:auto!important; transition-duration:.01ms!important; animation-duration:.01ms!important; animation-iteration-count:1!important; }
+  }
+</style>
 <link rel="manifest" href="/static/manifest.webmanifest" />
-<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
+<link rel="apple-touch-icon" href="/static/icons/v15-wave-note/full-192.png" />
 <meta name="theme-color" content="#1A1A1A" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -2626,8 +2714,29 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
+<style id="v15-product-ui">
+  :root{--product-ink:#171716;--product-card:#fff;--product-line:#dedbd3;--product-copper:#9b6548;--product-muted:#6e6b65}
+  .home-workspace{padding:52px 56px 80px;max-width:1120px;margin:0 auto}
+  .home-product-title{font-size:34px!important;line-height:1.12!important;letter-spacing:-.035em!important;margin:0 0 8px!important;font-weight:760!important}
+  .home-product-subtitle{font-size:14px!important;color:var(--product-muted)!important;margin:0 0 28px!important}
+  .home-workspace>.home-trust-strip{margin:0 0 22px;max-width:100%;background:#efede7;border:0;border-radius:9px;padding:11px 14px}
+  .home-action-layout{display:grid;grid-template-columns:1fr;gap:14px;max-width:1000px}
+  .home-action-layout>#newMeetingBtn{min-height:250px!important;border-radius:14px!important;padding:30px!important;box-shadow:0 18px 42px rgba(23,23,22,.12)}
+  .home-action-layout>div{display:grid!important;grid-template-columns:repeat(4,1fr)!important;gap:10px!important}
+  .home-action-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.55);margin-bottom:8px}
+  .quick-card{transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
+  .quick-card:hover{transform:translateY(-1px);box-shadow:0 10px 28px rgba(25,24,21,.07)}
+  .quick-card:focus-visible{outline:3px solid rgba(155,101,72,.28);outline-offset:2px}
+  @media(max-width:1023px){.home-workspace{padding:30px 24px 72px}.home-action-layout>div{grid-template-columns:1fr 1fr!important}.home-action-layout>#newMeetingBtn{min-height:210px!important}}
+  @media(max-width:520px){.home-workspace{padding:24px 16px 64px}.home-product-title{font-size:30px!important}.home-action-layout>div{grid-template-columns:1fr!important}.home-action-layout>#newMeetingBtn{min-height:190px!important}.home-workspace>.home-trust-strip span{display:block}}
+</style>
 </head>
 <body>
+<aside id="jobCenter" data-testid="job-center" role="region" aria-label="작업함" aria-hidden="true" style="position:fixed;right:18px;bottom:18px;z-index:500;width:min(390px,calc(100vw - 36px));max-height:55vh;overflow:auto;background:#fff;border:1px solid #d0cdc4;border-radius:14px;box-shadow:0 14px 44px rgba(0,0,0,.18);padding:12px;display:none">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><strong>작업함</strong><button type="button" id="jobCenterClose" aria-label="작업함 닫기">×</button></div>
+  <div id="jobCenterList"></div>
+</aside>
+<button type="button" id="jobCenterToggle" data-testid="job-center-toggle" aria-controls="jobCenter" aria-expanded="false" style="position:fixed;right:18px;bottom:18px;z-index:499;border:1px solid #d0cdc4;border-radius:999px;background:#1a1a1a;color:#fff;padding:10px 16px;box-shadow:0 8px 24px rgba(0,0,0,.2)">작업함 <span id="jobCenterCount" aria-live="polite">0</span></button>
 
 <button type="button" class="mobile-menu-btn" id="mobileMenuBtn" aria-label="메뉴 열기">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
@@ -2721,6 +2830,7 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <nav class="nav">
+      <div class="nav-section" style="margin-top:0;">시작</div>
       <button type="button" class="nav-item active" data-demo="home">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>
         홈
@@ -2733,6 +2843,7 @@ if ('serviceWorker' in navigator) {
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 11a4 4 0 008 0V5a4 4 0 00-8 0z"/><path d="M5 11a7 7 0 0014 0M12 18v3M9 21h6"/></svg>
         받아쓰기
       </button>
+      <div class="nav-section">내 기록</div>
       <button type="button" class="nav-item" data-demo="result">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6M9 14h6M9 18h6"/></svg>
         회의록
@@ -2749,9 +2860,10 @@ if ('serviceWorker' in navigator) {
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M4 4.5A2.5 2.5 0 016.5 2H20v20H6.5A2.5 2.5 0 014 19.5V4.5z"/></svg>
         라이브러리
       </button>
+      <div class="nav-section">설정</div>
       <button type="button" class="nav-item" data-demo="admin">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6m11-11h-6m-10 0H1"/></svg>
-        설정·어드민
+        설정
       </button>
     </nav>
 
@@ -2776,31 +2888,26 @@ if ('serviceWorker' in navigator) {
   <main class="main">
 
     <!-- ━━━ HOME (시작 화면) ━━━ -->
-    <section class="view active" id="view-home" style="padding: 64px 64px 96px;">
-      <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.16em; color:var(--text-tertiary); margin-bottom:12px;">2026년 5월 6일 · 화요일</div>
-      <h1 style="font-size:clamp(40px, 5vw, 56px); font-weight:800; line-height:1.05; letter-spacing:-0.035em; margin-bottom:20px;">
-        오늘의 회의를<br/>
-        <em style="font-style:normal; color:var(--accent-warm);">기록하고, 정리하고, 분배합니다.</em>
-      </h1>
-      <p style="font-size:16px; color:var(--text-secondary); max-width:580px; line-height:1.65; margin-bottom:40px;">
-        노트는 직접 쓰시고, AI 비서는 옆에서 조용히 듣다가 회의록·실행 과제·결정 사항을 정리해드립니다.
-        끝나면 결과가 팀원에게 자동으로 분배됩니다.
-      </p>
-      <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:24px; max-width:1000px;">
+    <section class="view active home-workspace" id="view-home">
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.16em; color:var(--text-tertiary); margin-bottom:12px;"><span id="homeToday"></span></div>
+      <h1 class="home-product-title">회의 시작</h1>
+      <p class="home-product-subtitle">녹음, 노트와 필기를 한 화면에서 시작합니다.</p>
+      <div class="home-trust-strip" role="note" aria-label="데이터 처리 안내"><span><strong>이 PC에서:</strong> 녹음·필기·받아쓰기·파일 보관</span><span><strong>동의 후 외부 전송:</strong> AI 회의록 정리에 필요한 원문</span><span>창을 닫아도 작업함에서 계속 확인</span></div>
+      <div class="home-action-layout">
         <button class="quick-card" id="newMeetingBtn" style="background:var(--text-primary); color:var(--bg-base); border:1px solid var(--text-primary); border-radius:16px; padding:32px; text-align:left; cursor:pointer; min-height:220px; display:flex; flex-direction:column; justify-content:space-between;">
           <div>
-            <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.12em; color:rgba(255,255,255,0.5); margin-bottom:8px;">START</div>
-            <div style="font-size:28px; font-weight:700; letter-spacing:-0.02em; line-height:1.2;">새 회의 시작하기</div>
+            <div class="home-action-kicker">새 회의</div>
+            <div style="font-size:28px; font-weight:700; letter-spacing:-0.02em; line-height:1.2;">녹음 시작</div>
           </div>
           <div style="display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:500; color:rgba(255,255,255,0.8);">
-            회의 종류 선택부터 <span>→</span>
+            음성 · 카메라 영상 · 키보드 노트 · 펜 필기 <span>→</span>
           </div>
         </button>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
           <button type="button" class="quick-card" id="homeUploadCard" style="background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; padding:16px; text-align:left; cursor:pointer;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-secondary); margin-bottom:12px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-            <div style="font-size:13px; font-weight:600; margin-bottom:4px;">녹음 파일 업로드</div>
-            <div style="font-size:11.5px; color:var(--text-tertiary); line-height:1.5;">MP3·WAV·M4A·WEBM — 바로 선택</div>
+            <div style="font-size:14px; font-weight:700; margin-bottom:4px;">녹음 파일 가져오기</div>
+            <div style="font-size:11.5px; color:var(--text-secondary); line-height:1.5;">휴대폰·녹음기 파일을 받아쓰기</div>
           </button>
           <button type="button" class="quick-card" data-demo="library" style="background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; padding:16px; text-align:left; cursor:pointer;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-secondary); margin-bottom:12px;"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M4 4.5A2.5 2.5 0 016.5 2H20v20H6.5A2.5 2.5 0 014 19.5V4.5z"/></svg>
@@ -2812,10 +2919,10 @@ if ('serviceWorker' in navigator) {
             <div style="font-size:13px; font-weight:600; margin-bottom:4px;">회의록 모아보기</div>
             <div style="font-size:11.5px; color:var(--text-tertiary); line-height:1.5;">과거 회의록 검색·필터</div>
           </button>
-          <button type="button" class="quick-card" data-demo="mynotes" style="background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; padding:16px; text-align:left; cursor:pointer;">
+          <button type="button" class="quick-card" id="homeNoteOnlyCard" style="background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; padding:16px; text-align:left; cursor:pointer;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-secondary); margin-bottom:12px;"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4z"/></svg>
-            <div style="font-size:13px; font-weight:600; margin-bottom:4px;">내 노트 모아보기</div>
-            <div style="font-size:11.5px; color:var(--text-tertiary); line-height:1.5;">개인 메모·단독 노트</div>
+            <div style="font-size:13px; font-weight:600; margin-bottom:4px;">필기만 시작</div>
+            <div style="font-size:11.5px; color:var(--text-tertiary); line-height:1.5;">녹음 없이 메모·펜 필기</div>
           </button>
         </div>
       </div>
@@ -2874,10 +2981,25 @@ if ('serviceWorker' in navigator) {
         <button class="admin-card" data-admin="engine">
           <span class="admin-card-tag soon">V1 출시 예정</span>
           <div class="admin-card-eyebrow">엔진</div>
-          <div class="admin-card-title">Whisper · Claude (BYOK)</div>
-          <div class="admin-card-desc">100% 로컬 · 사용자 OAuth</div>
+          <div class="admin-card-title">Whisper · 공식 API (BYOK)</div>
+          <div class="admin-card-desc">공식 API와 내부 실험 CLI를 명확히 분리</div>
         </button>
       </div>
+      <section class="provider-panel" aria-labelledby="providerPanelTitle">
+        <h2 id="providerPanelTitle">공식 API · BYOK</h2>
+        <p>정식 공개 연결은 사용자가 직접 키를 준비하는 공식 API입니다. API 키는 이 브라우저에 저장하지 않습니다.</p>
+        <label for="officialProviderSelect">AI 제공자</label>
+        <select id="officialProviderSelect"><option value="openai">OpenAI API (BYOK)</option><option value="gemini">Gemini API (BYOK)</option><option value="anthropic">Anthropic API (BYOK)</option><option value="mock">Mock 테스트</option></select>
+        <label for="officialModelSelect">모델</label><select id="officialModelSelect" aria-label="공식 API 모델"></select>
+        <label class="provider-consent" for="providerConsent"><input type="checkbox" id="providerConsent" /> <span>회의 원문과 선택한 내 노트를 외부 AI 제공자에게 전송하는 데 동의합니다.</span></label>
+        <div id="providerStatus" class="provider-status" role="status">상태를 확인하는 중…</div>
+        <p class="provider-status">키 등록은 대표님 승인 후 Windows 자격 증명 관리자에서만 진행합니다. iPad는 승인된 백엔드 프록시가 필요합니다.</p>
+        <div id="experimentalCliPanel" hidden>
+          <h3>실험적 계정 연결 · 내부 Windows 테스트판</h3>
+          <p class="provider-status">CLI 소비자 계정 연결은 공식 API BYOK와 별개이며 약관·배포 제한 검토가 필요합니다. 공개판에는 표시되지 않습니다.</p>
+          <div id="experimentalCliStatuses" class="provider-status" role="status"></div>
+        </div>
+      </section>
     </section>
 
     <!-- ━━━ 어드민 모달 ━━━ -->
@@ -2995,6 +3117,46 @@ if ('serviceWorker' in navigator) {
               </span>
             </label>
           </div>
+          <div class="form-row" style="margin-top:8px;">
+            <label class="toggle-row" style="margin:0;">
+              <span class="toggle-row-text">
+                <span class="toggle-row-title">🎥 카메라 영상 함께 녹화</span>
+                <span class="toggle-row-desc">회의실·참석자·칠판을 카메라로 촬영합니다. 영상은 이 기기의 라이브러리에 저장됩니다.</span>
+              </span>
+              <span class="toggle-switch">
+                <input type="checkbox" id="newMeetingVideo" />
+                <span class="toggle-slider"></span>
+              </span>
+            </label>
+          </div>
+          <div class="form-row" style="margin-top:8px;">
+            <label class="form-label" for="newMeetingLang">받아쓰기 언어 <span style="color:var(--text-tertiary); font-weight:400;">(해외·화상 회의)</span></label>
+            <select class="form-input" id="newMeetingLang">
+              <option value="ko">한국어</option>
+              <option value="en">English (영어)</option>
+              <option value="ja">日本語 (일본어)</option>
+              <option value="zh">中文 (중국어)</option>
+              <option value="vi">Tiếng Việt (베트남어)</option>
+            </select>
+          </div>
+          <div class="form-row" style="margin-top:8px;">
+            <label class="form-label" for="newMeetingAgent">참석 AI 에이전트 <span style="color:var(--text-tertiary); font-weight:400;">(회의 성격에 맞게)</span></label>
+            <select class="form-input" id="newMeetingAgent">
+              <option value="노아|회의 진행·정리">노아 — 일반 비서</option>
+              <option value="버치|음원·페스티벌·음악·아티스트">버치 — 버치사운드(음악)</option>
+              <option value="세라|영화·영상·IP·조선요괴전·콘텐츠">세라 — 써니엔터(영화)</option>
+              <option value="네아|전시·미디어아트·XR·공간·공공예술">네아 — 넥스트아트(전시)</option>
+              <option value="모리|굿즈·팝업스토어·웹툰·커머스">모리 — 굿즈모먼트(굿즈)</option>
+              <option value="마루|마케팅·SNS·홍보·제안서·영업">마루 — 마케팅</option>
+              <option value="리안|디자인·브랜딩·비주얼·UI">리안 — 디자인</option>
+              <option value="테오|기술·개발·시스템·자동화">테오 — 기술</option>
+              <option value="하나|회계·법무·세무·계약·미수금">하나 — 회계·법무</option>
+              <option value="소리|시나리오·스토리·대본·트리트먼트">소리 — 작가</option>
+              <option value="루미|콘텐츠 기획·IP 발굴·AI 영상">루미 — 콘텐츠 PD</option>
+              <option value="카이|게임 기획·개발·게임 디자인">카이 — 게임</option>
+              <option value="지니|전략·기획·총괄·일정·리스크">지니 — 전략기획</option>
+            </select>
+          </div>
         </div>
         <div class="modal-foot">
           <button class="modal-btn" id="meetingTypeCancel">취소</button>
@@ -3109,7 +3271,7 @@ if ('serviceWorker' in navigator) {
           </div>
           <div class="copilot-input-area">
             <div class="copilot-input-bar">
-              <button class="copilot-icon-btn">
+              <button class="copilot-icon-btn" type="button" title="이 답변 복사" aria-label="이 답변 복사">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11a4 4 0 008 0V5a4 4 0 00-8 0z"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>
               </button>
               <input class="copilot-input" id="liveCopilotInput" placeholder="비서에게 질문 — '노아, ~' 음성 호출 가능" />
@@ -3285,6 +3447,13 @@ if ('serviceWorker' in navigator) {
       <div class="result-shell">
         <div class="result-main">
 
+          <nav id="meetingResultTabs" aria-label="회의 결과 보기" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+            <button type="button" class="action-btn primary" aria-pressed="true" data-result-target="summary">AI 회의록</button>
+            <button type="button" class="action-btn" aria-pressed="false" data-result-target="transcript">전체 원문</button>
+            <button type="button" class="action-btn" aria-pressed="false" data-result-target="note">내 노트</button>
+            <button type="button" class="action-btn" aria-pressed="false" data-result-target="audio">녹음</button>
+          </nav>
+
           <div class="result-tag-row">
             <span class="tag">주간 · 내부</span>
             <span class="meta">2026-05-06 · 14:38 → 15:52</span>
@@ -3301,12 +3470,12 @@ if ('serviceWorker' in navigator) {
               <svg class="action-btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4z"/></svg>
               편집 모드
             </button>
-            <button class="action-btn primary">
+            <button class="action-btn">
               <svg class="action-btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z"/><path d="M22 6l-10 7L2 6"/></svg>
               참가자에게 회의록 발송
             </button>
             <div class="action-divider"></div>
-            <button class="action-btn">
+            <button class="action-btn primary" data-action="download">
               <svg class="action-btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
               회의록 다운로드 ▾
             </button>
@@ -3420,7 +3589,11 @@ if ('serviceWorker' in navigator) {
                 </button>
               </div>
             </div>
-            <div class="mynote-block-content" id="mynoteBlockContent" contenteditable="true">
+            <div class="note-mode-tabs" role="tablist" aria-label="노트 입력 방식">
+              <button type="button" id="noteModeText" role="tab" aria-selected="true" aria-controls="mynoteBlockContent" tabindex="0">텍스트</button>
+              <button type="button" id="noteModeInk" role="tab" aria-selected="false" aria-controls="inkPanel" tabindex="-1">필기</button>
+            </div>
+            <div class="mynote-block-content" id="mynoteBlockContent" role="tabpanel" aria-labelledby="noteModeText" contenteditable="true">
               <h2>스폰서십 회의</h2>
               <ul>
                 <li>NORI CITY 브랜드 보호 = 1순위</li>
@@ -3431,6 +3604,18 @@ if ('serviceWorker' in navigator) {
                 <li>등급별 베네핏 패키지 작성</li>
                 <li>변리사 연결 — 상표권</li>
               </ul>
+            </div>
+            <div class="ink-panel" id="inkPanel" role="tabpanel" aria-labelledby="noteModeInk" hidden>
+              <div class="ink-toolbar" aria-label="필기 도구">
+                <button type="button" data-ink-tool="pen" aria-pressed="true">펜</button><button type="button" data-ink-tool="eraser" aria-pressed="false">지우개</button>
+                <button type="button" data-ink-tool="line" aria-pressed="false">선</button><button type="button" data-ink-tool="arrow" aria-pressed="false">화살표</button><button type="button" data-ink-tool="rect" aria-pressed="false">사각형</button><button type="button" data-ink-tool="ellipse" aria-pressed="false">원</button>
+                <select id="inkColor" aria-label="펜 색"><option value="#1c1d1a">검정</option><option value="#b13e3e">빨강</option><option value="#376a8a">파랑</option></select>
+                <select id="inkWidth" aria-label="펜 굵기"><option value="2">얇게</option><option value="5" selected>보통</option><option value="9">굵게</option></select>
+                <button type="button" id="inkUndo">실행 취소</button><button type="button" id="inkRedo">다시 실행</button><button type="button" id="inkClear">전체 삭제</button>
+              </div>
+              <div class="ink-canvas-wrap"><canvas id="inkCanvas" width="1200" height="700" aria-label="필기 캔버스"></canvas></div>
+              <div id="inkTimeAnchors" class="ink-time-anchors" aria-label="녹음 시간 앵커"></div>
+              <p class="provider-status">필기 원본은 회의별 벡터 JSON으로 이 브라우저의 IndexedDB에 저장됩니다.</p>
             </div>
             <div class="mynote-block-foot">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -3821,13 +4006,9 @@ if ('serviceWorker' in navigator) {
               <button type="button" class="side-tab" data-side-tab="transcript">전체 받아쓰기 <span class="count">262</span></button>
               <button type="button" class="side-tab" data-side-tab="highlight">하이라이트 <span class="count">2</span></button>
               <button type="button" class="side-tab" data-side-tab="copilot">AI 비서 대화 <span class="count">14</span></button>
-              <button type="button" class="side-tab" data-side-tab="audio">
-                녹음 들어보기
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21" fill="currentColor"/></svg>
-              </button>
             </div>
-            <!-- 인라인 mini audio player (녹음 들어보기 클릭 시 노출) -->
-            <div class="side-audio-player" id="sideAudioPlayer" hidden>
+            <!-- ★ v1.4 녹음 플레이어 = 상시 표시 (별도 "녹음 들어보기" 탭 제거 = 플레이어 1개로 통합, 탐색바·배속 포함) -->
+            <div class="side-audio-player" id="sideAudioPlayer">
               <div class="side-audio-player-head">
                 <span class="side-audio-player-label">녹음 재생</span>
                 <button type="button" class="side-audio-player-close" id="sideAudioPlayerClose" title="닫기">
@@ -3835,6 +4016,13 @@ if ('serviceWorker' in navigator) {
                 </button>
               </div>
               <audio id="sideAudioPlayerAudio" controls preload="metadata"></audio>
+              <div class="side-audio-speed" id="sideAudioSpeed" style="display:flex; gap:4px; margin-top:6px; align-items:center; flex-wrap:wrap;">
+                <span style="font-size:11px; color:var(--text-tertiary,#888); margin-right:2px;">배속</span>
+                <button type="button" class="speed-btn active" data-speed="1">1×</button>
+                <button type="button" class="speed-btn" data-speed="1.25">1.25×</button>
+                <button type="button" class="speed-btn" data-speed="1.5">1.5×</button>
+                <button type="button" class="speed-btn" data-speed="2">2×</button>
+              </div>
               <div class="side-audio-player-meta" id="sideAudioPlayerMeta"></div>
             </div>
           </div>
@@ -3848,12 +4036,12 @@ if ('serviceWorker' in navigator) {
         <div class="dict-eyebrow">받아쓰기</div>
         <h1 class="dict-title">말씀하시는 대로 받아씁니다</h1>
         <p class="dict-subtitle" id="dictSubtitle">
-          마이크 + 화면 오디오를 함께 녹음합니다. 일반 회의·미팅 정공법.
+          마이크로 녹음합니다. 마주 앉아서 하는 회의·미팅용.
         </p>
         <div class="dict-modes-row" id="dictModesRow">
-          <button type="button" class="dict-mode-chip active" data-mode="realtime">실시간 녹음</button>
-          <button type="button" class="dict-mode-chip" data-mode="lecture">강의 모드</button>
-          <button type="button" class="dict-mode-chip" data-mode="interview">인터뷰 모드</button>
+          <button type="button" class="dict-mode-chip active" data-mode="realtime">회의 녹음</button>
+          <button type="button" class="dict-mode-chip" data-mode="lecture">강의·발표</button>
+          <button type="button" class="dict-mode-chip" data-mode="interview">화상 회의</button>
           <button type="button" class="dict-mode-chip" data-mode="file">파일 업로드</button>
         </div>
       </header>
@@ -3865,14 +4053,14 @@ if ('serviceWorker' in navigator) {
           <button type="button" class="dict-mic-button" id="dictMicBtn" aria-label="녹음 시작">
             <svg id="dictMicIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 11a4 4 0 008 0V5a4 4 0 00-8 0z"/><path d="M5 11a7 7 0 0014 0M12 18v3M9 21h6"/></svg>
           </button>
-          <h2 class="dict-empty-title" id="dictEmptyTitle">실시간 녹음 시작 — 마이크 + 화면 오디오</h2>
+          <h2 class="dict-empty-title" id="dictEmptyTitle">마주 앉아서 하는 회의</h2>
           <p class="dict-empty-desc" id="dictEmptyDesc">
-            클릭 → 마이크 권한 + 화면 오디오 공유 dialog (Zoom/Meet 상대방 목소리 캡쳐).<br />
+            클릭 → 마이크 권한만 요청. 대면 회의·일반 녹음용.<br />
             Space 일시정지 · H 하이라이트 · Esc 정지.
           </p>
           <div class="dict-mode-info" id="dictModeInfo">
             <span class="dict-mode-info-label">현재 모드</span>
-            <span class="dict-mode-info-detail" id="dictModeDetail">스테레오 mono mix · 화자 분리 자동(추후)</span>
+            <span class="dict-mode-info-detail" id="dictModeDetail">마이크로 녹음 · 마주 앉아서 하는 회의</span>
           </div>
         </div>
 
@@ -3883,7 +4071,7 @@ if ('serviceWorker' in navigator) {
             <span id="dictRecStatusText">녹음 중</span>
             <span class="dict-rec-timer" id="dictRecTimer">00:00:00</span>
           </div>
-          <div class="dict-rec-mode-tag" id="dictRecModeTag">실시간 녹음</div>
+          <div class="dict-rec-mode-tag" id="dictRecModeTag">회의 녹음</div>
           <div class="dict-rec-controls">
             <button type="button" class="dict-rec-btn" id="dictRecPauseBtn" title="일시정지/재개 (Space)">
               <svg viewBox="0 0 24 24" fill="currentColor" id="dictRecPauseIcon"><path d="M6 4h4v16H6zm8 0h4v16h-4z"/></svg>
@@ -3911,6 +4099,10 @@ if ('serviceWorker' in navigator) {
           <div style="font-size:12.5px; color:var(--text-tertiary); line-height:1.6;">
             Whisper가 음성을 텍스트로 변환하고 있습니다. 큰 파일일수록 시간이 더 걸립니다.<br/>
             <span id="dictElapsed">0초 경과</span>
+          </div>
+          <div style="margin-top:10px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:12.5px; line-height:1.6; color:var(--text-primary); background:var(--bg-elev);">
+            받아쓰기와 회의록은 <b>이 PC 안에서 계속 진행됩니다.</b> 창을 닫으셔도 되고, 다시 열면 이어서 보입니다.<br/>
+            (참고: 20분 녹음 = 보통 3~5분 처리)
           </div>
         </div>
 
@@ -3993,7 +4185,7 @@ if ('serviceWorker' in navigator) {
 
       <div class="assist-input-bar-wrap">
         <div class="assist-input-bar">
-          <button class="copilot-icon-btn">
+          <button class="copilot-icon-btn" type="button" title="이 답변 복사" aria-label="이 답변 복사">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           </button>
           <textarea class="assist-input" placeholder="질문하거나 자료를 첨부하세요…" rows="1"></textarea>
@@ -4031,6 +4223,10 @@ if ('serviceWorker' in navigator) {
     // 모드 자동 진입
     if (postMode === 'mynote') setTimeout(() => window.__pronoteShowMyNoteFullPage?.(), 50);
     else if (postMode === 'meeting') setTimeout(() => window.__pronoteShowMeetingMode?.(), 50);
+    // 목록 화면 = 진입할 때마다 최신 데이터로 다시 그림 (새 회의·노트 즉시 반영)
+    if (target === 'meetings') setTimeout(() => window.__pronoteRenderMeetingsList?.(), 0);
+    else if (target === 'mynotes') setTimeout(() => window.__pronoteRenderMyNotesList?.(), 0);
+    try { if (typeof renderSidebarMeetingHistory === 'function') renderSidebarMeetingHistory(); } catch {}
   }
 
   document.querySelectorAll('[data-demo]').forEach(el => {
@@ -4044,8 +4240,9 @@ if ('serviceWorker' in navigator) {
     cb.addEventListener('click', () => cb.classList.toggle('checked'));
   });
 
-  // 키보드 단축키
+  // 키보드 단축키 (시안용 — 실제 녹음 모듈이 있으면 그쪽 핸들러가 처리)
   document.addEventListener('keydown', e => {
+    if (window.__pronoteRecording) return;
     const liveActive = document.getElementById('view-live').classList.contains('active');
     if (!liveActive) return;
     if (e.code === 'Space' && !e.target.matches('input, textarea, [contenteditable]')) {
@@ -4071,11 +4268,11 @@ if ('serviceWorker' in navigator) {
 
     // 헬스체크
     fetch('/api/health').then(r => r.json()).then(d => {
-      const txt = `Whisper ${d.model} · ${d.device.toUpperCase()} · 준비됨`;
+      const txt = `Whisper ${d.default_model || d.model || ''} · ${(d.device || '').toUpperCase()} · 준비됨`;
       if ($('dictStatus')) $('dictStatus').textContent = txt;
       if ($('homeStatus')) $('homeStatus').textContent = txt;
     }).catch(() => {
-      if ($('dictStatus')) $('dictStatus').textContent = '서버 연결 실패 — http://localhost:8765 동작 중인지 확인';
+      if ($('dictStatus')) $('dictStatus').textContent = '서버 연결 실패 — http://localhost:8771 동작 중인지 확인';
     });
 
     // 클릭으로 파일 선택
@@ -4093,38 +4290,203 @@ if ('serviceWorker' in navigator) {
       return mm + ':' + ss;
     }
 
-    async function handleFile(file) {
+    // 받아쓰기 중 = 창 닫기 경고 (PC 종료는 OS라 못 막지만 창 닫기는 경고)
+    window.__pronoteBusy = false;
+    window.addEventListener('beforeunload', (e) => {
+      if (window.__pronoteBusy) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    async function runTranscribeRequest(url, fd, metaText) {
       empty.style.display = 'none';
       result.style.display = 'none';
       error.style.display = 'none';
       progress.style.display = 'block';
-      $('dictProgressMeta').textContent = file.name + ' · ' + (file.size/1024/1024).toFixed(1) + ' MB';
+      $('dictProgressMeta').textContent = metaText;
 
       const start = Date.now();
       const tick = setInterval(() => {
         $('dictElapsed').textContent = Math.floor((Date.now() - start)/1000) + '초 경과';
       }, 500);
+      window.__pronoteBusy = true;
 
       try {
-        const fd = new FormData();
-        fd.append('file', file);
-        const res = await fetch('/api/transcribe', { method: 'POST', body: fd });
+        const res = await fetch(url, { method: 'POST', body: fd });
         clearInterval(tick);
         if (!res.ok) {
           const err = await res.json().catch(() => ({ detail: '알 수 없는 에러' }));
           throw new Error(err.detail || '서버 에러');
         }
         const data = await res.json();
-        progress.style.display = 'none';
-        showResult(data);
+        if (!data.job_id) throw new Error('작업 번호를 받지 못했습니다');
+        await watchStandaloneJob(data.job_id);
       } catch (e) {
         clearInterval(tick);
         progress.style.display = 'none';
         empty.style.display = '';
         error.textContent = '에러: ' + e.message;
         error.style.display = '';
+      } finally {
+        window.__pronoteBusy = false;
       }
     }
+
+    async function watchStandaloneJob(jobId) {
+      for (;;) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        const jobRes = await fetch('/api/jobs/' + encodeURIComponent(jobId));
+        if (!jobRes.ok) throw new Error('작업 상태를 확인하지 못했습니다');
+        const job = await jobRes.json();
+        $('dictProgressTitle').textContent = job.phase || '처리 중';
+        $('dictProgressMeta').textContent = `${job.progress || 0}%`;
+        if (job.status === 'error' || job.status === 'interrupted') {
+          throw new Error(job.error || '작업이 중단됐습니다');
+        }
+        if (job.status !== 'done') continue;
+        const resultRes = await fetch('/api/results/' + encodeURIComponent(jobId));
+        if (!resultRes.ok) throw new Error('완료 결과를 불러오지 못했습니다');
+        const resultData = await resultRes.json();
+        progress.style.display = 'none';
+        showResult(resultData);
+        return;
+      }
+    }
+
+    async function handleFile(file) {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('external_consent', String(window.__pronoteExternalConsent?.() || false));
+      // 어드민에서 고른 받아쓰기 모델·화자 분리 설정 반영
+      try {
+        const s = JSON.parse(localStorage.getItem('ai_pronote.settings.v1') || '{}');
+        if (s?.transcribe?.model) fd.append('model', s.transcribe.model);
+        if (s?.transcribe?.diarize) fd.append('diarize', 'true');
+      } catch {}
+      await runTranscribeRequest('/api/transcribe', fd,
+        file.name + ' · ' + (file.size/1024/1024).toFixed(1) + ' MB');
+    }
+
+    // 서버에 남아 있는데 화면에 없는 결과 되찾기
+    // (창을 닫았거나 연결이 끊겨 결과를 못 받은 경우 — 서버에는 그대로 있다)
+    (async function recoverServerResults() {
+      try {
+        const [results, records] = await Promise.all([
+          fetch('/api/results').then(r => r.ok ? r.json() : []),
+          (window.__pronoteDB?.getAll ? window.__pronoteDB.getAll() : Promise.resolve([])),
+        ]);
+        if (!results.length) return;
+        const known = new Set(records.filter(r => r.jobId).map(r => r.jobId));
+        const orphans = results.filter(r => !known.has(r.job_id) && (r.char_count || 0) > 0);
+        if (!orphans.length) return;
+        const bar = document.createElement('div');
+        bar.id = 'serverResultBar';
+        bar.style.cssText = 'margin:0 0 14px; padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:var(--bg-elev); display:flex; align-items:center; gap:12px; font-size:13px; line-height:1.5;';
+        bar.innerHTML = '<span style="flex:1;">이 PC에 처리해 둔 받아쓰기 <b>' + orphans.length + '건</b>이 화면에 없습니다 — 가져오면 회의록을 만들 수 있습니다</span>' +
+          '<button type="button" id="srvResImport" class="dict-rec-btn" style="white-space:nowrap;">가져오기</button>' +
+          '<button type="button" id="srvResSkip" class="dict-rec-btn" style="white-space:nowrap;">닫기</button>';
+        const stage = document.getElementById('dictStage');
+        if (!stage) return;
+        stage.parentNode.insertBefore(bar, stage);
+        document.getElementById('srvResSkip').onclick = () => bar.remove();
+        document.getElementById('srvResImport').onclick = async () => {
+          bar.remove();
+          for (const o of orphans) {
+            try {
+              const full = await fetch('/api/results/' + o.job_id).then(r => r.json());
+              const rec = {
+                id: 'rec_' + o.job_id,
+                jobId: o.job_id,
+                filename: o.filename || (o.job_id + '.webm'),
+                title: (full.job && full.job.title) || '',
+                tag: (full.job && full.job.tag) || '',
+                attendees: (full.job && full.job.attendees) || '',
+                scenario: '회의록',
+                scenarioKey: (full.job && full.job.scenario) || 'meeting',
+                durationSec: Math.round(o.duration || 0),
+                size: 0,
+                startedAt: (o.saved_at ? o.saved_at * 1000 : Date.now()),
+                transcribed: true,
+                transcript: full.speaker_text || full.full_text || '',
+                transcriptSegments: full.segments,
+                transcriptModel: full.model,
+                transcriptedAt: Date.now(),
+                source: 'server',
+              };
+              if (full.summary_result && full.summary_result.summary) {
+                rec.summary = full.summary_result.summary;
+                rec.summaryModel = full.summary_result.model_id;
+                rec.summarizedAt = Date.now();
+                if (full.summary_result.title) rec.title = rec.title || full.summary_result.title;
+              }
+              await window.__pronoteDB.put(rec);
+            } catch (e) { console.error('[Recover]', e); }
+          }
+          window.showToast?.(orphans.length + '건을 가져왔습니다 — 라이브러리에서 확인하세요');
+          try { window.__pronoteLibrary?.refresh?.(); } catch {}
+        };
+      } catch (e) { /* 서버 옛 버전 등 = 조용히 무시 */ }
+    })();
+
+    // 미완료 작업 배너 — 지난번 받아쓰기가 중간에 끊겼으면(PC 종료 등) 이어서 처리 제안
+    (async function checkPending() {
+      try {
+        const r = await fetch('/api/pending');
+        if (!r.ok) return;
+        const jobs = await r.json();
+        if (!jobs.length) return;
+        const j = jobs[0];
+        const bar = document.createElement('div');
+        bar.id = 'dictPendingBar';
+        bar.style.cssText = 'margin:0 0 14px; padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:var(--bg-elev); display:flex; align-items:center; gap:12px; font-size:13px; line-height:1.5;';
+        bar.innerHTML = '<span style="flex:1;">완료되지 못한 받아쓰기가 있습니다 — <b>' + escapeHtml(j.filename || '녹음 파일') + '</b> (' + escapeHtml(String(j.started_at || '')) + ')</span>' +
+          '<button type="button" id="dictPendingRun" class="dict-rec-btn" style="white-space:nowrap;">이어서 받아쓰기</button>' +
+          '<button type="button" id="dictPendingSkip" class="dict-rec-btn" style="white-space:nowrap;">지우기</button>';
+        const stage = $('dictStage');
+        stage.parentNode.insertBefore(bar, stage);
+        document.getElementById('dictPendingRun').onclick = async () => {
+          bar.remove();
+          await runTranscribeRequest('/api/transcribe/redo/' + j.job_id, new FormData(),
+            (j.filename || j.job_id) + ' · 이어서 처리');
+        };
+        document.getElementById('dictPendingSkip').onclick = async () => {
+          bar.remove();
+          fetch('/api/pending/' + j.job_id, { method: 'DELETE' }).catch(() => {});
+        };
+      } catch (e) { /* 서버 옛 버전 등 = 조용히 무시 */ }
+    })();
+
+    // ★ v1.4 중단 녹음 복구 배너 — 녹음 중 크래시/새로고침 시 자동저장(draft)된 녹음을 살림
+    (async function recoverDraft() {
+      try {
+        const d = await window.__pronoteDB?.get?.('__draft_recording__');
+        if (!d || !d.blob || (d.durationSec || 0) < 3) return;
+        const bar = document.createElement('div');
+        bar.id = 'dictRecoverBar';
+        bar.style.cssText = 'margin:0 0 14px; padding:12px 14px; border:1px solid #d9534f; border-radius:10px; background:var(--bg-elev); display:flex; align-items:center; gap:12px; font-size:13px; line-height:1.5;';
+        const mins = Math.floor((d.durationSec || 0) / 60), secs = (d.durationSec || 0) % 60;
+        bar.innerHTML = '<span style="flex:1;">⚠️ 중단된 녹음이 있습니다 — <b>' + escapeHtml(d.title || d.filename || '녹음') + '</b> (' + mins + '분 ' + secs + '초). 복구할까요?</span>' +
+          '<button type="button" id="recoverRun" class="dict-rec-btn" style="white-space:nowrap;">복구</button>' +
+          '<button type="button" id="recoverSkip" class="dict-rec-btn" style="white-space:nowrap;">버리기</button>';
+        const stage = $('dictStage');
+        if (stage && stage.parentNode) stage.parentNode.insertBefore(bar, stage);
+        else document.body.appendChild(bar);
+        document.getElementById('recoverRun').onclick = async () => {
+          bar.remove();
+          const newId = 'rec_recovered_' + Date.now();
+          const sk = d.mode === 'lecture' ? 'lecture' : d.mode === 'interview' ? 'interview' : 'meeting';
+          await window.__pronoteDB.put({ ...d, id: newId, isDraft: false, source: 'recovered',
+            filename: (d.filename || '복구된 녹음').replace('(중단된 녹음) ', '복구_'),
+            endedAt: Date.now(), transcribed: false, scenarioKey: sk });
+          await window.__pronoteDB.delete('__draft_recording__');
+          try { window.__pronoteLibrary?.refresh?.(); } catch {}
+          window.showToast?.('녹음 복구 완료 — 받아쓰기를 시작합니다');
+          setTimeout(() => { try { window.__pronoteLibrary?.runTranscribe?.(newId); } catch (e) {} }, 600);
+        };
+        document.getElementById('recoverSkip').onclick = async () => {
+          bar.remove();
+          try { await window.__pronoteDB.delete('__draft_recording__'); } catch {}
+        };
+      } catch (e) { /* 무시 */ }
+    })();
 
     function showResult(data) {
       $('dictResTag').textContent = '받아쓰기 · ' + data.language.toUpperCase() + ' · ' + data.model;
@@ -4137,7 +4499,11 @@ if ('serviceWorker' in navigator) {
       data.segments.forEach(s => {
         const row = document.createElement('div');
         row.style.cssText = 'display:grid; grid-template-columns:80px 1fr; gap:16px; padding:8px 0; font-size:14px; line-height:1.6;';
-        row.innerHTML = '<span style="font-family:var(--font-mono); font-size:11px; color:var(--text-tertiary); padding-top:3px; font-variant-numeric:tabular-nums;">' + fmtSec(s.start) + ' → ' + fmtSec(s.end) + '</span><span>' + s.text + '</span>';
+        const timeSpan = document.createElement('span');
+        timeSpan.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);padding-top:3px;font-variant-numeric:tabular-nums';
+        timeSpan.textContent = fmtSec(s.start) + ' → ' + fmtSec(s.end);
+        const textSpan = document.createElement('span'); textSpan.textContent = s.text || '';
+        row.append(timeSpan, textSpan);
         list.appendChild(row);
       });
 
@@ -4161,6 +4527,49 @@ if ('serviceWorker' in navigator) {
       };
     }
   })();
+
+  // 비서 답변 옆 아이콘 = 그 답변을 복사한다 (옛 버전은 눌러도 아무 일이 없었다)
+  document.addEventListener('click', function (e) {
+    const b = e.target.closest('.copilot-icon-btn');
+    if (!b) return;
+    e.preventDefault();
+    const bubble = b.closest('.chat-bubble') || b.closest('.chat-msg');
+    const text = ((bubble && bubble.innerText) || '').replace(/\s+$/, '').trim();
+    if (!text) { window.showToast?.('복사할 내용이 없습니다'); return; }
+    navigator.clipboard.writeText(text)
+      .then(() => window.showToast?.('답변을 복사했습니다'))
+      .catch(() => window.showToast?.('복사하지 못했습니다'));
+  });
+
+  // AI 제안의 [실행 과제로] · [다음 미팅 안건] — 옛 버전은 눌러도 아무 일도 일어나지 않았다.
+    // 누르면 그 제안을 '다음 준비 사항' 목록에 실제로 옮긴다.
+    (function bindSuggestButtons() {
+      document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.ai-suggest-btn');
+        if (!btn) return;
+        e.preventDefault();
+        const item = btn.closest('.ai-suggest-item') || btn.parentElement;
+        const textEl = item && item.querySelector('.ai-suggest-text, [contenteditable], span');
+        const text = ((textEl && textEl.textContent) || '').trim();
+        if (!text) { window.showToast?.('옮길 내용을 찾지 못했습니다'); return; }
+        const label = (btn.textContent || '').trim();
+        const list = document.querySelector('#view-result .next-prep-list');
+        if (!list) { window.showToast?.('다음 준비 사항 목록을 찾지 못했습니다'); return; }
+        const li = document.createElement('li');
+        li.className = 'next-prep-item';
+        const box = document.createElement('span');
+        box.className = 'check-box';
+        box.addEventListener('click', () => box.classList.toggle('checked'));
+        const sp = document.createElement('span');
+        sp.setAttribute('contenteditable', 'true');
+        sp.textContent = label.includes('안건') ? ('[다음 미팅 안건] ' + text) : text;
+        li.appendChild(box); li.appendChild(sp);
+        list.appendChild(li);
+        btn.disabled = true;
+        btn.style.opacity = '0.45';
+        window.showToast?.(label.includes('안건') ? '다음 미팅 안건으로 옮겼습니다' : '다음 준비 사항에 넣었습니다');
+      });
+    })();
 
   // 회의록 결과 = 체크박스 토글 + 목차 active 강조
   document.querySelectorAll('#view-result .check-box').forEach(cb => {
@@ -4358,7 +4767,7 @@ if ('serviceWorker' in navigator) {
       title: 'Whisper · Claude (BYOK)',
       preview: `<ul style="padding-left:18px; margin:0;">
         <li>받아쓰기: Whisper Large v3 / Turbo / Medium 선택</li>
-        <li>요약·정리: Claude (사용자 OAuth — 본인 계정 토큰)</li>
+        <li>요약·정리: Claude (이 PC에 로그인한 내 계정 사용 — 추가 비용 없음)</li>
         <li>100% 로컬 처리 옵션 (외부 전송 X)</li>
         <li>화자 분리 (pyannote-audio) on/off</li>
       </ul>`
@@ -4388,11 +4797,76 @@ if ('serviceWorker' in navigator) {
         </div>
         <div class="form-hint">★ 처음 사용 시 = 모델 자동 다운로드 (small 466MB · medium 514MB). 한 번만.</div>
       </div>
+      <div class="form-row">
+        <label class="form-label">화자 분리</label>
+        <div class="form-chip-row" id="transcribeDiarizeRow">
+          <button type="button" class="form-chip" data-diarize="off">끔</button>
+          <button type="button" class="form-chip" data-diarize="on">켬 (참석자 1·2… 자동 구분)</button>
+        </div>
+        <div class="form-hint">여러 명이 말하는 회의에서 발언자를 구분해 줍니다. 처리 시간이 더 걸립니다.</div>
+      </div>
+      <div class="form-row">
+        <label class="form-label">AI 엔진 (회의록 정리·AI 비서)</label>
+        <div class="form-chip-row" id="aiProviderRow" style="flex-wrap:wrap; gap:10px;">
+          <button type="button" class="form-chip experimental-cli-choice" data-provider="claude">Claude CLI (실험)</button>
+          <button type="button" class="form-chip experimental-cli-choice" data-provider="gemini">Gemini CLI (실험)</button>
+          <button type="button" class="form-chip experimental-cli-choice" data-provider="codex">Codex CLI (실험)</button>
+        </div>
+        <div class="form-hint" id="aiProviderHint">이 기기에 로그인된 AI를 선택합니다. 로그인 정보는 앱이 복사하거나 저장하지 않습니다.</div>
+      </div>
     `;
+    // AI 엔진 = 설치·로그인 상태 표시 (미설치·미로그인 = 흐리게 + 안내)
+    (function () {
+      const curP = (s.ai && s.ai.provider) || 'claude';
+      const chips = adminBody.querySelectorAll('#aiProviderRow .form-chip');
+      chips.forEach(chip => { chip.hidden = true; });
+      chips.forEach(chip => {
+        if (chip.dataset.provider === curP) chip.classList.add('active');
+        chip.addEventListener('click', () => {
+          if (chip.dataset.disabledReason) {
+            showToast(chip.dataset.disabledReason);
+            return;
+          }
+          chips.forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+        });
+      });
+      Promise.all([fetch('/api/llm/status').then(r => r.json()), fetch('/api/v15/providers').then(r => r.json())]).then(([st, contract]) => {
+        if (!contract.experimental_cli) {
+          const hint = adminBody.querySelector('#aiProviderHint');
+          if (hint) hint.textContent = '공개 기본판에서는 실험 CLI가 숨겨집니다. 공식 API BYOK는 설정 화면의 공식 API 영역에서 확인하세요.';
+          return;
+        }
+        chips.forEach(chip => { chip.hidden = false; });
+        const pv = st.providers || {};
+        const guide = {
+          gemini: { not_installed: '제미나이 미설치 — 설치: npm i -g @google/gemini-cli', not_logged_in: '제미나이 설치됨 — 터미널에서 gemini 실행해 구글 로그인 1회' },
+          codex: { not_installed: 'Codex CLI 미설치', not_logged_in: 'Codex CLI 설치됨 — 로그인 필요' },
+          claude: { not_installed: '클로드 미설치 — 화면의 AI 로그인 안내에서 설치', not_logged_in: '클로드 로그인 필요 — 화면의 AI 로그인 안내에서 로그인' },
+        };
+        chips.forEach(chip => {
+          const p = chip.dataset.provider;
+          const state2 = pv[p] || 'not_installed';
+          if (state2 !== 'ready') {
+            chip.style.opacity = '0.45';
+            chip.dataset.disabledReason = (guide[p] && guide[p][state2]) || '사용 불가';
+            chip.title = chip.dataset.disabledReason;
+          }
+        });
+      }).catch(() => {});
+    })();
     adminBody.querySelectorAll('#transcribeModelRow .form-chip').forEach(chip => {
       if (chip.dataset.model === cur) chip.classList.add('active');
       chip.addEventListener('click', () => {
         adminBody.querySelectorAll('#transcribeModelRow .form-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+      });
+    });
+    const curDiarize = !!(s.transcribe && s.transcribe.diarize);
+    adminBody.querySelectorAll('#transcribeDiarizeRow .form-chip').forEach(chip => {
+      if ((chip.dataset.diarize === 'on') === curDiarize) chip.classList.add('active');
+      chip.addEventListener('click', () => {
+        adminBody.querySelectorAll('#transcribeDiarizeRow .form-chip').forEach(c => c.classList.remove('active'));
         chip.classList.add('active');
       });
     });
@@ -4401,13 +4875,17 @@ if ('serviceWorker' in navigator) {
     adminSave.textContent = '저장';
     adminSave.onclick = () => {
       const model = adminBody.querySelector('#transcribeModelRow .form-chip.active')?.dataset.model || 'medium';
+      const diarize = adminBody.querySelector('#transcribeDiarizeRow .form-chip.active')?.dataset.diarize === 'on';
+      const provider = adminBody.querySelector('#aiProviderRow .form-chip.active:not([hidden])')?.dataset.provider || null;
       const next = loadSettings();
-      next.transcribe = { model };
+      next.transcribe = { model, diarize };
+      if (provider) next.ai = { provider };
       saveSettings(next);
       refreshTranscribeDisplay();
       closeAdminModal();
       const label = model === 'small' ? '빠르게 (small)' : '표준 (medium)';
-      showToast(`받아쓰기 모델 = ${label} 저장됨`);
+      const pLabel = ({claude: 'Claude CLI (실험)', gemini: 'Gemini CLI (실험)', codex: 'Codex CLI (실험)'})[provider] || '공식 API BYOK 설정 유지';
+      showToast(`받아쓰기 = ${label} · 화자 분리 ${diarize ? '켬' : '끔'} · AI = ${pLabel}`);
     };
     adminModal.classList.add('open');
   }
@@ -4415,14 +4893,19 @@ if ('serviceWorker' in navigator) {
   function refreshTranscribeDisplay() {
     const s = loadSettings();
     const m = (s.transcribe && s.transcribe.model) || 'medium';
+    const dz = (s.transcribe && s.transcribe.diarize) ? ' · 화자 분리 켬' : '';
     const el = document.getElementById('adminCurrentTranscribe');
     if (el) {
-      el.textContent = m === 'small'
+      el.textContent = (m === 'small'
         ? '빠르게 (small · 8분/시간)'
-        : '표준 (medium · 19분/시간)';
+        : '표준 (medium · 19분/시간)') + dz;
     }
   }
   refreshTranscribeDisplay();
+  // 선택된 AI 엔진 = 비서·회의록 호출에서 사용 (디폴트 클로드)
+  window.__pronoteGetAIProvider = function () {
+    try { const s2 = loadSettings(); return (s2.ai && s2.ai.provider) || 'claude'; } catch (e) { return 'claude'; }
+  };
 
   // ─── 내 계정 모달 ───
   async function openAccountModal() {
@@ -4486,7 +4969,8 @@ if ('serviceWorker' in navigator) {
         if (all) for (const r of all) await window.__pronoteDB.delete(r.id);
         // localStorage 클리어
         ['ai_pronote.meetings.v1','ai_pronote.note_draft.v1','ai_pronote.recordings.v1','ai_pronote.current_meeting.v1','ai_pronote.current_view_meeting.v1','ai_pronote.live_panels.v1','ai_pronote.note_used.v1'].forEach(k => localStorage.removeItem(k));
-      } catch {}
+        await window.PronoteInk?.clearAll?.();
+      } catch (error) { showToast('로컬 필기 삭제 실패: ' + error.message); return; }
       // Supabase 계정 = 사용자 본인 직접 = 메일 발송 (admin API 필요 = 별도 페이지)
       showToast('로컬 데이터 삭제 완료. 서버 계정 = Supabase에서 처리됩니다.');
       try { await window.__pronoteAuth?.signOut?.(); } catch {}
@@ -4610,13 +5094,22 @@ if ('serviceWorker' in navigator) {
       noteUsedForMeeting: false
     }
   ];
+  // 샘플 회의 = 데모 모드(Ctrl+Shift+D) 전용. 실사용 화면에는 진짜 데이터만.
+  const SEED_MEETING_IDS = new Set(seedMeetings.map(m => m.id));
+  function isDemoModeOn() { return document.body.classList.contains('dev-mode-on'); }
   function loadMeetings() {
+    let stored = [];
     try {
       const raw = localStorage.getItem(MEETINGS_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) stored = JSON.parse(raw) || [];
     } catch {}
-    localStorage.setItem(MEETINGS_KEY, JSON.stringify(seedMeetings));
-    return seedMeetings.slice();
+    // 옛 버전이 저장해둔 샘플 데이터도 표시에서 제외 (저장소는 건드리지 않음)
+    const real = stored.filter(m => !SEED_MEETING_IDS.has(m.id));
+    if (isDemoModeOn()) {
+      const have = new Set(real.map(m => m.id));
+      return real.concat(seedMeetings.filter(s => !have.has(s.id)));
+    }
+    return real;
   }
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -4655,7 +5148,7 @@ if ('serviceWorker' in navigator) {
         <div class="list-card-foot">
           <span>${escapeHtml(m.duration)}</span>
           <span class="dot">·</span>
-          <span>${m.attendees}명</span>
+          <span>${escapeHtml(String(Number(m.attendees) || 0))}명</span>
           ${m.note ? `<span class="dot">·</span><span class="list-card-note-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4z"/></svg>내 노트</span>` : ''}
         </div>
       </button>
@@ -4664,6 +5157,7 @@ if ('serviceWorker' in navigator) {
       btn.addEventListener('click', () => {
         const id = btn.dataset.meetingId;
         localStorage.setItem('ai_pronote.current_view_meeting.v1', id);
+        window.PronoteInk?.switchMeeting?.(id).catch(() => {});
         if (typeof switchView === 'function') switchView('result');
         // 회의록 카드 = 회의록 모드 (디폴트)
         setTimeout(() => window.__pronoteShowMeetingMode?.(), 50);
@@ -4696,7 +5190,7 @@ if ('serviceWorker' in navigator) {
           <span class="list-card-date">${escapeHtml(m.date)}</span>
         </div>
         <div class="list-card-title">${escapeHtml(m.title)}</div>
-        <div class="list-card-preview">${m.note}</div>
+        <div class="list-card-preview">${escapeHtml(stripHtml(m.note))}</div>
         <div class="list-card-foot">
           ${m.noteUsedForMeeting
             ? `<span class="list-card-note-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4z"/></svg>회의록에 참고됨</span>`
@@ -4710,6 +5204,7 @@ if ('serviceWorker' in navigator) {
       btn.addEventListener('click', () => {
         const id = btn.dataset.meetingId;
         localStorage.setItem('ai_pronote.current_view_meeting.v1', id);
+        window.PronoteInk?.switchMeeting?.(id).catch(() => {});
         if (typeof switchView === 'function') switchView('result');
         // 내 노트 카드 = 풀 페이지 노트 모드로 자동 진입
         setTimeout(() => window.__pronoteShowMyNoteFullPage?.(), 50);
@@ -4773,6 +5268,7 @@ if ('serviceWorker' in navigator) {
       item.addEventListener('click', () => {
         const id = item.dataset.meetingId;
         localStorage.setItem('ai_pronote.current_view_meeting.v1', id);
+        window.PronoteInk?.switchMeeting?.(id).catch(() => {});
         wrap.querySelectorAll('.meeting-item').forEach(i => i.classList.remove('active'));
         item.classList.add('active');
         if (typeof switchView === 'function') switchView('result');
@@ -4789,6 +5285,7 @@ if ('serviceWorker' in navigator) {
     let curQ = '';
     const apply = () => renderMeetingsGrid(curFilter, curQ);
     apply();
+    window.__pronoteRenderMeetingsList = apply; // 뷰 진입 시 최신화
     if (input) input.addEventListener('input', () => { curQ = input.value; apply(); });
     if (filterRow) filterRow.addEventListener('click', e => {
       const chip = e.target.closest('.list-filter-chip');
@@ -4808,6 +5305,7 @@ if ('serviceWorker' in navigator) {
     let curQ = '';
     const apply = () => renderMyNotesGrid(curFilter, curQ);
     apply();
+    window.__pronoteRenderMyNotesList = apply; // 뷰 진입 시 최신화
     if (input) input.addEventListener('input', () => { curQ = input.value; apply(); });
     if (filterRow) filterRow.addEventListener('click', e => {
       const chip = e.target.closest('.list-filter-chip');
@@ -4858,7 +5356,9 @@ if ('serviceWorker' in navigator) {
         titleInput.focus();
         return;
       }
-      const all = loadMeetings();
+      // 저장소 원본 읽기 (데모 샘플이 저장소에 섞이지 않게 loadMeetings 대신 직접)
+      let all = [];
+      try { all = JSON.parse(localStorage.getItem(MEETINGS_KEY) || '[]'); } catch {}
       const today = new Date();
       const yyyy = today.getFullYear();
       const mm = String(today.getMonth()+1).padStart(2,'0');
@@ -4962,16 +5462,28 @@ if ('serviceWorker' in navigator) {
       localStorage.setItem('ai_pronote.current_meeting.v1', JSON.stringify({
         tag, title: finalTitle, attendees, startedAt: Date.now()
       }));
+      // 라이브 노트 = 새 세션 (끝나지 못한 옛 초안 = 복구 유지)
+      try { window.__pronoteLiveNote?.startSession?.(); } catch {}
       // 화면 오디오 토글 (줌·Meet 같은 원격 회의 시만 ON)
       const sysAudioToggle = document.getElementById('newMeetingSysAudio');
       const withSysAudio = !!sysAudioToggle?.checked;
+      // ★ v1.4 회의별 AI 에이전트 선택 (12명 중) → AI 비서가 그 전문 분야로 참석
+      const agentSel = document.getElementById('newMeetingAgent');
+      const agentParts = (agentSel?.value || '노아|').split('|');
+      window.__pronoteAgentName = agentParts[0] || '노아';
+      window.__pronoteAgentExpertise = agentParts[1] || '';
+      try {
+        const lcn = document.getElementById('liveCopilotName'); if (lcn) lcn.textContent = window.__pronoteAgentName;
+        const an = document.getElementById('assistName'); if (an) an.textContent = window.__pronoteAgentName;
+      } catch (e) {}
       // view-live 진입 후 자동 녹음 시작 (디폴트 = 마이크만, 원격 토글 ON 시 = 화면 오디오 추가)
       setTimeout(() => {
         if (window.__pronoteRecording && !window.__pronoteRecording.isActive()) {
           window.__pronoteRecording.start('realtime', {
             context: 'live',
             withSysAudio,
-            meta: { tag, title: finalTitle, attendees, withSysAudio }
+            recordVideo: !!(document.getElementById('newMeetingVideo') && document.getElementById('newMeetingVideo').checked),
+            meta: { tag, title: finalTitle, attendees, withSysAudio, language: (document.getElementById('newMeetingLang')?.value || 'ko') }
           });
         }
       }, 350);
@@ -4991,7 +5503,7 @@ if ('serviceWorker' in navigator) {
     function freshState() {
       return {
         active: false, paused: false, mode: null, context: null,
-        recorder: null, chunks: [], micStream: null, sysStream: null,
+        recorder: null, videoRecorder: null, chunks: [], micStream: null, sysStream: null, cameraStream: null,
         audioCtx: null, startTime: 0, pausedTotal: 0, pauseStartedAt: 0,
         timerInterval: null, highlights: [], meta: {},
         mimeType: null, fileExt: null,
@@ -5000,25 +5512,25 @@ if ('serviceWorker' in navigator) {
 
     const MODE_INFO = {
       realtime: {
-        title: '실시간 녹음 시작 — 마이크',
-        desc: '클릭 → 마이크 권한만 요청. 대면 회의·일반 녹음용.<br />Space 일시정지 · H 하이라이트 · Esc 정지.',
-        detail: '마이크 only · 대면 회의 정공법 (원격 = 인터뷰 모드)',
-        tag: '실시간 녹음',
-        subtitle: '마이크만으로 녹음합니다. 대면 회의·미팅·일반 녹음용.',
+        title: '마주 앉아서 하는 회의',
+        desc: '마이크로 녹음합니다. 한 자리에서 하는 회의·미팅에 쓰세요.<br />Space 잠시 멈춤 · H 중요 표시 · Esc 끝내기',
+        detail: '마이크로 녹음 · 마주 앉아 하는 회의',
+        tag: '회의 녹음',
+        subtitle: '마이크로 녹음합니다. 마주 앉아서 하는 회의·미팅용.',
       },
       lecture: {
-        title: '강의 녹음 시작 — 마이크 단일',
-        desc: '클릭 → 마이크 권한만 요청 (시스템 오디오 X). 1인 발표·강의·강의실용.<br />Space 일시정지 · H 하이라이트 · Esc 정지.',
-        detail: '마이크 only · 단일 화자 · 화자 분리 OFF · 60분+ 권장',
-        tag: '강의 모드',
-        subtitle: '마이크만 단일 채널로 녹음. 1인 발표·강의·강의실용.',
+        title: '강의 · 발표',
+        desc: '마이크로 녹음합니다. 한 사람이 길게 말하는 자리에 쓰세요.<br />Space 잠시 멈춤 · H 중요 표시 · Esc 끝내기',
+        detail: '마이크로 녹음 · 한 사람이 말하는 자리 · 긴 시간 가능',
+        tag: '강의',
+        subtitle: '마이크로 녹음합니다. 강의·발표처럼 한 사람이 말하는 자리용.',
       },
       interview: {
-        title: '원격 회의·인터뷰 — 마이크 + 화면 오디오',
-        desc: '클릭 → 마이크 + 화면 오디오 공유 dialog (줌·Meet·Teams 상대방 목소리 캡쳐) → 좌채널=마이크 · 우채널=상대방 분리 stereo.<br />원격 회의·인터뷰·화자 분리 자동 처리에 최적.',
-        detail: '좌=마이크 · 우=시스템 stereo split · 줌·Meet·인터뷰용',
-        tag: '원격·인터뷰',
-        subtitle: '줌·Meet·Teams 같은 원격 회의 + 인터뷰. 마이크와 시스템 오디오를 좌/우 채널로 분리 녹음.',
+        title: '화상 회의 (줌 · Teams · Meet)',
+        desc: '내 목소리와 <b>상대방 목소리</b>를 함께 녹음합니다.<br />시작하면 <b>공유할 화면을 고르는 창</b>이 뜹니다 — 회의 중인 창을 고르고 [공유]를 누르세요.<br />마주 앉아 하는 회의라면 [취소]해도 되고, 그래도 녹음은 계속됩니다.',
+        detail: '내 목소리 + 상대방 목소리 · 화상 회의용',
+        tag: '화상 회의',
+        subtitle: '줌·Teams·Meet 처럼 화면으로 하는 회의. 상대방 목소리까지 같이 녹음합니다.',
       },
       file: {
         title: '음성 파일을 올리거나 드래그하세요',
@@ -5048,20 +5560,35 @@ if ('serviceWorker' in navigator) {
         const micStream = await navigator.mediaDevices.getUserMedia({ audio: baseAudio });
 
         let sysStream = null;
+        let cameraStream = null;
         // 화면 오디오 = 인터뷰 모드 디폴트 ON / 외 모드 = opts.withSysAudio === true 일 때만 (대면 = OFF 기본)
         const needSys = mode === 'interview' || opts.withSysAudio === true;
         if (needSys) {
           try {
+            // Chrome 의 화면 선택 창이 설명 없이 튀어나오면 무슨 일인지 알 수 없다 → 먼저 알린다
+            window.showToast?.(opts.recordVideo
+              ? '화면 녹화 창이 뜹니다 — 녹화할 화면을 고르고 [공유]를 누르세요'
+              : '상대방 목소리도 녹음하려면 뜨는 창에서 회의 탭을 고르고 [공유] · 대면 회의면 [취소] (녹음은 계속됩니다)');
+            await new Promise(r => setTimeout(r, 1200));
             sysStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-            sysStream.getVideoTracks().forEach(t => t.stop());
+            if (!opts.recordVideo) sysStream.getVideoTracks().forEach(t => t.stop());  // ★ v1.4 영상 녹화 시 video track 유지
             if (sysStream.getAudioTracks().length === 0) {
-              window.showToast?.('탭에 오디오 없음 — 마이크 only로 진행');
+              window.showToast?.('고른 화면에 소리가 없어 마이크로만 녹음합니다 — 녹음은 계속 진행 중입니다');
               sysStream.getTracks().forEach(t => t.stop());
               sysStream = null;
             }
           } catch (e) {
-            window.showToast?.('화면 오디오 공유 취소 — 마이크 only로 진행');
+            window.showToast?.('화면 소리 없이 마이크로만 녹음합니다 — 녹음은 계속 진행 중입니다');
             sysStream = null;
+          }
+        }
+
+        if (opts.recordVideo) {
+          try {
+            window.showToast?.('카메라 권한을 허용하고 칠판과 참석자가 보이도록 위치를 조정하세요');
+            cameraStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } });
+          } catch (e) {
+            window.showToast?.('카메라를 사용할 수 없어 음성만 녹음합니다');
           }
         }
 
@@ -5084,18 +5611,52 @@ if ('serviceWorker' in navigator) {
         const mimeType = pickMime();
         const recorder = new MediaRecorder(dest.stream, mimeType ? { mimeType } : undefined);
         const chunks = [];
-        recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+        recorder.ondataavailable = e => {
+          if (e.data && e.data.size > 0) {
+            chunks.push(e.data);
+            // ★ v1.4 자동저장 — 약 60초마다 진행 중 녹음을 IndexedDB에 임시 보존 (크래시·새로고침 유실 방지)
+            if (chunks.length % 60 === 0) { autosaveDraft(); }
+          }
+        };
         recorder.onstop = handleStop;
         recorder.start(1000);
+        state.mixedStream = dest.stream; // 실시간 초안용 부분 레코더가 같은 믹스 스트림 사용
 
         state.active = true;
         state.paused = false;
         state.mode = mode;
         state.context = opts.context || 'dict';
         state.recorder = recorder;
+        // ★ v1.4 영상 녹화 (옵션) — 기존 audio 녹음과 별도 레코더 = 검증된 녹음 경로 무손상
+        if (opts.recordVideo && cameraStream && cameraStream.getVideoTracks().length) {
+          try {
+            const vstream = new MediaStream([...cameraStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+            const vmime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus' : 'video/webm';
+            const vrec = new MediaRecorder(vstream, { mimeType: vmime });
+            const vchunks = [];
+            const vtitle = (opts.meta && opts.meta.title) || '회의';
+            const vstart = Date.now();
+            vrec.ondataavailable = e => { if (e.data && e.data.size > 0) vchunks.push(e.data); };
+            vrec.onstop = async () => {
+              if (!vchunks.length) return;
+              const vblob = new Blob(vchunks, { type: 'video/webm' });
+              try {
+                await window.__pronoteDB.put({ id: 'vid_' + vstart, blob: vblob, mimeType: 'video/webm',
+                  filename: vtitle + ' (화면 영상).webm', title: vtitle, size: vblob.size,
+                  isVideo: true, source: 'recorded-video',
+                  durationSec: Math.round((Date.now() - vstart) / 1000), startedAt: vstart, endedAt: Date.now() });
+                if (window.__pronoteLibrary && window.__pronoteLibrary.refresh) window.__pronoteLibrary.refresh();
+                window.showToast && window.showToast('회의 영상도 저장됐습니다 (라이브러리)');
+              } catch (e) {}
+            };
+            vrec.start(1000);
+            state.videoRecorder = vrec;
+          } catch (e) { console.warn('[Rec] 영상 녹화 실패(무시)', e); }
+        }
         state.chunks = chunks;
         state.micStream = micStream;
         state.sysStream = sysStream;
+        state.cameraStream = cameraStream;
         state.audioCtx = audioCtx;
         state.startTime = Date.now();
         state.pausedTotal = 0;
@@ -5107,7 +5668,10 @@ if ('serviceWorker' in navigator) {
 
         enterRecordingUI(mode);
         startTimer();
-        window.showToast?.(`${MODE_INFO[mode]?.tag || mode} 녹음 시작 — ${state.sysStream ? '시스템 오디오 + 마이크' : '마이크 only'}`);
+        // 실시간 초안 받아쓰기 = 회의 중 화면(live)에서만 가동
+        state.rtEnabled = (state.context === 'live');
+        if (state.rtEnabled) rtStartPartial();
+        window.showToast?.(`녹음을 시작합니다 — ${state.sysStream ? '마이크 + 화면 소리' : '마이크'}`);
         return true;
       } catch (e) {
         console.error('[Rec] start error:', e);
@@ -5192,12 +5756,120 @@ if ('serviceWorker' in navigator) {
       const elapsed = Date.now() - state.startTime - state.pausedTotal;
       state.highlights.push({ at: elapsed, label: `H${state.highlights.length + 1}` });
       window.showToast?.(`하이라이트 #${state.highlights.length} — ${fmtHMS(elapsed)}`);
+      // 회의 중 화면: 실시간 초안 마지막 줄에 즉시 ★ 표시 (결과 화면뿐 아니라 그 자리에서 바로 보이게)
+      try {
+        const panel = document.querySelector('#view-live .transcribe-stream');
+        const last = panel && panel.querySelector('.rt-draft-line:last-of-type');
+        if (last && !last.querySelector('.rt-hl-star')) {
+          const star = document.createElement('span');
+          star.className = 'rt-hl-star';
+          star.textContent = ' ★';
+          star.style.cssText = 'color:var(--accent-warm,#c60);font-weight:700;';
+          last.lastElementChild.appendChild(star);
+        }
+      } catch (e) {}
+    }
+
+    // ── 실시간 초안 받아쓰기 — 45초마다 독립 webm을 /api/transcribe/partial로 보내 화면에 누적 ──
+    function rtElapsedSec() {
+      return Math.max(0, (Date.now() - state.startTime - state.pausedTotal) / 1000);
+    }
+
+    function rtStartPartial() {
+      if (!state.active || !state.rtEnabled || !state.mixedStream) return;
+      let pr;
+      try {
+        pr = new MediaRecorder(state.mixedStream, state.mimeType ? { mimeType: state.mimeType } : undefined);
+      } catch (e) { state.rtEnabled = false; return; }
+      const partChunks = [];
+      const startOffset = rtElapsedSec();
+      pr.ondataavailable = e => { if (e.data && e.data.size > 0) partChunks.push(e.data); };
+      pr.onstop = () => {
+        if (partChunks.length > 0) {
+          rtSendPartial(new Blob(partChunks, { type: state.mimeType }), startOffset);
+        }
+        if (state.active && state.rtEnabled) rtStartPartial(); // 다음 45초 조각
+      };
+      pr.start();
+      state.partialRecorder = pr;
+      state.rtTimer = setTimeout(() => { try { pr.stop(); } catch {} }, 45000);
+    }
+
+    function rtStopPartial() {
+      state.rtEnabled = false;
+      if (state.rtTimer) { clearTimeout(state.rtTimer); state.rtTimer = null; }
+      try { if (state.partialRecorder && state.partialRecorder.state !== 'inactive') state.partialRecorder.stop(); } catch {}
+      state.partialRecorder = null;
+    }
+
+    function rtSendPartial(blob, offsetSec) {
+      // 순차 전송 (동시 요청 1개 — CPU 보호)
+      state.rtQueue = (state.rtQueue || Promise.resolve()).then(async () => {
+        try {
+          const fd = new FormData();
+          fd.append('file', blob, 'part.webm');
+          fd.append('offset_sec', String(Math.round(offsetSec * 10) / 10));
+          const res = await fetch('/api/transcribe/partial', { method: 'POST', body: fd });
+          if (!res.ok) return;
+          const data = await res.json();
+          (data.segments || []).forEach(rtAppendLine);
+        } catch (e) { console.warn('[RT] partial err', e); }
+      });
+    }
+
+    function rtAppendLine(seg) {
+      const panel = document.querySelector('#view-live .transcribe-stream');
+      if (!panel) return;
+      if (!panel.querySelector('.rt-draft-label')) {
+        // 첫 줄 = 빈 상태 안내 제거 + 초안 라벨
+        panel.querySelectorAll('.transcribe-empty, [data-rt-empty]').forEach(el => el.remove());
+        const label = document.createElement('div');
+        label.className = 'rt-draft-label';
+        label.style.cssText = 'font-size:11px;color:var(--text-tertiary);padding:4px 0 8px;letter-spacing:0.04em;';
+        label.textContent = '실시간 초안 — 정지하면 정밀본으로 교체됩니다';
+        panel.appendChild(label);
+      }
+      const mm = String(Math.floor(seg.start / 60)).padStart(2, '0');
+      const ss = String(Math.floor(seg.start % 60)).padStart(2, '0');
+      const row = document.createElement('div');
+      row.className = 'rt-draft-line';
+      row.style.cssText = 'display:grid;grid-template-columns:52px 1fr;gap:10px;padding:5px 0;font-size:13.5px;line-height:1.55;';
+      row.innerHTML = '<span style="font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);padding-top:2px;">' + mm + ':' + ss + '</span><span></span>';
+      row.lastElementChild.textContent = seg.text;
+      panel.appendChild(row);
+      panel.scrollTop = panel.scrollHeight;
     }
 
     function stop() {
       if (!state.active || !state.recorder) return;
+      rtStopPartial();
       try { state.recorder.stop(); } catch {}
+      try { state.videoRecorder && state.videoRecorder.stop(); } catch {}
       if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval = null; }
+    }
+
+    // ★ v1.4 자동저장 — 진행 중 녹음을 IndexedDB draft로 보존 (정지 전 크래시/새로고침 대비)
+    let _autosaveBusy = false;
+    async function autosaveDraft() {
+      if (_autosaveBusy || !window.__pronoteDB || !state.active || !state.chunks?.length) return;
+      _autosaveBusy = true;
+      try {
+        const draftBlob = new Blob(state.chunks, { type: state.mimeType });
+        const tagPrefix = ({realtime:'회의',lecture:'강의',interview:'인터뷰'}[state.mode]) || '녹음';
+        await window.__pronoteDB.put({
+          id: '__draft_recording__',
+          isDraft: true,
+          blob: draftBlob,
+          mimeType: state.mimeType,
+          filename: '(중단된 녹음) ' + (state.meta.title || tagPrefix),
+          title: state.meta.title || '',
+          mode: state.mode,
+          durationSec: Math.floor((Date.now() - state.startTime - state.pausedTotal) / 1000),
+          startedAt: state.startTime,
+          savedAt: Date.now(),
+        });
+      } catch (e) { console.warn('[Rec] 자동저장 실패', e); }
+      finally { _autosaveBusy = false; }
     }
 
     async function handleStop() {
@@ -5210,30 +5882,42 @@ if ('serviceWorker' in navigator) {
       }
       const blob = new Blob(state.chunks, { type: state.mimeType });
       const elapsed = Math.floor((Date.now() - state.startTime - state.pausedTotal) / 1000);
+      // ★ v1.4 — webm → mp3 변환 (일반 사운드 플레이어 재생 + 재생바 중간 탐색 가능).
+      //   변환 실패 시 원본(webm) 그대로 저장 = 녹음 유실 방지 우선.
+      let saveBlob = blob, saveMime = state.mimeType || 'audio/webm', saveExt = state.fileExt || 'webm';
+      try {
+        window.showToast?.('녹음 저장 중 (mp3 변환)…');
+        const cfd = new FormData();
+        cfd.append('file', blob, 'rec.' + (state.fileExt || 'webm'));
+        const cres = await fetch('/api/export/mp3', { method: 'POST', body: cfd });
+        if (cres.ok) { saveBlob = await cres.blob(); saveMime = 'audio/mpeg'; saveExt = 'mp3'; }
+      } catch (e) { console.warn('[Rec] mp3 변환 실패 — 원본 저장', e); }
       const now = new Date();
       const ymd = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
       const hm = `${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
       const tagPrefix = ({realtime: '회의', lecture: '강의', interview: '인터뷰'}[state.mode]) || '녹음';
       const titleClean = (state.meta.title || tagPrefix).replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
-      const filename = `${tagPrefix}_${titleClean}_${ymd}_${hm}.${state.fileExt}`;
+      const filename = `${tagPrefix}_${titleClean}_${ymd}_${hm}.${saveExt}`;
       const recordId = 'rec_' + Date.now() + '_' + Math.floor(Math.random()*9999);
+      // ★ 회의 종류 → 회의록 시나리오 자동 매핑 (정지 후 자동 받아쓰기·회의록 연결)
+      const autoScenarioKey =
+        state.mode === 'lecture' ? 'lecture'
+        : state.mode === 'interview' ? 'interview'
+        : (state.meta.tag || '').includes('아이데이션') ? 'ideation'
+        : 'meeting';
 
-      // 다운로드
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename;
-      document.body.appendChild(a); a.click();
-      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+      // 녹음 원본 = 자동 다운로드 X (다운로드 폴더 오염 방지) — 라이브러리에 보관, 필요 시 [MP3로 저장]
+      rtStopPartial();
 
       // IndexedDB 영속 저장 (라이브러리)
       try {
         if (window.__pronoteDB) {
           await window.__pronoteDB.put({
             id: recordId,
-            blob,
-            mimeType: state.mimeType,
+            blob: saveBlob,
+            mimeType: saveMime,
             filename,
-            size: blob.size,
+            size: saveBlob.size,
             durationSec: elapsed,
             startedAt: state.startTime,
             endedAt: Date.now(),
@@ -5243,10 +5927,11 @@ if ('serviceWorker' in navigator) {
             tag: state.meta.tag || tagPrefix,
             title: state.meta.title || filename,
             attendees: state.meta.attendees || '',
+            language: state.meta.language || 'ko',
             highlights: state.highlights,
             sysAudioUsed: !!state.sysStream,
             scenario: null,
-            scenarioKey: null,
+            scenarioKey: autoScenarioKey,
             transcribed: false,
           });
         }
@@ -5274,15 +5959,21 @@ if ('serviceWorker' in navigator) {
       // 라이브러리 진입 상태면 = 즉시 갱신
       try { window.__pronoteLibrary?.refresh?.(); } catch {}
 
-      // live context = meetings 추가 + 결과 페이지 이동
-      if (state.context === 'live') {
-        saveMeetingFromLive(elapsed, filename, recordId);
-        setTimeout(() => {
-          if (typeof window.switchView === 'function') window.switchView('result');
-        }, 500);
-      } else {
-        window.showToast?.(`녹음 완료 — 라이브러리에 저장됨 + ${filename} 다운로드.`);
-      }
+      // ★ 모든 녹음 = 정지 즉시 자동 받아쓰기 → 회의록 자동 생성 (v1.4)
+      //   기존: '새 회의 시작'(live)만 자동, '받아쓰기·강의 화면'(dict)은 저장만 →
+      //   강의가 받아쓰기 안 되던 근본 원인. context 구분 폐지 = 어디서 녹음하든 동일.
+      saveMeetingFromLive(elapsed, filename, recordId);
+      setTimeout(() => {
+        if (typeof window.switchView === 'function') window.switchView('result');
+        try { window.__pronoteLoadResultAudio?.(); } catch (e) {}
+      }, 500);
+      setTimeout(() => {
+        try { window.__pronoteLibrary?.runTranscribe?.(recordId); }
+        catch (e) { console.error('[Rec] auto transcribe err', e); }
+      }, 900);
+
+      // ★ 정상 정지 = 자동저장 draft 삭제 (복구 불필요)
+      try { await window.__pronoteDB?.delete?.('__draft_recording__'); } catch {}
 
       cleanupTracks();
       const ctx = state.context;
@@ -5303,29 +5994,40 @@ if ('serviceWorker' in navigator) {
           : `${String(Math.floor(durationSec/60)).padStart(2,'0')}m ${String(durationSec%60).padStart(2,'0')}s`;
         const attendeesCount = state.meta.attendees
           ? state.meta.attendees.split(/[,，]\s*/).filter(Boolean).length : 0;
+        // 회의 중 작성한 내 노트 = 회의록과 함께 보존
+        let liveNoteHtml = '';
+        try { liveNoteHtml = window.__pronoteLiveNote?.getHtml?.() || ''; } catch {}
         arr.unshift({
           id: meetingId,
           title: state.meta.title || `${state.meta.tag || '회의'} ${date}`,
           tag: state.meta.tag || '회의',
           date, dateLabel: '오늘', duration: dur,
           attendees: attendeesCount,
-          summary: '녹음 완료. 받아쓰기 엔진 추가 후 자동 요약됩니다.',
-          note: '',
+          summary: '',
+          summaryPending: true,
+          note: liveNoteHtml,
           recordingFilename: filename,
           recordingId: recordingId || null,
           recordingDurationSec: durationSec,
           highlights: state.highlights,
+          copilotLog: (window.__pronoteCopilotLog?.getLive?.() || []),
           modeUsed: state.mode,
           sysAudioUsed: !!state.sysStream,
         });
         localStorage.setItem(KEY, JSON.stringify(arr.slice(0, 50)));
         localStorage.setItem('ai_pronote.current_view_meeting.v1', meetingId);
+        window.PronoteInk?.switchMeeting?.(meetingId).catch(() => {});
+        // 노트가 회의에 보존됐으니 = 라이브 노트 세션 종료 (다음 회의는 빈 노트)
+        try { window.__pronoteLiveNote?.endSession?.(); } catch {}
+        // 비서 대화도 회의에 보존됐으니 = 라이브 대화 초기화
+        try { window.__pronoteCopilotLog?.resetLive?.(); } catch {}
       } catch (e) { console.error('[Rec] meeting save err', e); }
     }
 
     function cleanupTracks() {
       try { state.micStream?.getTracks().forEach(t => t.stop()); } catch {}
       try { state.sysStream?.getTracks().forEach(t => t.stop()); } catch {}
+      try { state.cameraStream?.getTracks().forEach(t => t.stop()); } catch {}
       try { state.audioCtx?.close(); } catch {}
       if (state.timerInterval) clearInterval(state.timerInterval);
     }
@@ -5340,8 +6042,8 @@ if ('serviceWorker' in navigator) {
         if (tag) tag.textContent = MODE_INFO[mode]?.tag || mode;
         const meta = document.getElementById('dictRecMeta');
         if (meta) {
-          const sysNote = state.sysStream ? '시스템 오디오 + 마이크' : '마이크 only';
-          meta.textContent = `${sysNote} · ${state.mimeType} · ${MODE_INFO[mode]?.detail || ''}`;
+          const sysNote = state.sysStream ? '마이크 + 화면 소리' : '마이크로 녹음';
+          meta.textContent = `${sysNote} · ${MODE_INFO[mode]?.detail || ''}`;
         }
       }
       // live = floating-rec-bar 그대로 (CSS·텍스트 = 타이머 갱신 시 자동)
@@ -5676,31 +6378,67 @@ if ('serviceWorker' in navigator) {
 
     // 풀 페이지 툴바 = 저장·다운로드·이미지·노트 리스트
     const NOTE_DRAFT_KEY = 'ai_pronote.note_draft.v1';
-    // 시작 시 저장된 draft 복원
-    try {
-      const draft = localStorage.getItem(NOTE_DRAFT_KEY);
-      if (draft) content.innerHTML = draft;
+
+    // ── 회의별 노트 로드·저장 ──
+    // 현재 보고 있는 회의(current_view_meeting)의 note 필드를 읽고/쓴다.
+    // 회의가 없으면(단독 메모 등) = 옛 글로벌 draft 키 사용.
+    function getCurMeetingRef() {
+      try {
+        const id = localStorage.getItem('ai_pronote.current_view_meeting.v1');
+        if (!id) return null;
+        const arr = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+        const m = arr.find(x => x.id === id);
+        return m ? { arr, m } : null;
+      } catch { return null; }
+    }
+    function sanitizeNoteHtml(value) {
+      const template = document.createElement('template'); template.innerHTML = value || '';
+      const allowed = new Set(['B','STRONG','I','EM','U','BR','P','DIV','UL','OL','LI','H1','H2','H3','BLOCKQUOTE','SPAN']);
+      template.content.querySelectorAll('*').forEach(el => {
+        if (!allowed.has(el.tagName)) { el.replaceWith(document.createTextNode(el.textContent || '')); return; }
+        [...el.attributes].forEach(attr => { if (attr.name !== 'class') el.removeAttribute(attr.name); });
+      });
+      return template.innerHTML;
+    }
+    function loadCurrentNote() {
+      const ref = getCurMeetingRef();
+      if (ref) {
+        content.innerHTML = sanitizeNoteHtml(ref.m.note || '');
+      } else {
+        try {
+          const draft = localStorage.getItem(NOTE_DRAFT_KEY);
+          content.innerHTML = sanitizeNoteHtml(draft || '');
+        } catch { content.innerHTML = ''; }
+      }
       updateMeta();
-    } catch {}
+    }
+    function persistCurrentNote() {
+      const html = sanitizeNoteHtml(content.innerHTML);
+      if (html !== content.innerHTML) content.innerHTML = html;
+      const ref = getCurMeetingRef();
+      if (ref) {
+        ref.m.note = html;
+        try { localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(ref.arr)); return true; } catch { return false; }
+      }
+      try { localStorage.setItem(NOTE_DRAFT_KEY, html); return true; } catch { return false; }
+    }
+    // 시작 시 = 현재 회의 노트(없으면 옛 draft) 복원
+    loadCurrentNote();
+    // 외부 호출 (결과 화면 렌더 시 동기화)
+    window.__pronoteNote = { loadCurrent: loadCurrentNote, persist: persistCurrentNote };
 
     const saveBtn = document.getElementById('mynoteSaveBtn');
     if (saveBtn) {
       saveBtn.addEventListener('click', () => {
-        try {
-          localStorage.setItem(NOTE_DRAFT_KEY, content.innerHTML);
-          showToast('내 노트가 저장됐습니다');
-        } catch (e) {
-          showToast('저장 실패: ' + (e?.message || ''));
-        }
+        if (persistCurrentNote()) showToast('내 노트가 저장됐습니다');
+        else showToast('저장에 실패했습니다. 저장 공간을 확인해 주세요.');
       });
     }
-    // 자동 저장 (편집 멈춘 후 1.5s)
+    // 자동 저장 (편집 멈춘 후 1초)
     let autoSaveTimer;
     content.addEventListener('input', () => {
       clearTimeout(autoSaveTimer);
-      autoSaveTimer = setTimeout(() => {
-        try { localStorage.setItem(NOTE_DRAFT_KEY, content.innerHTML); } catch {}
-      }, 1500);
+      autoSaveTimer = setTimeout(persistCurrentNote, 1000);
     });
 
     // 다운로드 = .txt
@@ -5821,9 +6559,11 @@ if ('serviceWorker' in navigator) {
         btn.addEventListener('click', () => {
           const id = btn.dataset.meetingId;
           localStorage.setItem('ai_pronote.current_view_meeting.v1', id);
+          window.PronoteInk?.switchMeeting?.(id).catch(() => {});
           listMenu.classList.remove('open');
-          showToast('노트 전환됨 (V1에서 자동 로드 예정)');
-          // 시안 단계 = 다음 V1에서 = 그 회의 노트 데이터로 content 갱신
+          loadCurrentNote();
+          updateFullpageMeta();
+          showToast('노트를 불러왔습니다');
         });
       });
     }
@@ -5958,6 +6698,31 @@ if ('serviceWorker' in navigator) {
 
     window.__pronoteDB = { put: dbPut, get: dbGet, getAll: dbGetAll, delete: dbDelete };
 
+    // ★ v1.4 결과화면 녹음 플레이어 자동 로드 (상시 표시 — 탭 없이 바로 재생 준비)
+    let _resultAudioUrl = null;
+    async function loadResultAudio() {
+      try {
+        const wrap = document.getElementById('sideAudioPlayer');
+        const audio = document.getElementById('sideAudioPlayerAudio');
+        const meta = document.getElementById('sideAudioPlayerMeta');
+        if (!wrap || !audio) return;
+        const meetingId = localStorage.getItem('ai_pronote.current_view_meeting.v1');
+        const all = await dbGetAll();
+        const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+        const m = meetings.find(x => x.id === meetingId);
+        let rec = null;
+        if (m && m.recordingId) rec = all.find(r => r.id === m.recordingId);
+        if (!rec && m && m.recordingFilename) rec = all.find(r => r.filename === m.recordingFilename);
+        if (!rec || !rec.blob) { wrap.style.display = 'none'; return; }
+        wrap.style.display = '';
+        if (_resultAudioUrl) { try { URL.revokeObjectURL(_resultAudioUrl); } catch (e) {} }
+        _resultAudioUrl = URL.createObjectURL(rec.blob);
+        audio.src = _resultAudioUrl;
+        if (meta) { const s = rec.durationSec || 0; meta.textContent = (rec.filename || '녹음') + ' · ' + Math.floor(s / 60) + '분 ' + (s % 60) + '초'; }
+      } catch (e) {}
+    }
+    window.__pronoteLoadResultAudio = loadResultAudio;
+
     // ─── 헬퍼 ──────────────────────────────────────────────
     function fmtBytes(n) {
       if (!n) return '0';
@@ -6047,17 +6812,35 @@ if ('serviceWorker' in navigator) {
     let _libQuery = '';
     async function refreshLibrary() {
       try {
-        const audios = await dbGetAll();
+        // ★ v1.4 — 휴지통/임시저장(draft) 항목은 라이브러리에서 숨김 (데이터는 보존)
+        const audios = (await dbGetAll()).filter(a => !a.deleted && !a.isDraft && a.id !== '__draft_recording__');
         let meetings = [];
         try { meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]'); } catch {}
+        // 같은 녹음에 중복 메타가 남아 있어도 가장 완성된 회의 한 건만 표시한다.
+        const meetingByRecording = new Map();
+        const meetingScore = m => (m.summary ? 8 : 0) + (m.transcript ? 4 : 0) + (m.note ? 2 : 0) + (m.summaryError ? 1 : 0);
+        meetings.forEach(m => {
+          const key = m.recordingId || m.jobId || m.recordingFilename || m.id;
+          const previous = meetingByRecording.get(key);
+          if (!previous || meetingScore(m) >= meetingScore(previous)) meetingByRecording.set(key, m);
+        });
+        const displayMeetings = Array.from(meetingByRecording.values());
         // 통합 unified items
         const items = [];
         // (1) 녹음 = type 'audio'
         audios.forEach(a => {
+          // 연결된 회의 결과가 있으면 녹음과 회의록을 별도 카드로 중복 표시하지 않는다.
+          if (meetingByRecording.has(a.id)) return;
+          if (a.jobId && meetingByRecording.has(a.jobId)) return;
+          if (a.filename && meetingByRecording.has(a.filename)) return;
+          // 목록에 파일명을 그대로 내보이지 않는다 — "(영상) 회의.webm" → "회의"
+          const cleanName = String(a.title || a.filename || '')
+            .replace(/^\(영상\)\s*/, '')
+            .replace(/\.[^.]+$/, '');
           items.push({
             type: 'audio',
             id: a.id,
-            title: a.title || a.filename,
+            title: cleanName || a.filename || '제목 없음',
             subtitle: a.tag || '',
             scenario: a.scenario || null,
             scenarioKey: a.scenarioKey || null,
@@ -6067,12 +6850,13 @@ if ('serviceWorker' in navigator) {
             mode: a.mode,
             source: a.source,
             transcribed: a.transcribed,
+            isVideo: !!a.isVideo,
             _raw: a,
           });
         });
         // (2) 회의록 (meetings 중 = 표시할 만한 것) = type 'meeting'
         // (3) 노트 = type 'note' (meetings 중 note 있는 것)
-        meetings.forEach(m => {
+        displayMeetings.forEach(m => {
           // 회의록 항목
           if (m.summary || m.recordingFilename || !m.standalone) {
             items.push({
@@ -6087,12 +6871,13 @@ if ('serviceWorker' in navigator) {
               ts: m.id ? Number((m.id+'').replace(/[^0-9]/g, '')) || 0 : 0,
               attendees: m.attendees,
               recordingId: m.recordingId,
+              hasRecording: !!audios.find(a => (m.recordingId && a.id === m.recordingId) || (m.jobId && a.jobId === m.jobId) || (m.recordingFilename && a.filename === m.recordingFilename)),
               hasNote: !!(m.note && m.note.trim()),
               _raw: m,
             });
           }
           // 노트 항목 (별도 카드)
-          if (m.note && m.note.trim()) {
+          if (m.standalone && m.note && m.note.trim()) {
             items.push({
               type: 'note',
               id: m.id,
@@ -6151,19 +6936,14 @@ if ('serviceWorker' in navigator) {
       list.innerHTML = filtered.map(r => {
         const actions = renderCardActions(r);
         return `
-          <div class="library-card library-card-${r.type}" data-item-id="${escapeAttr(r.id)}" data-item-type="${r.type}">
+          <div class="library-card library-card-${r.type}" data-item-id="${escapeAttr(r.id)}" data-item-type="${r.type}" data-library-status="${escapeAttr(libraryItemStatus(r))}" role="button" tabindex="0" aria-label="${escapeAttr(r.title)} 열기">
             <div class="library-card-icon library-card-icon-${r.type}">${TYPE_ICON[r.type]}</div>
             <div class="library-card-body">
               <div class="library-card-title">${escapeHtml(r.title)}</div>
               <div class="library-card-meta">
-                <span class="library-card-tag">${TYPE_LABEL[r.type]}</span>
-                ${r.scenario ? `<span class="library-card-tag">${escapeHtml(r.scenario)}</span>` : ''}
-                ${r.subtitle ? `<span>${escapeHtml(r.subtitle)}</span><span class="dot">·</span>` : ''}
-                ${r.durationSec ? `<span>${fmtDuration(r.durationSec)}</span><span class="dot">·</span>` : ''}
-                ${r.size ? `<span>${fmtBytes(r.size)}</span><span class="dot">·</span>` : ''}
-                <span>${fmtDateRel(r.ts)}</span>
-                ${r.transcribed ? `<span class="dot">·</span><span style="color:var(--accent-warm);">받아쓰기 완료</span>` : ''}
-                ${r.hasNote ? `<span class="dot">·</span><span style="color:var(--text-secondary);">노트 있음</span>` : ''}
+                <span class="library-card-tag">${r.isVideo ? '화면 영상' : TYPE_LABEL[r.type]}</span>
+                ${(r.scenario && r.scenario !== TYPE_LABEL[r.type] && !r.isVideo) ? `<span class="library-card-tag">${escapeHtml(r.scenario)}</span>` : ''}
+                ${buildCardMeta(r)}
               </div>
             </div>
             <div class="library-card-actions">${actions}</div>
@@ -6174,6 +6954,14 @@ if ('serviceWorker' in navigator) {
       list.querySelectorAll('.library-card').forEach(card => {
         const id = card.dataset.itemId;
         const type = card.dataset.itemType;
+        card.addEventListener('click', () => openLibraryItem(id, type));
+        card.addEventListener('keydown', e => {
+          if (e.target !== card) return;
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openLibraryItem(id, type);
+          }
+        });
         card.querySelectorAll('.library-card-btn').forEach(btn => {
           btn.addEventListener('click', e => {
             e.stopPropagation();
@@ -6183,20 +6971,76 @@ if ('serviceWorker' in navigator) {
         });
       });
     }
-    function renderCardActions(r) {
+    function libraryItemStatus(r) {
+      if (r.type === 'meeting') {
+        if (r._raw?.summaryError) return 'failed';
+        if (r._raw?.summary) return 'complete';
+        return 'processing';
+      }
       if (r.type === 'audio') {
+        if (r._raw?.summaryError || r._raw?.jobError) return 'failed';
+        if (r._raw?.summary) return 'complete';
+        if (r._raw?.jobId || r.transcribed) return 'processing';
+      }
+      return 'ready';
+    }
+    // 카드 정보 줄 = 있는 항목만 모아 한 번에 이어 붙인다 (점만 덩그러니 남지 않게)
+    function buildCardMeta(r) {
+      const parts = [];
+      if (r.subtitle) parts.push(escapeHtml(r.subtitle));
+      if (r.durationSec) parts.push(fmtDuration(r.durationSec));
+      if (r.size) parts.push(fmtBytes(r.size));
+      const when = fmtDateRel(r.ts);
+      if (when) parts.push(when);
+      let out = parts.length ? `<span>${parts.join(' · ')}</span>` : '';
+      if (r.transcribed) out += `<span class="dot">·</span><span style="color:var(--accent-warm);">받아쓰기 완료</span>`;
+      if (r.hasNote) out += `<span class="dot">·</span><span style="color:var(--text-secondary);">노트 있음</span>`;
+      const state = libraryItemStatus(r);
+      if (state === 'processing') out += `<span class="dot">·</span><span style="color:var(--action-blue);">${escapeHtml(r._raw?._progress || (r.transcribed ? 'AI 회의록 처리 중' : '처리 중'))}</span>`;
+      if (state === 'failed') out += `<span class="dot">·</span><span style="color:var(--rec-red);">실패 · 다시 시도</span>`;
+      if (r.type === 'meeting' && r.recordingId && !r.hasRecording) out += `<span class="dot">·</span><span style="color:var(--text-tertiary);">원본 녹음이 이 기기에 없습니다 · 서버 복구 확인</span>`;
+      return out;
+    }
+
+    function renderCardActions(r) {
+      if (r.type === 'audio' && r.isVideo) {
+        // 화면 영상 = 회의록·MP3 대상이 아니다. 보기와 저장만.
+        return `
+          <button type="button" class="library-card-btn primary" data-act="play-video" title="영상 보기">
+            <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>
+            영상 보기
+          </button>
+          <button type="button" class="library-card-btn" data-act="download-video" title="영상 파일로 저장">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            저장
+          </button>
+          <button type="button" class="library-card-btn danger" data-act="delete-audio" title="삭제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+        `;
+      }
+      if (r.type === 'audio') {
+        if (r._raw?.summary) {
+          return `
+            <button type="button" class="library-card-btn primary" data-act="open-recovered" title="복구한 회의록 열기">회의록 열기</button>
+            <button type="button" class="library-card-btn" data-act="play" title="녹음 재생">재생</button>
+            <button type="button" class="library-card-btn" data-act="download" title="녹음 저장">저장</button>
+          `;
+        }
         return `
           <button type="button" class="library-card-btn" data-act="play" title="재생"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg></button>
           <button type="button" class="library-card-btn primary" data-act="scenario" title="회의록·강의록 등으로 정리">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
             회의록
           </button>
-          <button type="button" class="library-card-btn" data-act="download" title="다운로드"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></button>
+          <button type="button" class="library-card-btn" data-act="download" title="MP3로 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></button>
           <button type="button" class="library-card-btn danger" data-act="delete-audio" title="삭제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
         `;
       }
       if (r.type === 'meeting') {
         return `
+          <button type="button" class="library-card-btn" data-act="resummarize" title="회의록 다시 만들기">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+            다시 만들기
+          </button>
           <button type="button" class="library-card-btn primary" data-act="open-meeting" title="회의록 보기">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             보기
@@ -6215,34 +7059,117 @@ if ('serviceWorker' in navigator) {
       }
       return '';
     }
+    function openMeetingResult(id) {
+      localStorage.setItem('ai_pronote.current_view_meeting.v1', id);
+      window.PronoteInk?.switchMeeting?.(id).catch(() => {});
+      window.switchView?.('result');
+      setTimeout(() => { window.__pronoteShowMeetingMode?.(); try { loadResultAudio(); } catch (e) {} }, 50);
+    }
+    async function ensureMeetingForRecord(r) {
+      if (!r) return null;
+      const KEY = 'ai_pronote.meetings.v1';
+      let meetings = [];
+      try { meetings = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch {}
+      let meeting = meetings.find(m => m.recordingId === r.id || (r.jobId && m.jobId === r.jobId));
+      if (meeting) return meeting;
+      if (!r.summary && !r.transcript) return null;
+      meeting = {
+        id: 'm_recovered_' + r.id,
+        title: r.title || String(r.filename || '복구한 회의').replace(/\.[^.]+$/, ''),
+        tag: r.tag || r.scenario || '회의',
+        date: new Date(r.startedAt || Date.now()).toISOString().slice(0, 10),
+        dateLabel: '복구됨',
+        duration: r.durationSec ? `${Math.floor(r.durationSec / 60)}분` : '—',
+        recordingDurationSec: r.durationSec || 0,
+        recordingFilename: r.filename || '',
+        recordingId: r.id,
+        jobId: r.jobId || null,
+        source: r.source || 'recording',
+        scenario: r.scenario || '회의록',
+        scenarioKey: r.scenarioKey || 'meeting',
+        summary: r.summary || '',
+        transcript: r.transcript || '',
+        summaryError: r.summaryError || r.jobError || null,
+      };
+      meetings.unshift(meeting);
+      localStorage.setItem(KEY, JSON.stringify(meetings));
+      return meeting;
+    }
+    async function openLibraryItem(id, type) {
+      if (type === 'meeting') { openMeetingResult(id); return; }
+      if (type === 'note') { handleCardAction('open-note', id, type); return; }
+      if (type !== 'audio') return;
+      const record = await dbGet(id);
+      if (!record) { window.showToast?.('이 항목의 원본을 찾을 수 없습니다. 서버 복구 또는 백업을 확인해 주세요.'); return; }
+      if (record.summary || record.transcript) {
+        const meeting = await ensureMeetingForRecord(record);
+        if (meeting) { openMeetingResult(meeting.id); return; }
+      }
+      if (record.summaryError || record.jobError) {
+        window.showToast?.(`처리에 실패했습니다: ${record.summaryError || record.jobError} · 회의록 다시 시도를 눌러 주세요.`);
+        return;
+      }
+      if (record.jobId) {
+        window.showToast?.(record.transcribed ? 'AI 회의록 처리 중입니다. 작업함에서 진행 상태를 확인할 수 있습니다.' : '받아쓰기 처리 중입니다. 작업함에서 진행 상태를 확인할 수 있습니다.');
+        document.getElementById('jobCenterToggle')?.click();
+        return;
+      }
+      if (record.isVideo) { playVideo(id); return; }
+      playRecording(id);
+    }
     function handleCardAction(act, id, type) {
+      if (act === 'play-video') { playVideo(id); return; }
+      if (act === 'download-video') { downloadVideo(id); return; }
+      if (act === 'resummarize') {
+        // 회의록 카드 = meetings 항목 → 연결된 녹음으로 다시 만든다
+        let recId = id;
+        try {
+          const arr = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+          const m = arr.find(x => x.id === id);
+          if (m && m.recordingId) recId = m.recordingId;
+        } catch {}
+        runSummarizeForRecord(recId);
+        return;
+      }
       if (act === 'play') playRecording(id);
       else if (act === 'download') downloadRecording(id);
       else if (act === 'delete-audio') deleteRecording(id);
       else if (act === 'scenario') openScenarioModal(id);
+      else if (act === 'open-recovered') openLibraryItem(id, type);
       else if (act === 'open-meeting') {
-        localStorage.setItem('ai_pronote.current_view_meeting.v1', id);
-        window.switchView?.('result');
-        setTimeout(() => window.__pronoteShowMeetingMode?.(), 50);
+        openMeetingResult(id);
       }
       else if (act === 'open-note') {
         localStorage.setItem('ai_pronote.current_view_meeting.v1', id);
+        window.PronoteInk?.switchMeeting?.(id).catch(() => {});
         window.switchView?.('result-mynote');
       }
       else if (act === 'delete-meeting') deleteMeeting(id);
     }
     async function deleteMeeting(id) {
-      if (!confirm('이 항목을 삭제할까요? 회의록·노트가 함께 삭제됩니다.')) return;
+      if (!confirm('이 항목을 휴지통으로 보낼까요? (녹음 원본은 보존되어 복구 가능합니다)')) return;
       try {
         let arr = [];
         try { arr = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]'); } catch {}
         const target = arr.find(m => m.id === id);
         const recId = target?.recordingId;
+        // ★ v1.4 휴지통 — 회의록 메타를 trash로 백업 (영구삭제 X = 복구 가능)
+        if (target) {
+          try {
+            const trash = JSON.parse(localStorage.getItem('ai_pronote.trash.v1') || '[]');
+            target._deletedAt = Date.now();
+            trash.unshift(target);
+            localStorage.setItem('ai_pronote.trash.v1', JSON.stringify(trash.slice(0, 100)));
+          } catch {}
+        }
         arr = arr.filter(m => m.id !== id);
         localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(arr));
-        // 매핑된 녹음도 삭제 (옵션)
-        if (recId) { try { await dbDelete(recId); } catch {} }
-        window.showToast?.('삭제됨');
+        // ★ v1.4 — 녹음 원본은 영구삭제 X, deleted 마킹만 (재생성 불가 = 끝까지 보존)
+        if (recId) {
+          try { const r = await dbGet(recId); if (r) { r.deleted = true; r.deletedAt = Date.now(); await dbPut(r); } }
+          catch {}
+        }
+        window.showToast?.('휴지통으로 이동 — 녹음 원본은 보존됩니다');
         refreshLibrary();
       } catch (e) { window.showToast?.('삭제 실패: ' + e.message); }
     }
@@ -6263,7 +7190,12 @@ if ('serviceWorker' in navigator) {
     async function playRecording(id) {
       try {
         const r = await dbGet(id);
-        if (!r || !r.blob) { window.showToast?.('파일을 찾을 수 없습니다'); return; }
+        if (!r) { window.showToast?.('녹음을 찾을 수 없습니다'); return; }
+        if (!r.blob) {
+          const b = await ensureBlob(r);
+          if (!b) { window.showToast?.('녹음 파일이 없습니다 (원본이 지워졌을 수 있습니다)'); return; }
+          r.blob = b;
+        }
         const bar = document.getElementById('libraryAudioBar');
         const player = document.getElementById('libraryAudioPlayer');
         const title = document.getElementById('libraryAudioTitle');
@@ -6275,15 +7207,98 @@ if ('serviceWorker' in navigator) {
         player.play().catch(() => {});
       } catch (e) { window.showToast?.('재생 실패: ' + e.message); }
     }
-    async function downloadRecording(id) {
+    // 녹음 파일 확보 — 이 창에 없으면 서버에 남아 있는 원본을 가져온다.
+    // (결과만 되찾은 회의는 브라우저에 녹음이 없어서 재생·저장이 조용히 실패했다)
+    async function ensureBlob(r) {
+      if (!r) return null;
+      if (r.blob) return r.blob;
+      if (!r.jobId) return null;
+      try {
+        window.showToast?.('녹음 파일을 불러오는 중…');
+        const res = await fetch('/api/audio/' + r.jobId);
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        try { const rec = await dbGet(r.id); if (rec) { rec.blob = blob; rec.size = blob.size; await dbPut(rec); } } catch {}
+        return blob;
+      } catch (e) { return null; }
+    }
+
+    // 화면 영상 = 새 창에서 그대로 재생 (오디오 플레이어에 넣으면 소리만 난다)
+    async function playVideo(id) {
       try {
         const r = await dbGet(id);
-        if (!r || !r.blob) return;
+        if (!r || !r.blob) { window.showToast?.('영상 파일을 찾을 수 없습니다'); return; }
+        const url = URL.createObjectURL(r.blob);
+        const w = window.open('', '_blank');
+        if (!w) { window.showToast?.('팝업이 막혀 있습니다 — 허용 후 다시 눌러 주세요'); URL.revokeObjectURL(url); return; }
+        w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'
+          + escapeHtml(r.filename || '회의 영상')
+          + '</title><style>body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;height:100vh}video{max-width:100%;max-height:100%}</style></head><body>'
+          + '<video src="' + url + '" controls autoplay></video></body></html>');
+        w.document.close();
+      } catch (e) { window.showToast?.('영상 재생 실패: ' + e.message); }
+    }
+
+    // 화면 영상 = 원본 그대로 저장 (MP3 로 바꾸면 영상이 사라진다)
+    async function downloadVideo(id) {
+      try {
+        const r = await dbGet(id);
+        if (!r || !r.blob) { window.showToast?.('영상 파일을 찾을 수 없습니다'); return; }
+        const url = URL.createObjectURL(r.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (r.filename || '회의 영상.webm').replace(/^\(영상\)\s*/, '');
+        document.body.appendChild(a); a.click();
+        setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+        window.showToast?.('영상을 저장했습니다');
+      } catch (e) { window.showToast?.('영상 저장 실패: ' + e.message); }
+    }
+
+    async function downloadRecording(id) {
+      // 어디서나 열리는 MP3로 변환해 저장 (서버 변환). 실패 시 = 원본 그대로.
+      try {
+        const r = await dbGet(id);
+        if (!r) { window.showToast?.('녹음을 찾을 수 없습니다'); return; }
+        if (!r.blob) {
+          const b = await ensureBlob(r);
+          if (!b) { window.showToast?.('녹음 파일이 없습니다 (원본이 지워졌을 수 있습니다)'); return; }
+          r.blob = b;
+        }
+        const base = (r.filename || r.title || '녹음').replace(/\.[^.]+$/, '');
+        const mins = Math.round((r.durationSec || 0) / 60);
+        // 긴 녹음은 변환에 시간이 걸린다. 얼마나 걸릴지 먼저 알린다(고장으로 오해하지 않게).
+        window.showToast?.(mins >= 20
+          ? `MP3로 만드는 중… ${mins}분 녹음이라 1~3분 걸립니다`
+          : 'MP3로 만드는 중…');
+        try {
+          const fd = new FormData();
+          fd.append('file', r.blob, 'rec.webm');
+          // 너무 오래 걸리면 기다리지 않고 원본 그대로 저장한다 (어차피 재생은 된다)
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 240000);
+          let res;
+          try {
+            res = await fetch('/api/export/mp3', { method: 'POST', body: fd, signal: ctrl.signal });
+          } finally { clearTimeout(timer); }
+          if (!res.ok) throw new Error('변환 실패');
+          const mp3 = await res.blob();
+          const url = URL.createObjectURL(mp3);
+          const a = document.createElement('a');
+          a.href = url; a.download = base + '.mp3';
+          document.body.appendChild(a); a.click();
+          setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+          window.showToast?.('MP3로 저장됨 — ' + base + '.mp3');
+          return;
+        } catch (convErr) {
+          console.warn('[MP3] 변환 실패 — 원본으로 저장', convErr);
+          window.showToast?.('MP3 변환이 오래 걸려 원본 그대로 저장합니다');
+        }
         const url = URL.createObjectURL(r.blob);
         const a = document.createElement('a');
         a.href = url; a.download = r.filename || (r.title + '.webm');
         document.body.appendChild(a); a.click();
         setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+        window.showToast?.('녹음 원본으로 저장했습니다');
       } catch (e) { window.showToast?.('다운로드 실패: ' + e.message); }
     }
     async function deleteRecording(id) {
@@ -6351,61 +7366,311 @@ if ('serviceWorker' in navigator) {
         if (!r.transcribed) {
           await runTranscribeForRecord(_scenarioTargetId);
         } else {
-          window.showToast?.(`"${sel.name}" 형식으로 저장됨 (받아쓰기 = 이미 완료)`);
+          // 받아쓰기가 이미 끝난 녹음 = 회의록만 만든다.
+          // 옛 버전은 여기서 안내만 띄우고 아무것도 하지 않았다 → 회의록 생성이 한 번
+          // 실패하면 다시 만들 방법이 없었다(2026-08-20 실제 사고).
+          window.showToast?.(`"${sel.name}" 형식으로 회의록을 만듭니다`);
+          await runSummarizeForRecord(_scenarioTargetId);
         }
       } catch (e) { window.showToast?.('저장 실패: ' + e.message); }
     }
 
+    // ─── 회의 결과 페이지 진행상태/에러 갱신 헬퍼 ────────────────────
+    function updateMeetingProgress(recId, patch) {
+      try {
+        const KEY = 'ai_pronote.meetings.v1';
+        const arr = JSON.parse(localStorage.getItem(KEY) || '[]');
+        const m = arr.find(x => x.recordingId === recId);
+        if (m) {
+          if (patch.progress !== undefined) m._progress = patch.progress;
+          if (patch.error !== undefined) { m.summaryError = patch.error; m.summaryPending = false; }
+          localStorage.setItem(KEY, JSON.stringify(arr));
+        }
+      } catch (e) { console.error('[Progress]', e); }
+      try { window.__pronoteResult?.render?.(); } catch {}
+    }
+
     // ─── 받아쓰기 호출 + Claude 회의록 자동 생성 ─────────────────────
+    // ══════════════════════════════════════════════════════════════
+    // 서버 작업 따라가기
+    //
+    // 받아쓰기와 회의록은 서버가 혼자 끝까지 한다. 화면은 진행 상황만 지켜본다.
+    // 그래서 회의가 끝나면 창을 닫고 노트북을 덮어도 된다 — 다시 열면 이어서 보인다.
+    // 인터넷이 끊겨도 마찬가지다(받아쓰기는 이 PC에서 돌고, 회의록은 연결되면 만들어진다).
+    // ══════════════════════════════════════════════════════════════
+    const JOB_POLL_MS = 3000;
+    const _jobWatching = new Set();
+
+    function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    async function _getJson(url, opt) {
+      const res = await fetch(url, opt);
+      if (!res.ok) {
+        let body = null;
+        try { body = await res.json(); } catch {}
+        const d = body && body.detail;
+        const err = new Error((d && d.message) || (typeof d === 'string' ? d : '') || ('오류 ' + res.status));
+        err.status = res.status;
+        err.kind = d && d.kind;
+        throw err;
+      }
+      return res.json();
+    }
+
+    async function saveTranscriptToRecord(recId, data) {
+      const rec = await dbGet(recId);
+      if (!rec) return null;
+      rec.transcribed = true;
+      rec.transcript = data.speaker_text || data.full_text || '';
+      rec.transcriptSegments = data.segments;
+      rec.transcriptModel = data.model;
+      rec.transcriptDiarization = data.diarization;
+      rec.transcriptElapsedSec = data.elapsed_sec;
+      rec.transcriptedAt = Date.now();
+      await dbPut(rec);
+      refreshLibrary();
+      return rec;
+    }
+
+    async function saveSummaryToRecord(recId, out) {
+      const r = await dbGet(recId);
+      if (!r) return;
+      r.summary = out.summary;
+      r.summaryModel = out.model_id;
+      r.summaryElapsedSec = out.elapsed_sec;
+      r.summarizedAt = Date.now();
+      if (out.title && !r.title) r.title = out.title;
+      await dbPut(r);
+      try {
+        const KEY = 'ai_pronote.meetings.v1';
+        let arr = JSON.parse(localStorage.getItem(KEY) || '[]');
+        let m = arr.find(x => x.recordingId === recId);
+        if (!m) {
+          m = {
+            id: 'm_' + Date.now(),
+            title: out.title || r.title || '회의',
+            tag: r.tag || (r.scenario || '회의'),
+            date: new Date(r.startedAt || Date.now()).toISOString().slice(0, 10),
+            dateLabel: '오늘',
+            duration: r.durationSec ? `${Math.floor(r.durationSec / 60)}분` : '—',
+            attendees: r.attendees ? r.attendees.split(/[,，]\s*/).filter(Boolean).length : 0,
+            recordingId: recId,
+            recordingFilename: r.filename,
+            recordingDurationSec: r.durationSec,
+          };
+          arr.unshift(m);
+        }
+        if (out.title) m.title = out.title;
+        m.summary = out.summary;
+        m.summaryError = null;
+        m._progress = null;
+        m.transcript = r.transcript;
+        m.scenario = r.scenario;
+        m.scenarioKey = r.scenarioKey;
+        localStorage.setItem(KEY, JSON.stringify(arr));
+        localStorage.setItem('ai_pronote.current_view_meeting.v1', m.id);
+        window.PronoteInk?.switchMeeting?.(m.id).catch(() => {});
+      } catch (e) { console.error('[Sum] meeting save', e); }
+      refreshLibrary();
+      try { window.__pronoteResult?.render?.(); } catch {}
+    }
+
+    // 서버 작업 하나를 끝까지 지켜본다 (받아쓰기 → 회의록)
+    async function watchJob(recId, jobId) {
+      if (!jobId || _jobWatching.has(jobId)) return;
+      _jobWatching.add(jobId);
+      let transcriptSaved = false;
+      let offline = 0;
+      let resultFailures = 0;
+      let summaryFailures = 0;
+      try {
+        for (;;) {
+          await _sleep(JOB_POLL_MS);
+          let j;
+          try {
+            j = await _getJson('/api/jobs/' + jobId);
+            if (offline) { offline = 0; }
+          } catch (e) {
+            if (e.status === 404 || e.status === 410) {
+              updateMeetingProgress(recId, { error: '서버에서 이 작업을 찾을 수 없습니다. 작업함에서 원본 녹음을 확인해 주세요.' });
+              return;
+            }
+            if (e.status === 401 || e.status === 403) {
+              updateMeetingProgress(recId, { error: '작업을 확인할 권한이 없습니다. 로그인 상태를 확인해 주세요.' });
+              return;
+            }
+            // 서버가 잠깐 안 보여도 포기하지 않는다. 작업은 그쪽에서 계속 돌고 있다.
+            offline++;
+            if (offline === 4) {
+              updateMeetingProgress(recId, { progress: '연결이 끊겼습니다 — 다시 연결되면 이어서 표시됩니다' });
+            }
+            if (offline >= 20) {
+              updateMeetingProgress(recId, { error: '서버 연결을 오래 복구하지 못했습니다. 앱을 다시 연 뒤 작업함에서 상태를 확인해 주세요.' });
+              return;
+            }
+            continue;
+          }
+
+          if (j.status === 'queued' || j.status === 'running') {
+            updateMeetingProgress(recId, { progress: `${j.phase || '받아쓰기 중'} (${j.progress || 0}%)` });
+            continue;
+          }
+          if (j.status === 'interrupted') {
+            updateMeetingProgress(recId, { error: '받아쓰기가 중단됐습니다 — 라이브러리에서 [이어서 받아쓰기]를 누르면 다시 진행합니다.' });
+            return;
+          }
+          if (j.status === 'error') {
+            updateMeetingProgress(recId, { error: j.error || '받아쓰기에 실패했습니다.' });
+            return;
+          }
+
+          // 받아쓰기 완료
+          if (!transcriptSaved) {
+            try {
+              const data = await _getJson('/api/results/' + jobId);
+              await saveTranscriptToRecord(recId, data);
+              transcriptSaved = true;
+              const 글자수 = ((data.speaker_text || data.full_text) || '').length;
+              if (글자수 === 0) {
+                // 소리가 안 잡힌 것 = "완료"가 아니다. 무엇을 확인하면 되는지 알린다.
+                const msg = '소리가 인식되지 않았습니다 — 마이크가 음소거였거나 소리가 너무 작았을 수 있습니다. '
+                          + '녹음은 라이브러리에 남아 있으니 마이크를 확인한 뒤 다시 시도해 보세요.';
+                updateMeetingProgress(recId, { error: msg });
+                window.showToast?.('소리가 인식되지 않았습니다 — 마이크를 확인해 주세요');
+                return;
+              }
+              window.showToast?.(`받아쓰기 완료 — ${글자수.toLocaleString()}자`);
+            } catch (e) {
+              resultFailures++;
+              if ([401,403,410].includes(e.status) || resultFailures >= 5) {
+                updateMeetingProgress(recId, { error: '완료 결과를 불러오지 못했습니다. 작업함에서 상태를 확인해 주세요.' });
+                return;
+              }
+              continue;
+            }
+          }
+
+          // 회의록 = 서버가 이어서 만든다
+          let s = null;
+          try { s = await _getJson('/api/summarize/' + jobId); summaryFailures = 0; }
+          catch (e) {
+            summaryFailures++;
+            if ([401,403,404,410].includes(e.status) || summaryFailures >= 5) {
+              updateMeetingProgress(recId, { error: 'AI 회의록 상태를 불러오지 못했습니다. 작업함에서 다시 확인해 주세요.' });
+              return;
+            }
+            continue;
+          }
+
+          if (s.summary_status === 'done' && s.result) {
+            await saveSummaryToRecord(recId, s.result);
+            window.showToast?.(`AI 회의록 완료 — ${s.result.char_count}자`);
+            return;
+          }
+          if (s.summary_status === 'none') return;          // 자동 생성 대상이 아님
+          if (s.summary_status === 'error') {
+            updateMeetingProgress(recId, { error: s.summary_error || '회의록 생성에 실패했습니다.' });
+            return;
+          }
+          // pending · running = 계속 기다린다 (서버가 알아서 다시 시도한다)
+          if (s.summary_error_kind === 'auth') {
+            updateMeetingProgress(recId, { progress: 'Claude 로그인이 필요합니다 — 로그인하면 회의록을 자동으로 만듭니다' });
+            try { window.__pronoteAIStatus?.refresh?.(); } catch {}
+          } else if (s.summary_error_kind) {
+            updateMeetingProgress(recId, { progress: `AI 회의록 대기 중 — ${s.summary_error || '잠시 후 다시 시도합니다'}` });
+          } else {
+            updateMeetingProgress(recId, { progress: 'AI 회의록 작성 중…' });
+          }
+        }
+      } finally {
+        _jobWatching.delete(jobId);
+      }
+    }
+
     async function runTranscribeForRecord(recId) {
       const r = await dbGet(recId);
       if (!r || !r.blob) { window.showToast?.('파일 X'); return; }
       let modelChoice = 'medium';
+      let diarizeOn = false;
       try {
         const s = JSON.parse(localStorage.getItem('ai_pronote.settings.v1') || '{}');
         modelChoice = s?.transcribe?.model || 'medium';
+        diarizeOn = !!s?.transcribe?.diarize;
       } catch {}
-      const minutesEst = modelChoice === 'small' ? Math.ceil((r.durationSec||0) / 60 / 7) : Math.ceil((r.durationSec||0) / 60 / 3);
+      const minutesEst = modelChoice === 'small' ? Math.ceil((r.durationSec || 0) / 60 / 7) : Math.ceil((r.durationSec || 0) / 60 / 3);
       window.showToast?.(`받아쓰기 시작 — ${modelChoice} 모델 · 약 ${minutesEst}분 예상`);
+      updateMeetingProgress(recId, { progress: `받아쓰기 준비 중… (약 ${minutesEst}분 예상) — 창을 닫으셔도 됩니다` });
       try {
         const fd = new FormData();
         fd.append('file', r.blob, r.filename || 'audio.webm');
-        fd.append('language', 'ko');
+        // 받아쓰기 언어 = 녹음별 지정 > 설정값 > 기본 ko (해외 회의 대응)
+        let langChoice = 'ko';
+        try { langChoice = r.language || JSON.parse(localStorage.getItem('ai_pronote.settings.v1') || '{}')?.transcribe?.language || 'ko'; } catch {}
+        fd.append('language', langChoice);
         fd.append('model', modelChoice);
-        const t0 = Date.now();
-        const res = await fetch('/api/transcribe', { method: 'POST', body: fd });
-        if (!res.ok) {
-          const txt = await res.text();
-          window.showToast?.(`받아쓰기 실패 (${res.status}): ${txt.slice(0, 100)}`);
-          return;
-        }
-        const data = await res.json();
-        const elapsed = Math.round((Date.now() - t0) / 1000);
-        // record 갱신
-        const rec2 = await dbGet(recId);
-        rec2.transcribed = true;
-        rec2.transcript = data.full_text;
-        rec2.transcriptSegments = data.segments;
-        rec2.transcriptModel = data.model;
-        rec2.transcriptElapsedSec = data.elapsed_sec;
-        rec2.transcriptedAt = Date.now();
-        await dbPut(rec2);
-        refreshLibrary();
-        window.showToast?.(`받아쓰기 완료 — ${data.model} · ${elapsed}초 · ${data.full_text.length}자`);
-        // 시나리오 매핑된 회의록 자동 생성 (Claude OAuth)
-        if (rec2.scenarioKey) {
-          await runSummarizeForRecord(recId);
-        }
+        if (diarizeOn) fd.append('diarize', 'true');
+        // 회의 정보도 함께 = 화면이 꺼져 있어도 서버 혼자 회의록까지 만든다
+        fd.append('auto_summarize', r.scenarioKey ? 'true' : 'false');
+        fd.append('scenario', r.scenarioKey || 'meeting');
+        fd.append('llm_model', 'haiku');
+        fd.append('provider', (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude'));
+        fd.append('external_consent', String(window.__pronoteExternalConsent?.() || false));
+        fd.append('title', r.title || '');
+        fd.append('attendees', r.attendees || '');
+        fd.append('tag', r.tag || '');
+        fd.append('date', new Date(r.startedAt || Date.now()).toISOString().slice(0, 10));
+
+        const started = await _getJson('/api/transcribe', { method: 'POST', body: fd });
+        // job_id 를 먼저 저장한다 = 지금 창이 닫혀도 다음에 열었을 때 이어받는다
+        const rec1 = await dbGet(recId);
+        if (rec1) { rec1.jobId = started.job_id; rec1.jobStartedAt = Date.now(); await dbPut(rec1); }
+        await watchJob(recId, started.job_id);
       } catch (e) {
-        window.showToast?.('받아쓰기 실패: ' + e.message);
+        updateMeetingProgress(recId, { error: '받아쓰기 요청 실패: ' + e.message });
+        window.showToast?.('받아쓰기 요청 실패: ' + e.message);
       }
     }
+
+    // 앱을 열 때 — 끝나지 않은 작업이 있으면 조용히 이어서 따라간다
+    async function resumeUnfinishedJobs() {
+      try {
+        const all = await dbGetAll();
+        for (const rec of all) {
+          if (!rec.jobId) continue;
+          if (rec.summary) continue;                       // 이미 다 받아 온 것
+          let j = null;
+          try { j = await _getJson('/api/jobs/' + rec.jobId); } catch { continue; }
+          if (!j) continue;
+          if (j.status === 'done' && rec.transcribed && (j.summary_status === 'none')) continue;
+          watchJob(rec.id, rec.jobId);                     // 기다리지 않고 뒤에서 따라간다
+        }
+      } catch (e) { console.error('[Resume]', e); }
+    }
+    setTimeout(resumeUnfinishedJobs, 2500);
 
     // ─── Claude 회의록 자동 생성 ───────────────────────────────────
     async function runSummarizeForRecord(recId) {
       const r = await dbGet(recId);
-      if (!r || !r.transcript) { window.showToast?.('받아쓰기 텍스트 X'); return; }
-      window.showToast?.(`AI 회의록 생성 중 — Claude (${r.scenario || '회의록'})`);
+      if (!r || !r.transcript) { window.showToast?.('받아쓰기 텍스트가 없습니다'); return; }
+
+      // 서버에 남아 있는 작업이면 서버에 맡긴다 = 창을 닫아도 계속되고, 실패해도 대기열에 남는다
+      if (r.jobId) {
+        try {
+          const q = new URLSearchParams({
+            scenario: r.scenarioKey || 'meeting',
+            llm_model: 'haiku',
+            provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude'),
+            external_consent: String(window.__pronoteExternalConsent?.() || false),
+          });
+          await _getJson('/api/summarize/redo/' + r.jobId + '?' + q.toString(), { method: 'POST' });
+          window.showToast?.('AI 회의록을 다시 만듭니다 — 창을 닫으셔도 됩니다');
+          updateMeetingProgress(recId, { progress: 'AI 회의록 작성 중…' });
+          watchJob(recId, r.jobId);
+          return;
+        } catch (e) { /* 서버에 작업 기록이 없으면 아래 직접 호출로 */ }
+      }
+
+      window.showToast?.(`AI 회의록 생성 중 — ${r.scenario || '회의록'}`);
       try {
         const t0 = Date.now();
         const res = await fetch('/api/llm/summarize', {
@@ -6415,21 +7680,23 @@ if ('serviceWorker' in navigator) {
             transcript: r.transcript,
             scenario: r.scenarioKey || 'meeting',
             model: 'haiku',  // 디폴트 Haiku (빠름·정확). 사용자 선택 추후.
+            provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude'),
             title: r.title,
             attendees: r.attendees,
             tag: r.tag,
             date: new Date(r.startedAt).toISOString().slice(0, 10),
+            external_consent: Boolean(window.__pronoteExternalConsent?.()),
           }),
         });
         if (!res.ok) {
-          const txt = await res.text();
-          if (res.status === 401 || txt.includes('401')) {
-            window.showToast?.('Claude 인증 만료 — 새 터미널에서 "claude" 한 번 실행해주세요');
-          } else if (res.status === 429 || txt.includes('429')) {
-            window.showToast?.('Claude rate limit — 1분 후 다시 시도해주세요');
-          } else {
-            window.showToast?.(`AI 회의록 생성 실패 (${res.status})`);
+          let d = null;
+          try { d = (await res.json()).detail; } catch {}
+          const emsg = (d && d.message) || `회의록 생성에 실패했습니다 (${res.status})`;
+          if (d && d.kind === 'auth') {
+            try { window.__pronoteAIStatus?.open?.(); } catch {}
           }
+          updateMeetingProgress(recId, { error: emsg });
+          window.showToast?.(emsg);
           return;
         }
         const data = await res.json();
@@ -6466,10 +7733,13 @@ if ('serviceWorker' in navigator) {
           m.scenarioKey = r.scenarioKey;
           localStorage.setItem(KEY, JSON.stringify(arr));
           localStorage.setItem('ai_pronote.current_view_meeting.v1', m.id);
+          window.PronoteInk?.switchMeeting?.(m.id).catch(() => {});
         } catch (e) { console.error('[Sum] meeting save', e); }
         refreshLibrary();
-        window.showToast?.(`AI 회의록 완료 — ${elapsed}초 · ${data.char_count}자. 회의록 보기 = 라이브러리 카드 → 보기`);
+        try { window.__pronoteResult?.render?.(); } catch {}
+        window.showToast?.(`AI 회의록 완료 — ${elapsed}초 · ${data.char_count}자.`);
       } catch (e) {
+        updateMeetingProgress(recId, { error: 'AI 회의록 실패: ' + e.message });
         window.showToast?.('AI 회의록 실패: ' + e.message);
       }
     }
@@ -6495,7 +7765,9 @@ if ('serviceWorker' in navigator) {
       refresh: refreshLibrary,
       handleUploadedFiles,
       openScenario: openScenarioModal,
-      playRecording, downloadRecording, deleteRecording,
+      playRecording, downloadRecording, deleteRecording, playVideo, downloadVideo,
+      runTranscribe: runTranscribeForRecord,
+      runSummarize: runSummarizeForRecord,
     };
 
     // ─── DOMContentLoaded 후 바인딩 ──────────────────────────────
@@ -6594,6 +7866,45 @@ if ('serviceWorker' in navigator) {
         document.querySelectorAll('#view-result .side-tab').forEach(t => t.classList.remove('active'));
       }
       document.getElementById('sideAudioPlayerClose')?.addEventListener('click', closeSideAudio);
+      // ★ v1.4 배속 재생 (회의 다시 들을 때 빠르게)
+      document.querySelectorAll('#sideAudioSpeed .speed-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const a = document.getElementById('sideAudioPlayerAudio');
+          if (a) a.playbackRate = parseFloat(btn.dataset.speed) || 1;
+          document.querySelectorAll('#sideAudioSpeed .speed-btn').forEach(b => b.classList.toggle('active', b === btn));
+        });
+      });
+
+      async function openResultAudio(tab) {
+          const meetingId = localStorage.getItem('ai_pronote.current_view_meeting.v1');
+          if (!meetingId) { window.showToast?.('회의 정보 없음'); return false; }
+          const all = await dbGetAll();
+          let rec = null;
+          try {
+            const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+            const m = meetings.find(x => x.id === meetingId);
+            if (m?.recordingId) rec = all.find(r => r.id === m.recordingId);
+            else if (m?.recordingFilename) rec = all.find(r => r.filename === m.recordingFilename);
+          } catch {}
+          if (!rec) { window.showToast?.('이 회의에 연결된 녹음 파일이 없습니다'); tab?.classList.remove('active'); return false; }
+          const blob = await ensureBlob(rec);
+          if (!blob) { window.showToast?.('녹음 파일을 불러올 수 없습니다'); return false; }
+          const wrap = document.getElementById('sideAudioPlayer');
+          const audio = document.getElementById('sideAudioPlayerAudio');
+          const meta = document.getElementById('sideAudioPlayerMeta');
+          if (_sideAudioUrl) { try { URL.revokeObjectURL(_sideAudioUrl); } catch {} }
+          _sideAudioUrl = URL.createObjectURL(blob);
+          if (audio) audio.src = _sideAudioUrl;
+          if (meta) {
+            const dur = rec.durationSec ? `${Math.floor(rec.durationSec/60)}분 ${rec.durationSec%60}초` : '';
+            meta.textContent = `${rec.filename || rec.title} · ${dur}`;
+          }
+          if (wrap) wrap.removeAttribute('hidden');
+          audio?.scrollIntoView({behavior:'smooth', block:'center'});
+          if (audio) audio.play().catch(() => {});
+          return true;
+      }
+      window.__pronoteOpenResultAudio = openResultAudio;
 
       const sideTabs = document.querySelectorAll('#view-result .side-tab');
       sideTabs.forEach(tab => {
@@ -6603,42 +7914,14 @@ if ('serviceWorker' in navigator) {
           // 활성 탭 표시
           sideTabs.forEach(t => t.classList.toggle('active', t === tab));
           if (kind !== 'audio') {
-            // 다른 탭 = 인라인 player 닫기 + 토스트 (받아쓰기 엔진 통합 후 진짜 데이터)
             closeSideAudio();
-            const labels = { transcript: '전체 받아쓰기', highlight: '하이라이트', copilot: 'AI 비서 대화' };
-            window.showToast?.(`${labels[kind] || kind} = 받아쓰기 엔진 통합 후 자동 채워집니다`);
+            // 전체 받아쓰기 = 전용 핸들러가 실제 텍스트 패널을 토글 (여기서는 통과)
+            if (kind === 'transcript') return;
+            if (kind === 'highlight') { window.__pronoteResult?.toggleHighlights?.(); return; }
+            if (kind === 'copilot') { window.__pronoteResult?.toggleCopilotLog?.(); return; }
             return;
           }
-          // 녹음 들어보기
-          const meetingId = localStorage.getItem('ai_pronote.current_view_meeting.v1');
-          if (!meetingId) { window.showToast?.('회의 정보 없음'); return; }
-          const all = await dbGetAll();
-          let rec = null;
-          try {
-            const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
-            const m = meetings.find(x => x.id === meetingId);
-            if (m?.recordingId) rec = all.find(r => r.id === m.recordingId);
-            else if (m?.recordingFilename) rec = all.find(r => r.filename === m.recordingFilename);
-          } catch {}
-          if (!rec) rec = all.find(r => r.context === 'live') || all[0];
-          if (!rec) {
-            window.showToast?.('녹음 파일이 라이브러리에 없습니다');
-            tab.classList.remove('active');
-            return;
-          }
-          // 인라인 mini audio player 노출
-          const wrap = document.getElementById('sideAudioPlayer');
-          const audio = document.getElementById('sideAudioPlayerAudio');
-          const meta = document.getElementById('sideAudioPlayerMeta');
-          if (_sideAudioUrl) { try { URL.revokeObjectURL(_sideAudioUrl); } catch {} }
-          _sideAudioUrl = URL.createObjectURL(rec.blob);
-          if (audio) audio.src = _sideAudioUrl;
-          if (meta) {
-            const dur = rec.durationSec ? `${Math.floor(rec.durationSec/60)}분 ${rec.durationSec%60}초` : '';
-            meta.textContent = `${rec.filename || rec.title} · ${dur}`;
-          }
-          if (wrap) wrap.removeAttribute('hidden');
-          if (audio) audio.play().catch(() => {});
+          await openResultAudio(tab);
         });
       });
 
@@ -6882,7 +8165,12 @@ if ('serviceWorker' in navigator) {
       s = s.replace(/(?<![*])\*([^\n*]+?)\*(?![*])/g, '<em>$1</em>');
       s = s.replace(/`([^`\n]+?)`/g, '<code>$1</code>');
       // 링크
-      s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+        const safe = String(url).trim();
+        return /^(https?:|mailto:)/i.test(safe)
+          ? '<a href="' + safe + '" target="_blank" rel="noopener noreferrer">' + label + '</a>'
+          : label;
+      });
       // ordered list
       s = s.replace(/(?:^\d+\. .+(?:\n(?!\n).+)*\n?)+/gm, m => {
         const items = m.trim().split(/\n(?=\d+\. )/).map(line => '<li>' + line.replace(/^\d+\. /, '').replace(/\n/g, '<br/>') + '</li>').join('');
@@ -6914,10 +8202,43 @@ if ('serviceWorker' in navigator) {
       return null;
     }
 
+    // 샘플(데모) 섹션 = 한눈 요약·다음 준비·AI 제안. 진짜 회의록은 AI 정리 본문에 전부 포함됨.
+    function setSampleSectionsVisible(show) {
+      ['#summary', '#next', '#ai'].forEach(sel => {
+        const el = document.querySelector('#view-result ' + sel);
+        if (el) el.style.display = show ? '' : 'none';
+      });
+    }
+    function isDemoOn() { return document.body.classList.contains('dev-mode-on'); }
+    function isSeedMeeting(m) {
+      try { return typeof SEED_MEETING_IDS !== 'undefined' && SEED_MEETING_IDS.has(m.id); } catch { return false; }
+    }
+
     // 진짜 회의 데이터 binding
     function renderRealMeeting() {
       const m = getCurrentMeeting();
-      if (!m) return;
+      if (!m) {
+        // 실사용 = 아직 회의 없음 → 샘플 대신 빈 상태 안내 (데모 모드에서는 샘플 유지)
+        if (!isDemoOn()) {
+          setSampleSectionsVisible(false);
+          const t = document.querySelector('#view-result .result-title');
+          if (t) t.textContent = '회의록';
+          const tagEl0 = document.querySelector('#view-result .result-tag-row .tag');
+          if (tagEl0) tagEl0.textContent = '회의록';
+          document.querySelectorAll('#view-result .result-tag-row .meta').forEach(el => el.textContent = '');
+          const body0 = document.querySelector('#view-result .notes-box-body');
+          if (body0) {
+            body0.innerHTML = '<div class="meeting-real-summary" style="text-align:center; padding:44px 16px; color:var(--text-secondary); font-size:13.5px; line-height:1.8;">'
+              + '아직 회의록이 없습니다.<br/>좌측 <b>새 회의 시작</b>으로 녹음하거나, 라이브러리에 음성 파일을 올려 정리하면 여기에 표시됩니다.</div>';
+          }
+        } else {
+          setSampleSectionsVisible(true);
+        }
+        try { window.__pronoteNote?.loadCurrent?.(); } catch {}
+        return;
+      }
+      // 데모 샘플 회의 = 샘플 섹션 그대로 / 진짜 회의 = 샘플 섹션 숨김 (본문 = AI 회의록 전체)
+      setSampleSectionsVisible(isSeedMeeting(m));
       // 메타 갱신
       const tagEl = document.querySelector('#view-result .result-tag-row .tag');
       if (tagEl && m.tag) tagEl.textContent = m.tag;
@@ -6939,19 +8260,58 @@ if ('serviceWorker' in navigator) {
         }
       }
 
-      // notes-box-body = 진짜 summary 있으면 = 교체
+      // notes-box-body = 실제 summary 있으면 교체 / 없으면 "생성 중" (데모 mock 표시 X)
       const body = document.querySelector('#view-result .notes-box-body');
-      if (body && m.summary) {
-        // 옛 mock 보존 (첫 호출 시 backup)
+      if (body) {
         if (!body.dataset.mockSaved) {
           body.dataset.mockSaved = '1';
-          body.dataset.mockHtml = body.innerHTML;
+          body.dataset.mockHtml = body.innerHTML; // 옛 데모 백업(표시엔 사용 안 함)
         }
-        body.innerHTML = `<div class="meeting-real-summary">${mdToHtml(m.summary)}</div>`;
-      } else if (body && body.dataset.mockHtml) {
-        // summary 없으면 = mock 복원
-        body.innerHTML = body.dataset.mockHtml;
+        if (m.summary && m.summary.trim()) {
+          body.innerHTML = `<div class="meeting-real-summary">${mdToHtml(m.summary)}</div>`;
+        } else if (m.summaryError) {
+          body.innerHTML = `<div class="meeting-real-summary" style="padding:32px 8px">`
+            + `<p style="font-weight:600;margin-bottom:6px">회의록 생성에 실패했습니다.</p>`
+            + `<p style="font-size:13px;color:var(--text-secondary)">${escHtml(m.summaryError)}</p>`
+            + `<p style="font-size:13px;color:var(--text-secondary)">라이브러리에서 이 회의의 <b>[다시 만들기]</b> 를 누르면 다시 만듭니다.</p>`
+            + `<button type="button" id="summaryRetryBtn" style="margin-top:14px;padding:9px 18px;border-radius:8px;border:1px solid var(--border-strong);background:var(--bg-elev);cursor:pointer;font-size:13px;">회의록 다시 만들기</button></div>`;
+        } else {
+          body.innerHTML = `<style>@keyframes pronote-spin{to{transform:rotate(360deg)}}</style>`
+            + `<div class="meeting-real-summary" style="text-align:center;padding:44px 16px;color:var(--text-secondary)">`
+            + `<div style="width:26px;height:26px;border:3px solid var(--border,#ddd);border-top-color:var(--accent-warm,#c60);border-radius:50%;margin:0 auto 14px;animation:pronote-spin .8s linear infinite"></div>`
+            + `<div style="font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:6px">${escHtml(m._progress || '받아쓰기 · AI 회의록 생성 중…')}</div>`
+            + `<div style="font-size:12.5px">녹음 길이에 따라 수 분 걸릴 수 있습니다. <b>창을 닫고 이동하셔도 됩니다</b> — 뒤에서 계속 진행되고, 다시 열면 완성된 회의록이 표시됩니다.</div></div>`;
+        }
       }
+
+      // 실패 안내의 [회의록 다시 만들기] 연결
+      try {
+        const retryBtn = document.getElementById('summaryRetryBtn');
+        if (retryBtn && !retryBtn.dataset.bound) {
+          retryBtn.dataset.bound = '1';
+          retryBtn.addEventListener('click', () => {
+            const cur = getCurrentMeeting();
+            const rid = cur && (cur.recordingId || cur.id);
+            if (!rid) { window.showToast?.('연결된 녹음을 찾지 못했습니다'); return; }
+            retryBtn.disabled = true;
+            retryBtn.textContent = '다시 만드는 중…';
+            window.__pronoteLibrary?.runSummarize?.(rid);
+          });
+        }
+      } catch (e) { console.error('[Result] retry bind', e); }
+
+      // 사이드 "다른 보기" 카운트 = 진짜 수치 (샘플 숫자 고정 X)
+      if (!isSeedMeeting(m)) {
+        const cT = document.querySelector('#view-result .side-tab[data-side-tab="transcript"] .count');
+        if (cT) cT.textContent = m.transcript ? String(m.transcript.split('\n').filter(l => l.trim()).length) : '0';
+        const cH = document.querySelector('#view-result .side-tab[data-side-tab="highlight"] .count');
+        if (cH) cH.textContent = String((m.highlights || []).length);
+        const cC = document.querySelector('#view-result .side-tab[data-side-tab="copilot"] .count');
+        if (cC) cC.textContent = String((m.copilotLog || []).length);
+      }
+
+      // 이 회의의 내 노트 = 노트 카드·사이드 미리보기에 로드
+      try { window.__pronoteNote?.loadCurrent?.(); } catch {}
     }
 
     // showMeetingMode 진입 시 hook
@@ -6991,9 +8351,26 @@ if ('serviceWorker' in navigator) {
     }
     function downloadAs(fmt) {
       const m = getCurrentMeeting();
-      if (!m) { window.showToast?.('회의 정보 X'); return; }
+      if (!m) { window.showToast?.('회의 정보가 없습니다'); return; }
       const safeTitle = (m.title || '회의록').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
-      const summary = m.summary || '(AI 회의록 = 받아쓰기 후 자동 생성됩니다)';
+
+      // 녹음 원본 = 라이브러리로 가지 않아도 여기서 바로 받는다
+      if (fmt === 'audio') {
+        if (!m.recordingId) { window.showToast?.('이 회의에 연결된 녹음 파일이 없습니다'); return; }
+        try { window.__pronoteLibrary?.downloadRecording?.(m.recordingId); }
+        catch (e) { window.showToast?.('녹음 저장 실패: ' + e.message); }
+        return;
+      }
+      // 받아쓰기 원문만 받는 경우 = 회의록이 없어도 받을 수 있다
+      if (fmt === 'transcript' && !(m.transcript || '').trim()) {
+        window.showToast?.('받아쓰기가 아직 없습니다');
+        return;
+      }
+      if (fmt !== 'transcript' && !(m.summary || '').trim()) {
+        window.showToast?.('회의록이 아직 만들어지지 않았습니다 — 완성되면 받으실 수 있습니다');
+        return;
+      }
+      const summary = m.summary || '';
       if (fmt === 'md') {
         const head = `# ${m.title}\n\n날짜: ${m.date || ''}\n참석자: ${m.attendees || ''}\n종류: ${m.tag || ''}\n\n---\n\n`;
         dlBlob(new Blob([head + summary], { type: 'text/markdown;charset=utf-8' }), `${safeTitle}_${ymdNow()}.md`);
@@ -7003,6 +8380,46 @@ if ('serviceWorker' in navigator) {
       } else if (fmt === 'transcript') {
         const head = `${m.title} — 전체 받아쓰기\n날짜: ${m.date || ''}\n\n`;
         dlBlob(new Blob([head + (m.transcript || '(받아쓰기 X)')], { type: 'text/plain;charset=utf-8' }), `${safeTitle}_받아쓰기_${ymdNow()}.txt`);
+      } else if (fmt === 'docx') {
+        // ★ v1.4 — 회의록 워드(.docx) 다운로드 (서버 /api/export/docx)
+        window.showToast?.('워드 문서 생성 중…');
+        fetch('/api/export/docx', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            title: m.title || '회의록', summary: m.summary || '',
+            attendees: m.attendees || '', date: m.date || '',
+            transcript: m.transcript || '', include_transcript: false,
+          }),
+        }).then(async res => {
+          if (!res.ok) { window.showToast?.('워드 생성 실패 (' + res.status + ')'); return; }
+          dlBlob(await res.blob(), `${safeTitle}_${ymdNow()}.docx`);
+        }).catch(e => window.showToast?.('워드 생성 실패: ' + e.message));
+      } else if (fmt === 'pdf') {
+        // ★ v1.4 — PDF (브라우저 인쇄→PDF로 저장). 회의록만 깨끗하게 새 창에.
+        const body = (typeof stripMd === 'function') ? stripMd(summary) : summary;
+        const w = window.open('', '_blank');
+        if (!w) { window.showToast?.('팝업 차단됨 — 허용 후 다시 시도'); return; }
+        w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escapeHtml(m.title || '회의록') + '</title>' +
+          '<style>body{font-family:"맑은 고딕","Malgun Gothic",sans-serif;padding:40px;line-height:1.7;color:#222;}h1{color:#2E74B5;margin:0 0 6px;}.meta{color:#666;font-size:13px;margin-bottom:16px;}hr{border:none;border-top:1px solid #ddd;margin:16px 0;}pre{white-space:pre-wrap;font-family:inherit;font-size:14px;}</style></head><body>' +
+          '<h1>' + escapeHtml(m.title || '회의록') + '</h1>' +
+          '<div class="meta">날짜: ' + escapeHtml(m.date || '') + ' · 참석자: ' + escapeHtml(m.attendees || '') + '</div><hr>' +
+          '<pre>' + escapeHtml(body) + '</pre></body></html>');
+        w.document.close();
+        setTimeout(() => { try { w.print(); } catch (e) {} }, 400);
+      } else if (fmt === 'translate-en') {
+        // ★ v1.4 — 회의록 영어 번역 (해외 참가자용, 서버 /api/llm/translate)
+        window.showToast?.('영어로 번역 중… (약 10초)');
+        const src = (typeof stripMd === 'function') ? stripMd(summary) : summary;
+        fetch('/api/llm/translate', { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ text: src, target: 'en', external_consent: Boolean(window.__pronoteExternalConsent?.()) }) })
+          .then(async res => {
+            if (!res.ok) { window.showToast?.('번역 실패 (' + res.status + ')'); return; }
+            const d = await res.json();
+            const w = window.open('', '_blank');
+            if (!w) { window.showToast?.('팝업 차단됨 — 허용 후 다시'); return; }
+            w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escapeHtml(m.title || '') + ' (EN)</title><style>body{font-family:sans-serif;padding:40px;line-height:1.7;color:#222;}h1{color:#2E74B5;}</style></head><body><h1>' + escapeHtml(m.title || 'Meeting Notes') + ' (English)</h1><pre style="white-space:pre-wrap;font-family:inherit;">' + escapeHtml(d.translated || '') + '</pre></body></html>');
+            w.document.close();
+          }).catch(e => window.showToast?.('번역 실패: ' + e.message));
       }
     }
 
@@ -7011,6 +8428,19 @@ if ('serviceWorker' in navigator) {
       const btns = document.querySelectorAll('#view-result .action-btn');
       btns.forEach(btn => {
         const txt = (btn.textContent || '').trim();
+        // ★ v1.4 — 참가자에게 메일 발송 (mailto: 본문에 회의록 자동 채움)
+        if (txt.includes('발송')) {
+          btn.addEventListener('click', e => {
+            e.preventDefault();
+            const m = getCurrentMeeting();
+            if (!m) { window.showToast?.('회의 정보 X'); return; }
+            const subject = encodeURIComponent('[회의록] ' + (m.title || ''));
+            const raw = (m.title || '') + '\n날짜: ' + (m.date || '') + '\n참석자: ' + (m.attendees || '') +
+              '\n\n' + ((typeof stripMd === 'function') ? stripMd(m.summary || '') : (m.summary || ''));
+            window.location.href = 'mailto:?subject=' + subject + '&body=' + encodeURIComponent(raw.slice(0, 1800));
+            window.showToast?.('메일 앱을 엽니다 — 받는 사람 입력 후 발송 (긴 회의록은 워드로 받아 첨부 권장)');
+          });
+        }
         if (txt.includes('다운로드')) {
           btn.addEventListener('click', e => {
             e.preventDefault();
@@ -7025,6 +8455,10 @@ if ('serviceWorker' in navigator) {
               <button type="button" data-fmt="md" style="display:block; width:100%; text-align:left; padding:8px 12px; background:transparent; border:none; cursor:pointer; font-size:13px; border-radius:6px;">📄 회의록 (MD)</button>
               <button type="button" data-fmt="txt" style="display:block; width:100%; text-align:left; padding:8px 12px; background:transparent; border:none; cursor:pointer; font-size:13px; border-radius:6px;">📝 회의록 (TXT)</button>
               <button type="button" data-fmt="transcript" style="display:block; width:100%; text-align:left; padding:8px 12px; background:transparent; border:none; cursor:pointer; font-size:13px; border-radius:6px;">🎤 전체 받아쓰기 (TXT)</button>
+              <button type="button" data-fmt="docx" style="display:block; width:100%; text-align:left; padding:8px 12px; background:transparent; border:none; cursor:pointer; font-size:13px; border-radius:6px;">📘 회의록 (워드 .docx)</button>
+              <button type="button" data-fmt="pdf" style="display:block; width:100%; text-align:left; padding:8px 12px; background:transparent; border:none; cursor:pointer; font-size:13px; border-radius:6px;">📕 회의록 (PDF·인쇄)</button>
+              <button type="button" data-fmt="audio" style="display:block; width:100%; text-align:left; padding:8px 12px; background:transparent; border:none; cursor:pointer; font-size:13px; border-radius:6px;">🔊 녹음 원본 (MP3)</button>
+              <button type="button" data-fmt="translate-en" style="display:block; width:100%; text-align:left; padding:8px 12px; background:transparent; border:none; cursor:pointer; font-size:13px; border-radius:6px;">🌐 영어로 번역</button>
             `;
             document.body.appendChild(menu);
             menu.querySelectorAll('button').forEach(b => {
@@ -7050,6 +8484,47 @@ if ('serviceWorker' in navigator) {
       });
     }
 
+    // ★ v1.4 노트 서식 툴바 (굵게·밑줄·형광펜·사진 붙여넣기) — contenteditable 노트
+    function attachNoteToolbar(editorId) {
+      const ed = document.getElementById(editorId);
+      if (!ed || ed._fmtToolbar) return;
+      ed._fmtToolbar = true;
+      const bar = document.createElement('div');
+      bar.style.cssText = 'display:flex; gap:4px; margin-bottom:8px; flex-wrap:wrap;';
+      const bstyle = 'padding:4px 9px;border:1px solid var(--border,#ddd);border-radius:6px;background:transparent;cursor:pointer;font-size:13px;';
+      bar.innerHTML =
+        '<button type="button" data-c="bold" title="굵게" style="' + bstyle + 'font-weight:700;">B</button>' +
+        '<button type="button" data-c="underline" title="밑줄" style="' + bstyle + 'text-decoration:underline;">U</button>' +
+        '<button type="button" data-c="hilite" title="형광펜" style="' + bstyle + 'background:#fff59d;">형광펜</button>' +
+        '<button type="button" data-c="image" title="사진 넣기" style="' + bstyle + '">🖼 사진</button>' +
+        '<button type="button" data-c="sticky" title="포스트잇 메모" style="' + bstyle + 'background:#fff59d;">📌 포스트잇</button>';
+      ed.parentNode.insertBefore(bar, ed);
+      bar.querySelectorAll('button').forEach(b => {
+        b.addEventListener('mousedown', e => {
+          e.preventDefault();
+          ed.focus();
+          const c = b.dataset.c;
+          if (c === 'bold') document.execCommand('bold');
+          else if (c === 'underline') document.execCommand('underline');
+          else if (c === 'hilite') document.execCommand('hiliteColor', false, '#fff59d');
+          else if (c === 'image') {
+            const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+            inp.onchange = () => {
+              const f = inp.files && inp.files[0]; if (!f) return;
+              const rd = new FileReader();
+              rd.onload = () => { ed.focus(); document.execCommand('insertImage', false, rd.result); };
+              rd.readAsDataURL(f);
+            };
+            inp.click();
+          }
+          else if (c === 'sticky') {
+            document.execCommand('insertHTML', false, '<div style="background:#fff9c4;border-radius:8px;padding:8px 12px;margin:6px 0;border-left:3px solid #fbc02d;">메모를 입력하세요</div><p><br></p>');
+          }
+        });
+      });
+    }
+    try { attachNoteToolbar('mynoteBlockContent'); attachNoteToolbar('standaloneNoteContent'); } catch (e) {}
+
     // ─── 사이드 탭 "전체 받아쓰기" 클릭 = transcript 인라인 노출 ────
     function attachSideTabTranscript() {
       const sideCard = document.querySelector('#view-result .side-card');
@@ -7059,11 +8534,23 @@ if ('serviceWorker' in navigator) {
         panel = document.createElement('div');
         panel.id = 'sideTranscriptPanel';
         panel.hidden = true;
+        panel.setAttribute('contenteditable', 'true');  // ★ v1.4 받아쓰기 인라인 수정 (오타 직접 고치기)
+        panel.title = '클릭해서 받아쓰기 오타를 직접 고칠 수 있습니다';
         panel.style.cssText = 'margin-top:10px; padding:10px; background:var(--bg-elev); border:1px solid var(--border); border-radius:8px; max-height:340px; overflow-y:auto; font-size:11.5px; line-height:1.6; color:var(--text-secondary); white-space:pre-wrap;';
         sideCard.appendChild(panel);
+        // ★ v1.4 — 받아쓰기 수정 시 회의에 저장
+        panel.addEventListener('blur', () => {
+          try {
+            const cm = getCurrentMeeting(); if (!cm) return;
+            const KEY = 'ai_pronote.meetings.v1';
+            const arr = JSON.parse(localStorage.getItem(KEY) || '[]');
+            const mm = arr.find(x => x.id === cm.id);
+            if (mm) { mm.transcript = panel.innerText; localStorage.setItem(KEY, JSON.stringify(arr)); window.showToast?.('받아쓰기 수정 저장됨'); }
+          } catch (e) {}
+        });
       }
       document.querySelectorAll('#view-result .side-tab[data-side-tab="transcript"]').forEach(tab => {
-        tab.addEventListener('click', e => {
+        tab.addEventListener('click', async e => {
           e.preventDefault();
           const m = getCurrentMeeting();
           const tx = m?.transcript;
@@ -7072,14 +8559,127 @@ if ('serviceWorker' in navigator) {
             window.showToast?.('받아쓰기 = 없음 (파일 → 시나리오 모달 → 확정 시 자동 생성)');
             return;
           }
-          if (panel.hidden) {
-            panel.textContent = tx;
-            panel.hidden = false;
+          if (!panel.hidden) { panel.hidden = true; return; }
+          // ★ v1.4 타임싱크 — segments 있으면 줄 클릭 시 그 대목 재생. 없으면 통텍스트(편집 가능).
+          let segs = null;
+          try {
+            const all = await window.__pronoteDB.getAll();
+            const rec = all.find(r => r.id === m.recordingId) || all.find(r => r.filename === m.recordingFilename);
+            segs = rec && rec.transcriptSegments;
+          } catch (e2) {}
+          if (segs && segs.length) {
+            panel.setAttribute('contenteditable', 'false');
+            panel.innerHTML = '';
+            const hint = document.createElement('div');
+            hint.textContent = '↓ 줄을 클릭하면 그 대목이 재생됩니다';
+            hint.style.cssText = 'font-size:10.5px;color:var(--text-tertiary,#999);margin-bottom:6px;';
+            panel.appendChild(hint);
+            segs.forEach(function (s) {
+              const row = document.createElement('div');
+              row.style.cssText = 'margin:2px 0;padding:3px 5px;border-radius:4px;cursor:pointer;display:flex;gap:6px;';
+              row.onmouseenter = function () { row.style.background = 'var(--bg-deep,#f0f0f0)'; };
+              row.onmouseleave = function () { row.style.background = 'transparent'; };
+              const tspan = document.createElement('span');
+              const mm = String(Math.floor((s.start || 0) / 60)).padStart(2, '0'), ss = String(Math.floor((s.start || 0) % 60)).padStart(2, '0');
+              tspan.textContent = mm + ':' + ss;
+              tspan.style.cssText = 'color:var(--text-tertiary,#888);font-size:10.5px;font-variant-numeric:tabular-nums;flex-shrink:0;';
+              const xspan = document.createElement('span'); xspan.textContent = s.text || '';
+              row.appendChild(tspan); row.appendChild(xspan);
+              row.addEventListener('click', function () {
+                const a = document.getElementById('sideAudioPlayerAudio');
+                if (a) { a.currentTime = parseFloat(s.start) || 0; a.play().catch(function () {}); }
+              });
+              panel.appendChild(row);
+            });
           } else {
-            panel.hidden = true;
+            panel.setAttribute('contenteditable', 'true');
+            panel.textContent = tx;
           }
+          panel.hidden = false;
         });
       });
+    }
+
+    // ─── 사이드 패널 공통 생성 ───
+    function ensureSidePanel(id) {
+      const sideCard = document.querySelector('#view-result .side-card');
+      if (!sideCard) return null;
+      let panel = document.getElementById(id);
+      if (!panel) {
+        panel = document.createElement('div');
+        panel.id = id;
+        panel.hidden = true;
+        panel.style.cssText = 'margin-top:10px; padding:10px; background:var(--bg-elev); border:1px solid var(--border); border-radius:8px; max-height:340px; overflow-y:auto; font-size:12px; line-height:1.6; color:var(--text-secondary);';
+        sideCard.appendChild(panel);
+      }
+      return panel;
+    }
+    function fmtSecHMS(sec) {
+      const t = Math.max(0, Math.floor(sec));
+      const h = Math.floor(t / 3600), m2 = Math.floor((t % 3600) / 60), s2 = t % 60;
+      return (h > 0 ? String(h).padStart(2, '0') + ':' : '') + String(m2).padStart(2, '0') + ':' + String(s2).padStart(2, '0');
+    }
+
+    // ─── 하이라이트 패널 — 직전 30초 구간 텍스트 발췌 + 듣기 ───
+    async function toggleHighlightPanel() {
+      const panel = ensureSidePanel('sideHighlightPanel');
+      if (!panel) return;
+      if (!panel.hidden) { panel.hidden = true; return; }
+      const m = getCurrentMeeting();
+      const hs = (m && m.highlights) || [];
+      if (!m || hs.length === 0) {
+        window.showToast?.('이 회의에 하이라이트가 없습니다 — 녹음 중 H키 또는 하이라이트 버튼');
+        return;
+      }
+      let segs = [];
+      try {
+        if (m.recordingId && window.__pronoteDB?.get) {
+          const rec = await window.__pronoteDB.get(m.recordingId);
+          segs = (rec && rec.transcriptSegments) || [];
+        }
+      } catch {}
+      panel.innerHTML = '';
+      hs.forEach((h, i) => {
+        const atSec = (h.at || 0) / 1000;
+        const from = Math.max(0, atSec - 30);
+        const text = segs
+          .filter(s => s.end >= from && s.start <= atSec)
+          .map(s => s.text).join(' ').trim();
+        const row = document.createElement('div');
+        row.style.cssText = 'padding:8px 0; border-bottom:1px solid var(--border);';
+        row.innerHTML = '<div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">'
+          + '<span style="color:var(--accent-warm,#c60); font-weight:700;">★ ' + (i + 1) + '</span>'
+          + '<span style="font-family:var(--font-mono); font-size:11px; color:var(--text-tertiary);">' + fmtSecHMS(from) + ' ~ ' + fmtSecHMS(atSec) + '</span>'
+          + '</div>'
+          + '<div data-hl-text style="color:var(--text-primary); font-size:12.5px;"></div>';
+        row.querySelector('[data-hl-text]').textContent = text || '(이 구간의 받아쓰기 텍스트 없음 — 무음이거나 받아쓰기 전)';
+        panel.appendChild(row);
+      });
+      panel.hidden = false;
+    }
+
+    // ─── AI 비서 대화 기록 패널 ───
+    function toggleCopilotLogPanel() {
+      const panel = ensureSidePanel('sideCopilotPanel');
+      if (!panel) return;
+      if (!panel.hidden) { panel.hidden = true; return; }
+      const m = getCurrentMeeting();
+      const log = (m && m.copilotLog) || [];
+      if (!m || log.length === 0) {
+        window.showToast?.('이 회의의 AI 비서 대화가 없습니다');
+        return;
+      }
+      panel.innerHTML = '';
+      log.forEach(turn => {
+        const row = document.createElement('div');
+        row.style.cssText = 'padding:6px 0;';
+        const who = turn.role === 'user' ? '나' : 'AI 비서';
+        row.innerHTML = '<div style="font-size:10.5px; color:var(--text-tertiary); margin-bottom:2px;">' + who + '</div>'
+          + '<div data-cl-text style="color:var(--text-primary); font-size:12.5px; white-space:pre-wrap;"></div>';
+        row.querySelector('[data-cl-text]').textContent = turn.text || '';
+        panel.appendChild(row);
+      });
+      panel.hidden = false;
     }
 
     // init
@@ -7097,6 +8697,8 @@ if ('serviceWorker' in navigator) {
       render: renderRealMeeting,
       download: downloadAs,
       mdToHtml,
+      toggleHighlights: toggleHighlightPanel,
+      toggleCopilotLog: toggleCopilotLogPanel,
     };
 
     // ─── 모바일 햄버거 토글 ───
@@ -7108,12 +8710,12 @@ if ('serviceWorker' in navigator) {
       // 메뉴 클릭 시 = 자동 닫기
       document.querySelectorAll('.sidebar .nav-item').forEach(n => {
         n.addEventListener('click', () => {
-          if (window.innerWidth <= 768) document.body.classList.remove('sidebar-open');
+          if (window.innerWidth <= 1023) document.body.classList.remove('sidebar-open');
         });
       });
       // 외부 클릭 시 닫기
       document.addEventListener('click', e => {
-        if (window.innerWidth > 768) return;
+        if (window.innerWidth > 1023) return;
         if (!document.body.classList.contains('sidebar-open')) return;
         const sidebar = document.querySelector('.sidebar');
         if (sidebar?.contains(e.target) || btn?.contains(e.target)) return;
@@ -7132,5 +8734,603 @@ if ('serviceWorker' in navigator) {
   })();
 </script>
 
+<!-- ═══ AI PRONOTE V1.3 — Claude 온보딩 (자체 완결 · 기존 코드 무관) ═══ -->
+<script>
+(function () {
+  'use strict';
+  // AI 회의록 정리는 사용자 PC의 claude CLI(본인 구독)로 호출됨.
+  // 설치·로그인이 안 돼 있으면 = 안내 모달 + 5초 폴링으로 완료 자동 인식.
+  var POLL_MS = 5000, modal = null, pollTimer = null, busy = false;
+
+  function el(id) { return modal && modal.querySelector(id); }
+
+  function build() {
+    modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'claudeSetupModal';
+    modal.innerHTML =
+      '<div class="modal-card" style="max-width:480px;">' +
+        '<div class="modal-head"><div>' +
+          '<div class="modal-eyebrow">AI 회의록 설정</div>' +
+          '<h2 class="modal-title" id="csTitle">Claude 연결</h2>' +
+        '</div></div>' +
+        '<div class="modal-body">' +
+          '<p id="csMsg" style="margin:0 0 12px;line-height:1.6;"></p>' +
+          '<div id="csSteps" style="font-size:13px;color:#667085;line-height:1.75;' +
+            'background:#f6f7f9;border-radius:10px;padding:12px 14px;"></div>' +
+          '<div id="csStatus" style="margin-top:12px;font-size:13px;color:#667085;min-height:18px;"></div>' +
+          '<div style="margin-top:14px;padding-top:12px;border-top:1px solid #eee;font-size:12px;color:#98a2b3;">' +
+            '이미 설치·로그인했는데 안 넘어가나요? ' +
+            '<a href="#" id="csOverride" style="color:#475467;font-weight:600;">자동 체크 무시하고 진행</a>' +
+          '</div>' +
+        '</div>' +
+        '<div class="modal-foot">' +
+          '<button class="modal-btn" id="csLater">나중에</button>' +
+          '<button class="modal-btn primary" id="csAction">설치하기</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    el('#csLater').onclick = function () { hide(); };
+    el('#csAction').onclick = onAction;
+    el('#csOverride').onclick = function (e) {
+      e.preventDefault();
+      try { localStorage.setItem('pronote_claude_override', '1'); } catch (_) {}
+      hide();
+    };
+  }
+
+  function show() { if (modal) modal.classList.add('open'); }
+  function hide() { if (modal) modal.classList.remove('open'); stopPoll(); }
+
+  var VIEW = {
+    not_installed: {
+      title: 'Claude 설치가 필요합니다',
+      steps: "1) 아래 '설치하기'를 누르면 검은 설치 창이 열립니다.<br>" +
+             '2) 설치가 끝날 때까지 기다려 주세요 (1~2분).<br>' +
+             '3) 끝나면 이 화면이 자동으로 다음 단계로 넘어갑니다.<br>' +
+             '<b>⚠ 검은 창이 떠도 정상입니다. 닫지 말고 기다려 주세요.</b>',
+      btn: '설치하기', step: 'install'
+    },
+    not_logged_in: {
+      title: 'Claude 로그인 한 번만 하면 됩니다',
+      steps: "1) '로그인하기'를 누르면 터미널 창이 열립니다.<br>" +
+             '2) 브라우저가 열리면 본인 Claude 계정으로 로그인하세요.<br>' +
+             '3) 완료되면 이 화면이 자동으로 닫힙니다.<br>' +
+             '<b>※ Claude Pro / Max 구독 계정이 필요합니다.</b>',
+      btn: '로그인하기', step: 'login'
+    }
+  };
+
+  function render(state, message) {
+    if (state === 'ready') { success(); return; }
+    var v = VIEW[state]; if (!v) return;
+    el('#csTitle').textContent = v.title;
+    el('#csMsg').textContent = message || '';
+    el('#csSteps').innerHTML = v.steps;
+    var a = el('#csAction');
+    a.textContent = busy ? '진행 중…' : v.btn;
+    a.disabled = busy;
+    a.dataset.step = v.step;
+    el('#csStatus').innerHTML = busy
+      ? '● 터미널 창에서 진행해 주세요 — 완료를 5초마다 자동 확인 중입니다…'
+      : '';
+    show();
+  }
+
+  function success() {
+    applyBadges('ready');
+    if (!modal) return;
+    el('#csTitle').textContent = 'Claude 준비 완료';
+    el('#csMsg').textContent = 'AI 회의록 정리를 바로 쓸 수 있습니다.';
+    el('#csSteps').innerHTML = '✅ 설치·로그인이 확인되었습니다.';
+    el('#csStatus').textContent = '';
+    el('#csAction').style.display = 'none';
+    el('#csLater').textContent = '확인';
+    stopPoll();
+    setTimeout(hide, 1800);
+  }
+
+  function onAction() {
+    var step = el('#csAction').dataset.step;
+    busy = true;
+    el('#csAction').disabled = true;
+    el('#csAction').textContent = '진행 중…';
+    el('#csStatus').textContent = '터미널 창을 여는 중…';
+    fetch('/api/setup/run', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ step: step })
+    }).then(function (r) { return r.json(); })
+      .then(function () {
+        el('#csStatus').innerHTML =
+          '● 터미널 창에서 진행해 주세요 — 완료를 5초마다 자동 확인 중입니다…';
+        startPoll();
+      })
+      .catch(function (e) {
+        busy = false;
+        el('#csStatus').textContent = '터미널 실행 실패: ' + e + ' — 다시 시도해 주세요.';
+        el('#csAction').disabled = false;
+      });
+  }
+
+  function check() {
+    return fetch('/api/llm/status').then(function (r) { return r.json(); })
+      .then(function (s) { return s; })
+      .catch(function () { return null; });
+  }
+
+  function startPoll() {
+    stopPoll();
+    pollTimer = setInterval(function () {
+      check().then(function (s) {
+        if (!s) return;
+        if (s.state === 'ready') { success(); }
+        else { render(s.state, s.message); }  // install→login 자동 전환
+      });
+    }, POLL_MS);
+  }
+  function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+  // ── AI 로그인 상태 배지 — AI 의존 기능(회의록 정리·AI 비서)에만 표시 ──
+  // 로컬 기능(녹음·받아쓰기·화자분리·노트)은 로그인 무관 = 배지 X.
+  var lastState = null;
+  function applyBadges(state) {
+    lastState = state;
+    var need = state && state !== 'ready';
+    ['#view-live .copilot-name', '#view-assistant-solo .copilot-name', '#view-result .side-tab[data-side-tab="copilot"]']
+      .forEach(function (sel) {
+        var t = document.querySelector(sel);
+        if (!t) return;
+        var b = t.querySelector('.ai-login-badge');
+        if (need && !b) {
+          b = document.createElement('span');
+          b.className = 'ai-login-badge';
+          b.style.cssText = 'display:inline-block;margin-left:8px;padding:1px 8px;font-size:10px;border-radius:999px;background:#FFF4E0;color:#9A5B00;border:1px solid #F0D9AC;cursor:pointer;vertical-align:middle;font-weight:600;';
+          b.textContent = 'AI 로그인 필요';
+          b.title = '로그인하면 사용 가능합니다 — 클릭해서 로그인';
+          b.addEventListener('click', function (e) { e.stopPropagation(); openSetup(); });
+          t.appendChild(b);
+        } else if (!need && b) { b.remove(); }
+      });
+  }
+  function openSetup() {
+    if (!modal) build();
+    check().then(function (s) {
+      if (!s) { window.showToast && window.showToast('서버 연결 실패'); return; }
+      if (s.state === 'ready') { applyBadges('ready'); window.showToast && window.showToast('AI 준비 완료 — 바로 사용 가능합니다'); return; }
+      render(s.state, s.message);
+    });
+  }
+  window.__pronoteAIStatus = {
+    getState: function () { return lastState; },
+    open: openSetup,
+    refresh: function () { return check().then(function (s) { if (s) applyBadges(s.state); return s; }); },
+  };
+
+  // 페이지 로드 1.5초 후 = 최초 확인
+  function boot() {
+    check().then(function (s) { if (s) applyBadges(s.state); });
+    try {
+      if (localStorage.getItem('pronote_claude_override') === '1') return;  // 사용자가 자동 체크 무시 선택
+    } catch (_) {}
+    check().then(function (s) {
+      if (!s || s.state === 'ready') return;  // 준비됐으면 모달 안 띄움
+      if (!modal) build();
+      render(s.state, s.message);
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(boot, 1500); });
+  } else { setTimeout(boot, 1500); }
+
+  // 검증·디버그용 훅 (window.__pronoteResult 패턴과 동일)
+  window.__pronoteClaudeSetup = {
+    boot: boot,
+    _preview: function (state, msg) { busy = false; if (!modal) build(); render(state, msg || ''); }
+  };
+})();
+</script>
+
+<!-- ═══ 회의 진행 화면(view-live) = 실사용 상태 + 내 노트 자동 저장 ═══
+     샘플 회의 내용(스폰서십·Q2 마케팅 등)은 데모 모드(Ctrl+Shift+D)에서만 표시.
+     실제 회의 = 빈 노트에서 시작, 입력 1초 후 자동 저장, 정지 시 회의록과 함께 보존. -->
+<script>
+(function () {
+  'use strict';
+  var LIVE_NOTE_KEY = 'ai_pronote.live_note.v1';
+  var noteEl = document.querySelector('#view-live .note-editor');
+  var streamEl = document.querySelector('#view-live .transcribe-stream');
+  var titleInput = document.querySelector('#view-live .live-title-input');
+  var noteTools = document.querySelector('#view-live [data-panel-id="note"] .panel-tools');
+  if (!noteEl || !streamEl) return;
+
+  // 시안 샘플 백업 (데모 모드 전용으로만 복원)
+  var sampleNote = noteEl.value;
+  var sampleStream = streamEl.innerHTML;
+  var sampleTitle = titleInput ? titleInput.value : '';
+
+  var EMPTY_STREAM_HTML =
+    '<div class="transcribe-empty" style="padding:28px 10px; text-align:center; font-size:12.5px; color:var(--text-tertiary); line-height:1.8;">' +
+    '녹음 중에는 음성이 안전하게 저장됩니다.<br/>' +
+    '받아쓰기는 <b>정지</b>를 누르면 자동으로 만들어져 결과 화면에 표시됩니다.' +
+    '</div>';
+
+  function isDemo() { return document.body.classList.contains('dev-mode-on'); }
+
+  function readDraft() {
+    try { return JSON.parse(localStorage.getItem(LIVE_NOTE_KEY) || 'null'); } catch (e) { return null; }
+  }
+  function currentSessionId() {
+    try {
+      var cur = JSON.parse(localStorage.getItem('ai_pronote.current_meeting.v1') || 'null');
+      if (cur && cur.startedAt) return 'live_' + cur.startedAt;
+    } catch (e) {}
+    return 'live_default';
+  }
+  function saveDraftNow() {
+    try {
+      localStorage.setItem(LIVE_NOTE_KEY, JSON.stringify({
+        sessionId: currentSessionId(),
+        content: noteEl.value,
+        savedAt: Date.now()
+      }));
+      if (noteTools) {
+        var d = new Date();
+        noteTools.textContent = '자동 저장 · ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+      }
+    } catch (e) { /* 저장 공간 부족 등 = 다음 입력에서 재시도 */ }
+  }
+
+  function applyRealState() {
+    var draft = readDraft();
+    noteEl.value = (draft && draft.content) ? draft.content : '';
+    noteEl.placeholder = '회의 중 메모를 여기에 적으세요. 입력하면 1초 뒤 자동 저장됩니다.';
+    streamEl.innerHTML = EMPTY_STREAM_HTML;
+    if (titleInput) {
+      var t = '';
+      try {
+        var cur = JSON.parse(localStorage.getItem('ai_pronote.current_meeting.v1') || 'null');
+        if (cur && cur.title) t = cur.title;
+      } catch (e) {}
+      titleInput.value = t;
+      titleInput.placeholder = '회의 제목';
+    }
+    if (noteTools) noteTools.textContent = '자동 저장';
+  }
+  function applyDemoState() {
+    noteEl.value = sampleNote;
+    streamEl.innerHTML = sampleStream;
+    if (titleInput) titleInput.value = sampleTitle;
+  }
+
+  // 입력 = 1초 debounce 자동 저장
+  var timer = null;
+  noteEl.addEventListener('input', function () {
+    clearTimeout(timer);
+    timer = setTimeout(saveDraftNow, 1000);
+  });
+
+  function escapeHtmlText(s) {
+    var d = document.createElement('div');
+    d.textContent = s == null ? '' : s;
+    return d.innerHTML;
+  }
+
+  // 녹음 모듈(saveMeetingFromLive)·새 회의 모달에서 사용
+  window.__pronoteLiveNote = {
+    getText: function () { return noteEl.value; },
+    getHtml: function () {
+      var v = (noteEl.value || '').trim();
+      if (!v) return '';
+      return escapeHtmlText(v).replace(/\n/g, '<br/>');
+    },
+    // 새 회의 시작 = 새 세션. 끝나지 못한 옛 초안이 있으면 지우지 않고 에디터에 남긴다 (복구 우선).
+    startSession: function () {
+      clearTimeout(timer);
+      if (!isDemo()) {
+        var draft = readDraft();
+        noteEl.value = (draft && draft.content) ? draft.content : '';
+        streamEl.innerHTML = EMPTY_STREAM_HTML;
+      }
+    },
+    // 회의 종료·노트 보존 완료 = 초안 정리
+    endSession: function () {
+      clearTimeout(timer);
+      noteEl.value = '';
+      try { localStorage.removeItem(LIVE_NOTE_KEY); } catch (e) {}
+      if (noteTools) noteTools.textContent = '자동 저장';
+    }
+  };
+
+  // 데모 모드 토글(Ctrl+Shift+D) = 기존 토글 처리 후 화면 동기화
+  document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+      setTimeout(function () {
+        if (isDemo()) applyDemoState();
+        else applyRealState();
+        // 리스트·결과 화면도 데모/실사용 데이터로 다시 그림
+        try { if (typeof renderMeetingsGrid === 'function') renderMeetingsGrid('all', ''); } catch (err) {}
+        try { if (typeof renderMyNotesGrid === 'function') renderMyNotesGrid('all', ''); } catch (err) {}
+        try { if (typeof renderSidebarMeetingHistory === 'function') renderSidebarMeetingHistory(); } catch (err) {}
+        try { window.__pronoteResult && window.__pronoteResult.render && window.__pronoteResult.render(); } catch (err) {}
+      }, 30);
+    }
+  });
+
+  // 시작 = 실사용 상태 (샘플 = 데모 모드에서만)
+  applyRealState();
+})();
+</script>
+
+<script>
+/* ★ AI 비서 채팅 연결 (회의중 패널 + 단독 모드) → /api/assistant/chat
+   기존 코드 무관 = 자체 완결 스크립트 (데모 버블을 실제 대화로 교체) */
+(function () {
+  var API = '/api/assistant/chat';
+  function asstName() {
+    return (document.getElementById('liveCopilotName') && document.getElementById('liveCopilotName').textContent
+      || document.getElementById('assistName') && document.getElementById('assistName').textContent
+      || '노아').trim();
+  }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+  function mdLite(s) {
+    var h = esc(s);
+    h = h.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    h = h.replace(/^#{1,4}\s*(.+)$/gm, '<b>$1</b>');
+    h = h.replace(/^\s*[-*]\s+(.+)$/gm, '• $1');
+    h = h.replace(/\n/g, '<br>');
+    return h;
+  }
+  function nowHM() { var d = new Date(); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+  function bubble(chat, text, isUser, loading) {
+    var w = document.createElement('div'); w.className = 'chat-msg' + (isUser ? ' chat-msg-user' : '');
+    var t = document.createElement('div'); t.className = 'chat-msg-time'; t.textContent = nowHM();
+    var b = document.createElement('div'); b.className = 'chat-bubble';
+    if (loading) { b.textContent = '생각 중…'; b.setAttribute('data-loading', '1'); }
+    else b.innerHTML = isUser ? esc(text) : mdLite(text);
+    // ★ v1.4 음성 — 에이전트 답변 듣기 (브라우저 TTS, ko-KR). 대표님 비전: 에이전트가 목소리로.
+    if (!isUser && !loading && text && window.speechSynthesis) {
+      var spk = document.createElement('button');
+      spk.textContent = '🔊'; spk.title = '음성으로 듣기';
+      spk.style.cssText = 'background:none;border:none;cursor:pointer;font-size:13px;margin-left:6px;opacity:0.55;';
+      spk.onmouseenter = function () { spk.style.opacity = '1'; };
+      spk.onmouseleave = function () { spk.style.opacity = '0.55'; };
+      spk.onclick = function () { try { var u = new SpeechSynthesisUtterance(text); u.lang = 'ko-KR'; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {} };
+      b.appendChild(spk);
+    }
+    w.appendChild(t); w.appendChild(b); chat.appendChild(w);
+    chat.scrollTop = chat.scrollHeight; return w;
+  }
+  function getContext() {
+    var parts = [];
+    try {
+      var m = JSON.parse(localStorage.getItem('ai_pronote.current_meeting.v1') || 'null');
+      if (m && m.title) parts.push('현재 회의: ' + m.title + (m.tag ? ' (' + m.tag + ')' : ''));
+    } catch (e) {}
+    // 내 노트 (회의 중 메모)
+    var note = document.querySelector('#view-live .note-editor, #view-live textarea, #view-live [contenteditable="true"]');
+    if (note) { var v = (note.value || note.innerText || '').trim(); if (v) parts.push('내 노트:\n' + v.slice(0, 3000)); }
+    // 받아쓰기 = 실제 받아쓰기 줄(.transcript-line)만 수집 (빈 상태 안내문 제외)
+    var lines = document.querySelectorAll('#view-live .transcribe-stream .transcript-line');
+    if (lines.length) {
+      var tv = Array.prototype.map.call(lines, function (l) { return (l.innerText || '').trim(); }).join('\n').trim();
+      if (tv) parts.push('받아쓰기:\n' + tv.slice(0, 3000));
+    } else {
+      // 회의 종료 후 = 저장된 받아쓰기를 맥락으로 (현재 보고 있는 회의)
+      try {
+        var vid = localStorage.getItem('ai_pronote.current_view_meeting.v1');
+        var arr = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+        var vm = arr.find(function (x) { return x.id === vid; });
+        if (vm && vm.transcript) parts.push('받아쓰기(회의 전체):\n' + String(vm.transcript).slice(0, 3000));
+      } catch (e2) {}
+    }
+    return parts.join('\n\n');
+  }
+  var hist = { live: [], solo: [] };
+  function send(input, chat, key, withContext) {
+    var msg = (input.value || '').trim(); if (!msg) return;
+    // AI 미로그인 = 에러 대신 안내 + 로그인 연결
+    var ai = window.__pronoteAIStatus;
+    if (ai && ai.getState && ai.getState() && ai.getState() !== 'ready') {
+      bubble(chat, 'AI 비서는 클로드 로그인 후 사용 가능합니다. 로그인 화면을 열었어요 — 한 번만 하면 됩니다. (녹음·받아쓰기는 로그인 없이 계속 쓸 수 있습니다)', false, false);
+      try { ai.open(); } catch (e) {}
+      return;
+    }
+    input.value = ''; if (input.style) input.style.height = 'auto';
+    bubble(chat, msg, true, false);
+    var load = bubble(chat, '', false, true);
+    hist[key].push({ role: 'user', text: msg });
+    fetch(API, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: msg, context: withContext ? getContext() : '', history: hist[key].slice(-8), name: asstName(), expertise: (window.__pronoteAgentExpertise || ''), provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude'), external_consent: Boolean(window.__pronoteExternalConsent?.()) })
+    }).then(function (res) {
+      return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+    }).then(function (r) {
+      if (load.parentNode) load.parentNode.removeChild(load);
+      if (r.ok && r.data.reply) { bubble(chat, r.data.reply, false, false); hist[key].push({ role: 'assistant', text: r.data.reply }); }
+      else bubble(chat, (r.data && r.data.detail) || '응답을 받지 못했습니다.', false, false);
+    }).catch(function (e) {
+      if (load.parentNode) load.parentNode.removeChild(load);
+      bubble(chat, '연결 실패: ' + e.message, false, false);
+    });
+  }
+  // 회의 종료 시 대화 기록을 회의에 보존하기 위한 외부 노출
+  window.__pronoteCopilotLog = {
+    getLive: function () { return hist.live.slice(); },
+    resetLive: function () { hist.live = []; },
+  };
+
+  function bindLive() {
+    var input = document.getElementById('liveCopilotInput'); if (!input || input.getAttribute('data-bound')) return;
+    var panel = input.closest('.copilot-panel'); var chat = panel && panel.querySelector('.copilot-chat');
+    var sendBtn = panel && panel.querySelector('.copilot-send-btn'); if (!chat) return;
+    input.setAttribute('data-bound', '1');
+    chat.innerHTML = '';
+    bubble(chat, asstName() + '입니다. 회의 내용 정리나 궁금한 점을 말씀해 주세요.', false, false);
+    var go = function () { send(input, chat, 'live', true); };
+    if (sendBtn) sendBtn.addEventListener('click', go);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
+  }
+  function bindSolo() {
+    var view = document.getElementById('view-assistant-solo'); if (!view) return;
+    var input = view.querySelector('.assist-input'); if (!input || input.getAttribute('data-bound')) return;
+    var chat = view.querySelector('.assist-chat'); var sendBtn = view.querySelector('.copilot-send-btn'); if (!chat) return;
+    input.setAttribute('data-bound', '1');
+    var ensure = function () { if (!chat.getAttribute('data-started')) { chat.innerHTML = ''; chat.setAttribute('data-started', '1'); } };
+    var go = function () { ensure(); send(input, chat, 'solo', false); };
+    if (sendBtn) sendBtn.addEventListener('click', go);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
+    view.querySelectorAll('.assist-suggest-card').forEach(function (c) {
+      c.addEventListener('click', function () {
+        var d = c.querySelector('.assist-suggest-desc'); var q = d ? d.textContent.replace(/[""]/g, '').trim() : '';
+        if (q) { input.value = q; go(); }
+      });
+    });
+    view.querySelectorAll('.assist-quick-btn').forEach(function (c) {
+      c.addEventListener('click', function () { input.value = c.textContent.trim(); go(); });
+    });
+  }
+  function bindAll() { try { bindLive(); } catch (e) {} try { bindSolo(); } catch (e) {} }
+  if (document.readyState !== 'loading') bindAll(); else document.addEventListener('DOMContentLoaded', bindAll);
+  document.addEventListener('click', function () { setTimeout(bindAll, 300); }, true);
+  window.__pronoteAssistant = { bindAll: bindAll, send: send };
+})();
+</script>
+
+<script>
+/* 시작 화면 날짜 = 오늘로 자동 (하드코딩 '2026년 5월 6일 · 화요일' 은 날짜·요일 모두 틀렸었음.
+   페더 재검증 2026-07-16 에서 발견 → 사실 오류가 첫 화면에 노출되던 문제) */
+(function fillToday() {
+  var el = document.getElementById('homeToday');
+  if (!el) { document.addEventListener('DOMContentLoaded', fillToday); return; }
+  var d = new Date();
+  var days = ['일요일','월요일','화요일','수요일','목요일','금요일','토요일'];
+  el.textContent = d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 · ' + days[d.getDay()];
+})();
+
+(function initProviderContracts() {
+  var providerSelect = document.getElementById('officialProviderSelect');
+  var modelSelect = document.getElementById('officialModelSelect');
+  var status = document.getElementById('providerStatus');
+  var cliPanel = document.getElementById('experimentalCliPanel');
+  var cliStatuses = document.getElementById('experimentalCliStatuses');
+  if (!providerSelect || !modelSelect || !status) return;
+  var providers = [];
+  var labels = {openai:'OpenAI API', gemini:'Gemini API', anthropic:'Anthropic API', mock:'Mock', codex_cli:'Codex CLI (실험)', claude_cli:'Claude CLI (실험)', gemini_cli:'Gemini CLI (실험)'};
+  var states = {ready:'연결 준비됨', needs_key:'API 키 필요', mock:'테스트 전용', error:'상태 확인 실패', not_installed:'미설치', login_required:'로그인 필요', expired:'로그인 만료', cancelled:'사용자가 취소함', network_error:'네트워크 오류', invalid_key:'API 키 확인 필요'};
+  function renderOfficial() {
+    var item = providers.find(function (entry) { return entry.name === providerSelect.value; });
+    modelSelect.innerHTML = '';
+    if (!item) { status.textContent = '상태 정보가 없습니다.'; return; }
+    item.models.forEach(function (model) { var option = document.createElement('option'); option.value = model; option.textContent = model; modelSelect.appendChild(option); });
+    status.textContent = (labels[item.name] || item.name) + ' · ' + (states[item.state] || item.state) + ' — ' + item.message;
+  }
+  providerSelect.addEventListener('change', renderOfficial);
+  fetch('/api/v15/providers').then(function (response) {
+    if (!response.ok) throw new Error('상태 조회 실패');
+    return response.json();
+  }).then(function (payload) {
+    providers = payload.providers || [];
+    renderOfficial();
+    if (payload.experimental_cli && cliPanel && cliStatuses) {
+      cliPanel.hidden = false;
+      var cli = providers.filter(function (entry) { return /_cli$/.test(entry.name); });
+      cliStatuses.replaceChildren();
+      cli.forEach(function (entry) {
+        var paragraph = document.createElement('p');
+        var title = document.createElement('strong');
+        title.textContent = labels[entry.name] || entry.name;
+        paragraph.appendChild(title);
+        paragraph.appendChild(document.createTextNode(' · ' + (states[entry.state] || entry.state)));
+        paragraph.appendChild(document.createElement('br'));
+        paragraph.appendChild(document.createTextNode(entry.message || ''));
+        cliStatuses.appendChild(paragraph);
+      });
+    }
+  }).catch(function () { status.textContent = '제공자 상태를 확인하지 못했습니다. 키나 로그인 세션은 변경되지 않았습니다.'; });
+})();
+</script>
+
+<script>
+/* v1.5 P0: 서버 작업을 화면 이동과 무관하게 계속 보여주는 작업함. */
+(function initP0JobCenter() {
+  var center = document.getElementById('jobCenter');
+  var list = document.getElementById('jobCenterList');
+  var toggle = document.getElementById('jobCenterToggle');
+  var close = document.getElementById('jobCenterClose');
+  var count = document.getElementById('jobCenterCount');
+  if (!center || !list || !toggle) return;
+
+  function esc(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+    });
+  }
+  function render(jobs) {
+    var active = jobs.filter(function (j) { return !['done','error','interrupted'].includes(j.status); });
+    count.textContent = String(active.length);
+    list.innerHTML = jobs.slice(0, 12).map(function (job) {
+      var view = job.queue_view || {};
+      var retry = view.can_retry
+        ? '<button type="button" data-job-retry="' + esc(job.job_id) + '">다시 시도</button>' : '';
+      var eta = view.eta_seconds == null ? '' : ' · 약 ' + Math.max(1, Math.ceil(view.eta_seconds / 60)) + '분 남음';
+      return '<article data-job-id="' + esc(job.job_id) + '" style="border-top:1px solid #ece9e2;padding:9px 0">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px"><strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(job.filename || job.job_id) + '</strong><span>' + esc(view.stage_label || job.phase || job.status) + '</span></div>' +
+        '<progress aria-label="' + esc((job.filename || '작업') + ' 진행률') + '" max="100" value="' + Number(job.progress || 0) + '" style="width:100%"></progress>' +
+        '<small>' + Number(job.progress || 0) + '%' + eta + (job.error ? ' · ' + esc(job.error) : '') + '</small> ' + retry +
+        '</article>';
+    }).join('') || '<p style="margin:8px 0;color:#777">진행 중인 작업이 없습니다.</p>';
+  }
+  async function refresh() {
+    try {
+      var response = await fetch('/api/jobs');
+      if (response.ok) render(await response.json());
+    } catch (e) { /* 다음 주기에 다시 연결 */ }
+  }
+  function openCenter() { center.style.display = 'block'; center.setAttribute('aria-hidden','false'); toggle.style.display = 'none'; toggle.setAttribute('aria-expanded','true'); close.focus(); refresh(); }
+  function closeCenter() { center.style.display = 'none'; center.setAttribute('aria-hidden','true'); toggle.style.display = 'block'; toggle.setAttribute('aria-expanded','false'); toggle.focus(); }
+  toggle.addEventListener('click', openCenter);
+  close.addEventListener('click', closeCenter);
+  center.addEventListener('keydown', function (event) { if (event.key === 'Escape') closeCenter(); });
+  list.addEventListener('click', async function (event) {
+    var button = event.target.closest('[data-job-retry]');
+    if (!button) return;
+    button.disabled = true;
+    try {
+      var response = await fetch('/api/transcribe/redo/' + encodeURIComponent(button.dataset.jobRetry), {method:'POST'});
+      if (!response.ok) { var body = await response.json().catch(function(){ return {}; }); throw new Error(body.detail || ('다시 시도 실패 (' + response.status + ')')); }
+    } catch (error) {
+      window.showToast?.(error.message || '다시 시도하지 못했습니다');
+      button.disabled = false;
+    } finally { refresh(); }
+  });
+  refresh();
+  window.setInterval(refresh, 2500);
+})();
+
+(function initMeetingResultTabs() {
+  var tabs = document.getElementById('meetingResultTabs');
+  if (!tabs) return;
+  tabs.addEventListener('click', async function (event) {
+    var button = event.target.closest('[data-result-target]');
+    if (!button) return;
+    var target = button.dataset.resultTarget;
+    if (target === 'summary') document.getElementById('summary')?.scrollIntoView({behavior:'smooth'});
+    if (target === 'note') document.getElementById('mynoteBlock')?.scrollIntoView({behavior:'smooth'});
+    if (target === 'audio') await window.__pronoteOpenResultAudio?.(button);
+    if (target === 'transcript') document.querySelector('[data-side-tab="transcript"]')?.click();
+    tabs.querySelectorAll('button').forEach(function (item) {
+      item.classList.toggle('primary', item === button);
+      item.setAttribute('aria-pressed', item === button ? 'true' : 'false');
+    });
+  });
+})();
+</script>
+<script>
+document.getElementById('homeNoteOnlyCard')?.addEventListener('click', function () {
+  if (typeof switchView === 'function') switchView('mynotes');
+  window.setTimeout(function () { document.getElementById('newStandaloneNoteBtn')?.click(); }, 80);
+});
+</script>
+<script src="/static/v15-ink.js"></script>
 </body>
 </html>

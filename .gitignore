@@ -1,11 +1,20 @@
-__pycache__/
-*.pyc
+# 비밀값·개인 데이터 — 절대 저장소에 올리지 않는다
 .env.local
+ipad_companion_url.txt
+ipad_companion_qr.png
+certs_local/
+.env
+
+# 사용자 데이터 (녹음·받아쓰기·회의록)
 uploads/
 results/
-.ai-pronote/
-server.log
-server.err.log
-node_modules/
+logs/
+
+# 파이썬
+__pycache__/
+*.pyc
+
+# 작업 백업
+_backup_*/
 *.bak
-.claude-flow/
+*.bak.*
