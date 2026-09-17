@@ -1,0 +1,110 @@
+name: RC25 베타 오류 제보
+description: 회의 내용이나 로그인 정보를 포함하지 않고 오류를 제보합니다
+title: "[RC25 Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        실제 회의 원본, 받아쓰기·회의록 본문, 참석자 개인정보, 로그인 화면, 이메일, 비밀번호, 인증 코드, API 키, 토큰은 공개 이슈에 올리지 마세요.
+        보안 취약점이나 개인정보 노출 가능성이 있으면 공개 이슈를 만들지 말고 베타 초대 시 안내받은 비공개 연락처로 알려 주세요.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 운영체제
+      options:
+        - macOS Apple Silicon
+        - macOS Intel
+        - Windows 11 64비트
+        - Windows 10 64비트
+        - 기타 또는 모름
+    validations:
+      required: true
+
+  - type: input
+    id: os_version
+    attributes:
+      label: 운영체제 버전
+      placeholder: 예 macOS 15.6 또는 Windows 11 24H2
+    validations:
+      required: true
+
+  - type: input
+    id: browser_version
+    attributes:
+      label: Chrome 또는 Edge 버전
+      placeholder: 설정의 브라우저 정보에 표시되는 버전
+    validations:
+      required: true
+
+  - type: dropdown
+    id: flow
+    attributes:
+      label: 문제가 발생한 기능
+      options:
+        - 설치 또는 실행
+        - 음성 녹음
+        - 카메라 영상과 음성
+        - 기존 파일 가져오기
+        - 받아쓰기
+        - AI 회의록
+        - 필기만
+        - 라이브러리 재열기
+        - 삭제 또는 복구
+        - 기타
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 재현 순서
+      description: 회의 내용 없이, 눌렀던 버튼과 발생 순서만 적습니다.
+      placeholder: |
+        1. 새 회의를 열었습니다.
+        2. 카메라 영상 함께 녹화를 켰습니다.
+        3. 녹음 시작을 눌렀습니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: message
+    attributes:
+      label: 화면에 표시된 오류 문구
+      description: 이름·회의 내용·경로에 개인정보가 있으면 가리고 적습니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대한 결과와 실제 결과
+    validations:
+      required: true
+
+  - type: dropdown
+    id: retry
+    attributes:
+      label: 다시 시도했을 때
+      options:
+        - 같은 오류가 다시 발생함
+        - 다시 시도하니 성공함
+        - 데이터 손실 우려로 다시 시도하지 않음
+        - 재시도할 수 없음
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: 공개 전 확인
+      options:
+        - label: 실제 회의 음성·영상·본문을 첨부하지 않았습니다.
+          required: true
+        - label: 로그인 정보·API 키·토큰·개인정보를 포함하지 않았습니다.
+          required: true
+        - label: 원본 파일과 data_v15를 삭제하지 않았습니다.
+          required: true
+
