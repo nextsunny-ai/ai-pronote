@@ -11,6 +11,7 @@
 - [x] iPad companion HTTPS·1회 토큰·절대 만료·관리 API 차단·localhost 기본값 검증
 - [x] unsigned 외부 베타 RC17 Mac·Windows ZIP 해시·내용 목록 기록
 - [x] Python/JavaScript/보안 리뷰의 CRITICAL/HIGH 0
+- [x] RC18 Windows 새 설치본에서 60분·109.9MB WAV 업로드→받아쓰기→원본 해시 일치→서버 재시작 후 재열기
 - [ ] 제거·롤백 실제 경로 확인
 
 ## 2. 대표님 실사용 — 순서와 합격 기준
