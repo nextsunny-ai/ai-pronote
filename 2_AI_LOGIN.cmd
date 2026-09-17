@@ -8,16 +8,13 @@ cls
 echo AI PRONOTE에서 사용할 AI를 선택하세요.
 echo.
 echo   1. Claude
-echo   2. Gemini
-echo   3. ChatGPT / Codex
-echo   4. 세 가지 모두 준비
+echo   2. ChatGPT / Codex
+echo   Gemini는 앱 설정의 공식 API (BYOK)로만 연결합니다.
 echo   0. 종료
 echo.
 set /p choice=번호 입력: 
 if "%choice%"=="1" goto claude
-if "%choice%"=="2" goto gemini
-if "%choice%"=="3" goto codex
-if "%choice%"=="4" goto all
+if "%choice%"=="2" goto codex
 if "%choice%"=="0" goto end
 goto menu
 
@@ -31,18 +28,6 @@ if errorlevel 1 (
 )
 echo Claude 로그인 화면을 엽니다. 로그인 뒤 /exit를 입력하세요.
 claude
-if "%choice%"=="4" goto gemini
-goto done
-
-:gemini
-where node >nul 2>nul
-if errorlevel 1 goto node_missing
-where gemini >nul 2>nul
-if errorlevel 1 call npm install -g @google/gemini-cli
-if errorlevel 1 goto failed
-echo Gemini 로그인 화면을 엽니다. 로그인 뒤 /quit를 입력하세요.
-call gemini
-if "%choice%"=="4" goto codex
 goto done
 
 :codex
@@ -55,12 +40,8 @@ echo ChatGPT / Codex 로그인 화면을 엽니다. 로그인 뒤 /exit를 입�
 call codex
 goto done
 
-:all
-set choice=4
-goto claude
-
 :node_missing
-echo Gemini와 Codex 설치에는 Node.js가 필요합니다.
+echo Codex 설치에는 Node.js가 필요합니다.
 echo https://nodejs.org/ 에서 LTS 버전을 설치한 뒤 다시 실행하세요.
 goto pause_end
 

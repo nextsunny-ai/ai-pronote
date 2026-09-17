@@ -118,7 +118,7 @@ class ProviderRegistry:
     def __init__(self, store: CredentialStore, allow_experimental_cli: bool = False) -> None:
         adapters: list[ProviderAdapter] = [OpenAIAdapter(store), GeminiAdapter(store), AnthropicAdapter(store), MockAdapter(store)]
         if allow_experimental_cli:
-            adapters.extend((CodexCliAdapter(store), ClaudeCliAdapter(store), GeminiCliAdapter(store)))
+            adapters.extend((CodexCliAdapter(store), ClaudeCliAdapter(store)))
         self._adapters = {adapter.name: adapter for adapter in adapters}
 
     def names(self) -> tuple[str, ...]:

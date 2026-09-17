@@ -388,16 +388,13 @@ def codex_bin() -> Optional[str]:
 def provider_status() -> dict:
     """AI 엔진별 상태.
 
-    Gemini/Codex의 로컬 로그인 파일은 실제 호출 자격까지 증명하지 못한다. 특히
-    Gemini는 로그인 파일이 있어도 계정 tier/client 정책으로 거절될 수 있으므로
-    첫 호출 전에는 ready라고 단정하지 않는다.
+    Gemini CLI OAuth를 제3자 앱에서 사용하는 경로는 Google 공식 정책상 허용되지
+    않으므로 상태 탐지나 호출을 제공하지 않는다. Gemini는 공식 API BYOK만 쓴다.
+    Codex의 로컬 로그인 파일은 실제 호출 자격까지 증명하지 못한다.
     """
     cs = claude_state()
     out = {"claude": cs["state"]}
-    if gemini_bin():
-        out["gemini"] = "login_unverified" if (Path.home() / ".gemini" / "oauth_creds.json").exists() else "not_logged_in"
-    else:
-        out["gemini"] = "not_installed"
+    out["gemini"] = "policy_blocked"
     if codex_bin():
         out["codex"] = "login_unverified" if (Path.home() / ".codex" / "auth.json").exists() else "not_logged_in"
     else:
@@ -421,12 +418,10 @@ def _run_cli_text(cmd: list, stdin_text: str, timeout: int, label: str) -> str:
 
 
 def call_gemini(system: str, prompt: str, content: str = "", timeout: int = 600) -> str:
-    b = gemini_bin()
-    if not b:
-        raise RuntimeError("Gemini CLI 없음 — 설치: npm i -g @google/gemini-cli → 'gemini' 1회 실행해 구글 로그인")
-    instruction = (system + "\n\n" + prompt).strip()
-    cmd = (["cmd", "/c", b] if sys.platform == "win32" else [b]) + ["-p", instruction]
-    return _run_cli_text(cmd, content or "", timeout, "gemini")
+    raise LLMError(
+        "Gemini CLI 로그인은 공급자 정책상 앱 연결에 사용할 수 없습니다. 공식 Gemini API (BYOK)를 사용해 주세요.",
+        "policy", "",
+    )
 
 
 def call_codex(system: str, prompt: str, content: str = "", timeout: int = 600) -> str:
@@ -441,23 +436,32 @@ def call_codex(system: str, prompt: str, content: str = "", timeout: int = 600) 
 def call_llm(provider: str, system: str, prompt: str, content: str = "",
              model_alias: str = DEFAULT_LLM_MODEL, timeout: int = 600,
              allowed_tools: Optional[str] = None, retries: int = 2) -> str:
-    """프로바이더 라우팅 — claude(기본)·gemini·codex. 전부 로컬 CLI = 사용자 구독 = 추가 비용 0.
+    """실험 CLI 라우팅 — Claude·Codex만 허용. Gemini는 공식 API BYOK 전용.
 
     회의가 끝난 뒤 한 번 실패하면 그 회의록은 그대로 날아간다. 그래서 사용량 한도·
     혼잡·네트워크처럼 잠시 뒤에는 되는 실패는 여기서 조용히 다시 시도한다.
     로그인 만료(auth)는 다시 걸어도 같은 결과이므로 즉시 실패시켜 안내로 넘긴다.
     """
-    p = (provider or "claude").lower()
+    p = (provider or "").strip().lower()
+    if p in {"gemini", "gemini_cli"}:
+        raise LLMError(
+            "Gemini CLI 로그인은 공급자 정책상 앱 연결에 사용할 수 없습니다. 설정에서 공식 Gemini API (BYOK)를 사용해 주세요.",
+            "policy", "",
+        )
+    if p in {"openai", "openai_api", "gemini_api", "anthropic", "anthropic_api"}:
+        raise LLMError("공식 API 제공자는 공식 BYOK 실행 경로에서만 사용할 수 있습니다.", "policy", "")
+    if p not in {"claude_cli", "codex_cli"}:
+        raise LLMError("알 수 없거나 지원하지 않는 AI 제공자입니다. 설정에서 다시 선택해 주세요.", "policy", "")
     if os.environ.get("PRONOTE_EXPERIMENTAL_CLI", "false").lower() != "true":
         raise LLMError("구독형 CLI 경로는 공개 기본 설정에서 비활성화되어 있습니다.", "policy", "")
 
     def _once() -> str:
-        if p == "gemini":
-            return call_gemini(system, prompt, content, timeout=timeout)
-        if p in ("codex", "chatgpt", "openai"):
+        if p == "codex_cli":
             return call_codex(system, prompt, content, timeout=timeout)
-        return call_claude(system, prompt, content, model_alias=model_alias,
-                           timeout=timeout, allowed_tools=allowed_tools)
+        if p == "claude_cli":
+            return call_claude(system, prompt, content, model_alias=model_alias,
+                               timeout=timeout, allowed_tools=allowed_tools)
+        raise LLMError("지원하지 않는 AI 제공자입니다.", "policy", "")
 
     delay = 4.0
     for attempt in range(retries + 1):
@@ -730,7 +734,7 @@ class SummarizeRequest(BaseModel):
     transcript: str
     scenario: str = "meeting"  # meeting | lecture | interview | ideation | memo | free
     model: str = DEFAULT_LLM_MODEL  # haiku | sonnet | opus
-    provider: str = "claude"   # claude | gemini | codex — 사용자가 어드민에서 선택
+    provider: str = "claude_cli"
     title: Optional[str] = None
     attendees: Optional[str] = None
     tag: Optional[str] = None
@@ -1070,7 +1074,7 @@ def llm_title(req: TitleRequest):
 
 
 def build_summary(transcript: str, scenario: str = "meeting",
-                  model_alias: str = DEFAULT_LLM_MODEL, provider: str = "claude",
+                  model_alias: str = DEFAULT_LLM_MODEL, provider: str = "claude_cli",
                   title: str = "", attendees: str = "", tag: str = "",
                   date: str = "", auto_title: bool = True) -> dict:
     """받아쓰기 → 회의록. 화면 요청과 서버 자동 생성이 함께 쓰는 본체."""
@@ -1213,7 +1217,7 @@ class AssistantRequest(BaseModel):
     tone: str = "정중한"
     expertise: str = ""             # ★ v1.4 회의별 에이전트 전문 분야 (예: 음원·페스티벌)
     model: str = "haiku"  # 회의 중 비서 = 빠르고 지시 준수 우수한 haiku 기본
-    provider: str = "claude"        # claude | gemini | codex
+    provider: str = "claude_cli"
     research: Optional[bool] = None  # (현재 미사용 — 웹검색은 BYOK 환경 제약으로 보류)
     external_consent: bool = False
 
@@ -1548,13 +1552,19 @@ def _try_summarize(job_id: str) -> bool:
         return False
 
     attempts = int(job.get("summary_attempts") or 0) + 1
+    stored_provider = job.get("provider")
+    provider = {"claude": "claude_cli", "codex": "codex_cli"}.get(
+        stored_provider, stored_provider or "claude_cli"
+    )
+    if provider != stored_provider:
+        _job_write(job_id, provider=provider)
     _job_write(job_id, summary_status="running", summary_attempts=attempts)
     try:
         out = build_summary(
             transcript,
             scenario=job.get("scenario") or "meeting",
             model_alias=job.get("llm_model") or "haiku",
-            provider=job.get("provider") or "claude",
+            provider=provider,
             title=job.get("title") or "",
             attendees=job.get("attendees") or "",
             tag=job.get("tag") or "",
@@ -2108,7 +2118,7 @@ TRANSLATE_LANGS = {
 class TranslateRequest(BaseModel):
     text: str
     target: str = "en"
-    provider: str = "claude"
+    provider: str = "claude_cli"
     external_consent: bool = False
 
 
@@ -2201,7 +2211,7 @@ async def transcribe(
     auto_summarize: bool = Form(True),
     scenario: str = Form("meeting"),
     llm_model: str = Form("haiku"),
-    provider: str = Form("claude"),
+    provider: str = Form("claude_cli"),
     external_consent: bool = Form(False),
     title: str = Form(""),
     attendees: str = Form(""),

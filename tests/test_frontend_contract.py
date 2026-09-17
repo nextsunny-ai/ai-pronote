@@ -9,7 +9,7 @@ HTML = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
 class FrontendContractTests(unittest.TestCase):
     def test_experimental_cli_login_is_present_but_not_claimed_verified(self):
         self.assertIn("login_unverified", HTML)
-        self.assertIn("계정 자격은 첫 회의록 생성 때 확인됩니다", HTML)
+        self.assertIn("실제 사용 가능 여부는 첫 회의록 생성 때 확인됩니다", HTML)
 
     def test_persistent_job_center_is_present(self):
         self.assertIn('id="jobCenter"', HTML)
@@ -92,13 +92,15 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('role="status" aria-live="polite"', HTML)
         self.assertNotIn('id="libraryFileInput" accept="audio/*', HTML)
 
-    def test_mac_beta_has_three_ai_login_and_safe_launchers(self):
+    def test_mac_beta_uses_supported_cli_logins_and_safe_launchers(self):
         mac = ROOT / "mac"
         for name in ("1_FIRST_SETUP.command", "2_AI_LOGIN.command", "3_START_AI_PRONOTE.command", "STOP_AI_PRONOTE.command"):
             self.assertTrue((mac / name).exists())
         login = (mac / "2_AI_LOGIN.command").read_text(encoding="utf-8")
-        for marker in ("claude", "@google/gemini-cli", "@openai/codex"):
+        for marker in ("claude", "@openai/codex"):
             self.assertIn(marker, login)
+        self.assertNotIn("@google/gemini-cli", login)
+        self.assertIn("공식 API(BYOK)", login)
         start = (mac / "3_START_AI_PRONOTE.command").read_text(encoding="utf-8")
         setup = (mac / "1_FIRST_SETUP.command").read_text(encoding="utf-8")
         self.assertIn('PRONOTE_HOST="127.0.0.1"', start)

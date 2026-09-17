@@ -15,7 +15,8 @@ AI PRONOTE는 Mac·Windows에서 회의 음성 또는 카메라 영상+음성을
 ## 정식 연동과 실험 기능
 
 - 정식 공개 대상: OpenAI API, Gemini API, Anthropic API의 사용자 보유 키(BYOK).
-- 내부 실험: `Codex CLI (실험)`, `Claude CLI (실험)`, `Gemini CLI (실험)`. 공개판에서는 feature flag로 숨깁니다.
+- 내부 실험: `Codex CLI (실험)`, `Claude CLI (실험)`. 공개판에서는 feature flag로 숨깁니다.
+- Gemini는 공급자 정책에 따라 공식 Gemini API(BYOK)로만 연결하며 Gemini CLI OAuth 경로는 차단합니다.
 - CLI 로그인은 소비자 계정의 일반 모델 로그인과 동일하다고 보장하지 않으며, 각 제공자 약관·배포 제한을 별도로 확인해야 합니다.
 
 ## 지원·제거·복구

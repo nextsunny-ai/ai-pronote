@@ -56,9 +56,15 @@ class ServerSecurityContractTests(unittest.TestCase):
         self.assertIn('purge_managed_data(DATA_ROOT, (UPLOAD_DIR, RESULT_DIR, LOG_DIR))', MAIN)
 
     def test_cli_login_files_are_not_reported_as_verified_ready(self):
-        self.assertIn('out["gemini"] = "login_unverified"', MAIN)
+        self.assertIn('out["gemini"] = "policy_blocked"', MAIN)
         self.assertIn('out["codex"] = "login_unverified"', MAIN)
         self.assertIn('"account_unsupported"', MAIN)
+
+    def test_cli_provider_ids_are_strict_and_legacy_jobs_are_migrated(self):
+        self.assertIn('p not in {"claude_cli", "codex_cli"}', MAIN)
+        self.assertIn('{"claude": "claude_cli", "codex": "codex_cli"}.get(', MAIN)
+        self.assertIn('stored_provider or "claude_cli"', MAIN)
+        self.assertIn('_job_write(job_id, provider=provider)', MAIN)
 
 
 if __name__ == "__main__":

@@ -4849,16 +4849,19 @@ if ('serviceWorker' in navigator) {
       <div class="form-row">
         <label class="form-label">AI 엔진 (회의록 정리·AI 비서)</label>
         <div class="form-chip-row" id="aiProviderRow" style="flex-wrap:wrap; gap:10px;">
-          <button type="button" class="form-chip experimental-cli-choice" data-provider="claude">Claude CLI (실험)</button>
-          <button type="button" class="form-chip experimental-cli-choice" data-provider="gemini">Gemini CLI (실험)</button>
-          <button type="button" class="form-chip experimental-cli-choice" data-provider="codex">Codex CLI (실험)</button>
+          <button type="button" class="form-chip experimental-cli-choice" data-provider="claude_cli">Claude CLI (실험)</button>
+          <button type="button" class="form-chip experimental-cli-choice" data-provider="gemini_cli" data-policy-blocked="true" aria-disabled="true" aria-describedby="aiProviderHint">Gemini CLI — 앱 연결 안 함</button>
+          <button type="button" class="form-chip experimental-cli-choice" data-provider="codex_cli">Codex CLI (실험)</button>
         </div>
         <div class="form-hint" id="aiProviderHint">이 기기에 로그인된 AI를 선택합니다. 로그인 정보는 앱이 복사하거나 저장하지 않습니다.</div>
       </div>
     `;
     // AI 엔진 = 설치·로그인 상태 표시 (미설치·미로그인 = 흐리게 + 안내)
     (function () {
-      const curP = (s.ai && s.ai.provider) || 'claude';
+      const storedProvider = s.ai && s.ai.provider;
+      const curP = storedProvider === 'claude' ? 'claude_cli'
+        : storedProvider === 'codex' ? 'codex_cli'
+        : ['claude_cli', 'codex_cli'].includes(storedProvider) ? storedProvider : null;
       const chips = adminBody.querySelectorAll('#aiProviderRow .form-chip');
       chips.forEach(chip => { chip.hidden = true; });
       chips.forEach(chip => {
@@ -4879,15 +4882,21 @@ if ('serviceWorker' in navigator) {
           return;
         }
         chips.forEach(chip => { chip.hidden = false; });
+        const geminiCli = adminBody.querySelector('[data-provider="gemini_cli"]');
+        if (geminiCli) {
+          geminiCli.style.opacity = '0.45';
+          geminiCli.dataset.disabledReason = 'Gemini는 공급자 정책에 따라 공식 API (BYOK)로만 연결할 수 있습니다.';
+          geminiCli.title = geminiCli.dataset.disabledReason;
+        }
         const pv = st.providers || {};
         const guide = {
-          gemini: { not_installed: '제미나이 미설치 — 설치: npm i -g @google/gemini-cli', not_logged_in: '제미나이 설치됨 — 터미널에서 gemini 실행해 구글 로그인 1회', login_unverified: '제미나이 로그인 정보 발견 — 계정 자격은 첫 회의록 생성 때 확인됩니다.' },
-          codex: { not_installed: 'Codex CLI 미설치', not_logged_in: 'Codex CLI 설치됨 — 로그인 필요', login_unverified: 'Codex 로그인 정보 발견 — 실제 사용 가능 여부는 첫 회의록 생성 때 확인됩니다.' },
-          claude: { not_installed: '클로드 미설치 — 화면의 AI 로그인 안내에서 설치', not_logged_in: '클로드 로그인 필요 — 화면의 AI 로그인 안내에서 로그인' },
+          codex_cli: { not_installed: 'Codex CLI 미설치', not_logged_in: 'Codex CLI 설치됨 — 로그인 필요', login_unverified: 'Codex 로그인 정보 발견 — 실제 사용 가능 여부는 첫 회의록 생성 때 확인됩니다.' },
+          claude_cli: { not_installed: '클로드 미설치 — 화면의 AI 로그인 안내에서 설치', not_logged_in: '클로드 로그인 필요 — 화면의 AI 로그인 안내에서 로그인' },
         };
         chips.forEach(chip => {
+          if (chip.dataset.policyBlocked === 'true') return;
           const p = chip.dataset.provider;
-          const state2 = pv[p] || 'not_installed';
+          const state2 = pv[p.replace('_cli', '')] || 'not_installed';
           if (state2 === 'login_unverified') {
             chip.title = guide[p][state2];
           } else if (state2 !== 'ready') {
@@ -4923,11 +4932,12 @@ if ('serviceWorker' in navigator) {
       const next = loadSettings();
       next.transcribe = { model, diarize };
       if (provider) next.ai = { provider };
+      else if (next.ai && !['claude', 'codex', 'claude_cli', 'codex_cli'].includes(next.ai.provider)) delete next.ai;
       saveSettings(next);
       refreshTranscribeDisplay();
       closeAdminModal();
       const label = model === 'small' ? '빠르게 (small)' : '표준 (medium)';
-      const pLabel = ({claude: 'Claude CLI (실험)', gemini: 'Gemini CLI (실험)', codex: 'Codex CLI (실험)'})[provider] || '공식 API BYOK 설정 유지';
+      const pLabel = ({claude_cli: 'Claude CLI (실험)', codex_cli: 'Codex CLI (실험)'})[provider] || '공식 API BYOK 설정 유지';
       showToast(`받아쓰기 = ${label} · 화자 분리 ${diarize ? '켬' : '끔'} · AI = ${pLabel}`);
     };
     adminModal.classList.add('open');
@@ -4947,7 +4957,13 @@ if ('serviceWorker' in navigator) {
   refreshTranscribeDisplay();
   // 선택된 AI 엔진 = 비서·회의록 호출에서 사용 (디폴트 클로드)
   window.__pronoteGetAIProvider = function () {
-    try { const s2 = loadSettings(); return (s2.ai && s2.ai.provider) || 'claude'; } catch (e) { return 'claude'; }
+    try {
+      const value = loadSettings()?.ai?.provider;
+      if (value === 'claude') return 'claude_cli';
+      if (value === 'codex') return 'codex_cli';
+      if (value === 'claude_cli' || value === 'codex_cli') return value;
+      return value ? 'policy_blocked' : 'claude_cli';
+    } catch (e) { return 'policy_blocked'; }
   };
 
   // ─── 내 계정 모달 ───
@@ -7963,7 +7979,7 @@ if ('serviceWorker' in navigator) {
         fd.append('auto_summarize', r.scenarioKey ? 'true' : 'false');
         fd.append('scenario', r.scenarioKey || 'meeting');
         fd.append('llm_model', 'haiku');
-        fd.append('provider', (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude'));
+        fd.append('provider', (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude_cli'));
         fd.append('external_consent', String(window.__pronoteExternalConsent?.() || false));
         fd.append('title', r.title || '');
         fd.append('attendees', r.attendees || '');
@@ -8009,7 +8025,7 @@ if ('serviceWorker' in navigator) {
           const q = new URLSearchParams({
             scenario: r.scenarioKey || 'meeting',
             llm_model: 'haiku',
-            provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude'),
+            provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude_cli'),
             external_consent: String(window.__pronoteExternalConsent?.() || false),
           });
           await _getJson('/api/summarize/redo/' + r.jobId + '?' + q.toString(), { method: 'POST' });
@@ -8030,7 +8046,7 @@ if ('serviceWorker' in navigator) {
             transcript: r.transcript,
             scenario: r.scenarioKey || 'meeting',
             model: 'haiku',  // 디폴트 Haiku (빠름·정확). 사용자 선택 추후.
-            provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude'),
+            provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude_cli'),
             title: r.title,
             attendees: r.attendees,
             tag: r.tag,
@@ -9490,7 +9506,7 @@ if ('serviceWorker' in navigator) {
     hist[key].push({ role: 'user', text: msg });
     fetch(API, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ message: msg, context: withContext ? getContext() : '', history: hist[key].slice(-8), name: asstName(), expertise: (window.__pronoteAgentExpertise || ''), provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude'), external_consent: Boolean(window.__pronoteExternalConsent?.()) })
+      body: JSON.stringify({ message: msg, context: withContext ? getContext() : '', history: hist[key].slice(-8), name: asstName(), expertise: (window.__pronoteAgentExpertise || ''), provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'claude_cli'), external_consent: Boolean(window.__pronoteExternalConsent?.()) })
     }).then(function (res) {
       return res.json().then(function (data) { return { ok: res.ok, data: data }; });
     }).then(function (r) {

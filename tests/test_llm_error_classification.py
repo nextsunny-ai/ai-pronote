@@ -1,6 +1,6 @@
 import unittest
 
-from main import _classify_llm_error
+from main import LLMError, _classify_llm_error, call_llm
 
 
 class LlmErrorClassificationTests(unittest.TestCase):
@@ -17,6 +17,22 @@ class LlmErrorClassificationTests(unittest.TestCase):
         self.assertEqual(_classify_llm_error("401 not logged in", "codex")[0], "auth")
         self.assertIn("Codex", _classify_llm_error("401 not logged in", "codex")[1])
         self.assertIn("Gemini", _classify_llm_error("429 rate limit", "gemini")[1])
+
+    def test_gemini_cli_is_blocked_before_subprocess_or_feature_flag(self):
+        with self.assertRaises(LLMError) as caught:
+            call_llm("gemini_cli", "system", "prompt", "private meeting")
+        self.assertEqual(caught.exception.kind, "policy")
+        self.assertIn("공식 Gemini API", str(caught.exception))
+
+    def test_cli_router_rejects_api_ids_unknown_and_legacy_aliases(self):
+        providers = (
+            "openai", "openai_api", "gemini_api", "anthropic", "anthropic_api",
+            "gemini", "unknown", "claude", "codex", " gemini_cli ",
+        )
+        for provider in providers:
+            with self.subTest(provider=provider), self.assertRaises(LLMError) as caught:
+                call_llm(provider, "system", "prompt", "private meeting")
+            self.assertEqual(caught.exception.kind, "policy")
 
 
 if __name__ == "__main__":
