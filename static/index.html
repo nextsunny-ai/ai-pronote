@@ -2715,20 +2715,28 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <style id="v15-product-ui">
-  :root{--product-ink:#171716;--product-card:#fff;--product-line:#dedbd3;--product-copper:#9b6548;--product-muted:#6e6b65}
+  :root{--product-ink:#191918;--product-card:#fff;--product-line:#dedbd3;--product-copper:#ad7859;--product-muted:#6e6b65}
   .home-workspace{padding:52px 56px 80px;max-width:1120px;margin:0 auto}
   .home-product-title{font-size:34px!important;line-height:1.12!important;letter-spacing:-.035em!important;margin:0 0 8px!important;font-weight:760!important}
   .home-product-subtitle{font-size:14px!important;color:var(--product-muted)!important;margin:0 0 28px!important}
-  .home-workspace>.home-trust-strip{margin:0 0 22px;max-width:100%;background:#efede7;border:0;border-radius:9px;padding:11px 14px}
+  .home-workspace>.home-trust-strip{margin:0 0 22px;max-width:100%;display:flex;align-items:center;gap:0;background:#f1efe9;border:1px solid #e6e1d8;border-radius:11px;padding:0 14px;color:#64615b}
+  .home-workspace>.home-trust-strip span{padding:11px 14px;position:relative;white-space:nowrap}
+  .home-workspace>.home-trust-strip span+span:before{content:"";position:absolute;left:0;top:11px;bottom:11px;width:1px;background:#d9d4cb}
+  .home-workspace>.home-trust-strip strong{color:#272624;font-weight:680}
   .home-action-layout{display:grid;grid-template-columns:1fr;gap:14px;max-width:1000px}
-  .home-action-layout>#newMeetingBtn{min-height:250px!important;border-radius:14px!important;padding:30px!important;box-shadow:0 18px 42px rgba(23,23,22,.12)}
+  .home-action-layout>#newMeetingBtn{min-height:250px!important;border-radius:16px!important;padding:30px!important;overflow:hidden;position:relative;box-shadow:0 20px 48px rgba(23,23,22,.14);background:radial-gradient(circle at 82% 32%,#2b2926 0,#1b1b1a 38%,#171716 72%)!important}
+  .home-record-copy{position:relative;z-index:2;display:flex;flex-direction:column;justify-content:space-between;height:100%}
+  .home-record-visual{position:absolute;right:52px;top:50%;transform:translateY(-50%);height:92px;display:flex;align-items:center;gap:7px;opacity:.92}
+  .home-record-visual i{display:block;width:7px;border-radius:999px;background:#c48a68;box-shadow:0 0 24px rgba(196,138,104,.16)}
+  .home-record-visual i:nth-child(1),.home-record-visual i:nth-child(9){height:18px;opacity:.42}.home-record-visual i:nth-child(2),.home-record-visual i:nth-child(8){height:34px;opacity:.56}.home-record-visual i:nth-child(3),.home-record-visual i:nth-child(7){height:58px;opacity:.72}.home-record-visual i:nth-child(4),.home-record-visual i:nth-child(6){height:82px}.home-record-visual i:nth-child(5){height:48px}
   .home-action-layout>div{display:grid!important;grid-template-columns:repeat(4,1fr)!important;gap:10px!important}
   .home-action-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.55);margin-bottom:8px}
   .quick-card{transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
-  .quick-card:hover{transform:translateY(-1px);box-shadow:0 10px 28px rgba(25,24,21,.07)}
+  .quick-card:hover{transform:translateY(-2px);border-color:#cfc8bd!important;box-shadow:0 12px 30px rgba(25,24,21,.075)}
   .quick-card:focus-visible{outline:3px solid rgba(155,101,72,.28);outline-offset:2px}
-  @media(max-width:1023px){.home-workspace{padding:30px 24px 72px}.home-action-layout>div{grid-template-columns:1fr 1fr!important}.home-action-layout>#newMeetingBtn{min-height:210px!important}}
-  @media(max-width:520px){.home-workspace{padding:24px 16px 64px}.home-product-title{font-size:30px!important}.home-action-layout>div{grid-template-columns:1fr!important}.home-action-layout>#newMeetingBtn{min-height:190px!important}.home-workspace>.home-trust-strip span{display:block}}
+  .brand-product-icon{width:32px;height:32px;border-radius:8px;display:block}
+  @media(max-width:1023px){.home-workspace{padding:30px 24px 72px}.home-action-layout>div{grid-template-columns:1fr 1fr!important}.home-action-layout>#newMeetingBtn{min-height:210px!important}.home-workspace>.home-trust-strip{align-items:stretch;flex-direction:column;padding:6px 14px}.home-workspace>.home-trust-strip span{padding:6px 0;white-space:normal}.home-workspace>.home-trust-strip span+span:before{display:none}.home-record-visual{right:36px;transform:translateY(-50%) scale(.82)}}
+  @media(max-width:520px){.home-workspace{padding:24px 16px 64px}.home-product-title{font-size:30px!important}.home-action-layout>div{grid-template-columns:1fr!important}.home-action-layout>#newMeetingBtn{min-height:190px!important}.home-record-visual{opacity:.28;right:20px}}
 </style>
 </head>
 <body>
@@ -2758,12 +2766,7 @@ if ('serviceWorker' in navigator) {
   <div class="login-split">
     <div class="login-art">
       <div class="login-art-brand">
-        <svg width="28" height="28" viewBox="0 0 64 64" fill="none">
-          <rect x="8" y="12" width="40" height="44" rx="6" fill="#FAFAF7" opacity="0.92"/>
-          <path d="M16 24h22M16 32h22M16 40h14" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round"/>
-          <circle cx="50" cy="20" r="8" fill="#A0826D"/>
-          <path d="M46 20h8M50 16v8" stroke="#FAFAF7" stroke-width="1.6" stroke-linecap="round"/>
-        </svg>
+        <img class="brand-product-icon" src="/static/icons/v15-wave-note/full-64.png" alt="" />
         AI PRONOTE
       </div>
       <div class="login-art-content">
@@ -2817,12 +2820,7 @@ if ('serviceWorker' in navigator) {
 
   <aside class="sidebar">
     <div class="brand">
-      <svg class="brand-logo" viewBox="0 0 64 64" fill="none">
-        <rect x="8" y="12" width="40" height="44" rx="6" fill="#1A1A1A"/>
-        <path d="M16 24h22M16 32h22M16 40h14" stroke="#FAFAF7" stroke-width="2" stroke-linecap="round"/>
-        <circle cx="50" cy="20" r="8" fill="#A0826D"/>
-        <path d="M46 20h8M50 16v8" stroke="#FAFAF7" stroke-width="1.6" stroke-linecap="round"/>
-      </svg>
+      <img class="brand-logo brand-product-icon" src="/static/icons/v15-wave-note/full-64.png" alt="" />
       <div class="brand-text">
         AI PRONOTE
         <small>프로노트</small>
@@ -2891,17 +2889,12 @@ if ('serviceWorker' in navigator) {
     <section class="view active home-workspace" id="view-home">
       <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.16em; color:var(--text-tertiary); margin-bottom:12px;"><span id="homeToday"></span></div>
       <h1 class="home-product-title">회의 시작</h1>
-      <p class="home-product-subtitle">녹음, 노트와 필기를 한 화면에서 시작합니다.</p>
-      <div class="home-trust-strip" role="note" aria-label="데이터 처리 안내"><span><strong>이 PC에서:</strong> 녹음·필기·받아쓰기·파일 보관</span><span><strong>동의 후 외부 전송:</strong> AI 회의록 정리에 필요한 원문</span><span>창을 닫아도 작업함에서 계속 확인</span></div>
+      <p class="home-product-subtitle">음성, 카메라 영상 또는 필기 중 필요한 기록 방식을 선택하세요.</p>
+      <div class="home-trust-strip" role="note" aria-label="데이터 처리 안내"><span><strong>로컬 보관</strong> 녹음·영상·필기·받아쓰기</span><span><strong>선택 전송</strong> 동의한 경우에만 AI 회의록 생성</span><span><strong>작업 보존</strong> 창을 닫아도 진행 상태 유지</span></div>
       <div class="home-action-layout">
         <button class="quick-card" id="newMeetingBtn" style="background:var(--text-primary); color:var(--bg-base); border:1px solid var(--text-primary); border-radius:16px; padding:32px; text-align:left; cursor:pointer; min-height:220px; display:flex; flex-direction:column; justify-content:space-between;">
-          <div>
-            <div class="home-action-kicker">새 회의</div>
-            <div style="font-size:28px; font-weight:700; letter-spacing:-0.02em; line-height:1.2;">녹음 시작</div>
-          </div>
-          <div style="display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:500; color:rgba(255,255,255,0.8);">
-            음성 · 카메라 영상 · 키보드 노트 · 펜 필기 <span>→</span>
-          </div>
+          <div class="home-record-copy"><div><div class="home-action-kicker">새 회의</div><div style="font-size:30px; font-weight:720; letter-spacing:-0.035em; line-height:1.2;">녹음 시작</div></div><div style="display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:500; color:rgba(255,255,255,0.8);">음성 · 카메라 영상 · 키보드 노트 · 펜 필기 <span>→</span></div></div>
+          <div class="home-record-visual" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
         </button>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
           <button type="button" class="quick-card" id="homeUploadCard" style="background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; padding:16px; text-align:left; cursor:pointer;">

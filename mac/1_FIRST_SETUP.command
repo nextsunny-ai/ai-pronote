@@ -9,8 +9,13 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 2
 fi
 python3 -c 'import sys; assert sys.version_info >= (3,10), "Python 3.10 이상이 필요합니다"; print("Python", sys.version.split()[0], "확인")'
-python3 -m pip install --user --disable-pip-version-check -r requirements.txt
-python3 -c 'import fastapi, uvicorn, multipart, faster_whisper, requests; print("핵심 구성요소 확인 완료")'
+if [[ ! -x ".venv/bin/python" ]]; then
+  echo "AI PRONOTE 전용 Python 환경을 만듭니다."
+  python3 -m venv .venv
+fi
+".venv/bin/python" -m pip install --disable-pip-version-check --upgrade pip
+".venv/bin/python" -m pip install --disable-pip-version-check -r requirements.txt
+".venv/bin/python" -c 'import fastapi, uvicorn, multipart, faster_whisper, requests; print("핵심 구성요소 확인 완료")'
 mkdir -p data_v15
 echo "설치 완료. 다음으로 mac/2_AI_LOGIN.command를 실행하세요."
 read -r -p "Enter를 누르면 닫힙니다."

@@ -13,6 +13,7 @@ logs/
 # 파이썬
 __pycache__/
 *.pyc
+.venv/
 
 # 작업 백업
 _backup_*/
