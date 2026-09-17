@@ -9,15 +9,21 @@ try { $python = Get-Command python.exe -ErrorAction Stop } catch {
 $versionText = & $python.Source -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"
 if ($LASTEXITCODE -ne 0) { throw 'Python 실행에 실패했습니다.' }
 $parts = $versionText.Split('.')
-if ([int]$parts[0] -ne 3 -or [int]$parts[1] -lt 10) {
-    throw "Python 3.10 이상이 필요합니다. 현재: $versionText"
+if ([int]$parts[0] -ne 3 -or [int]$parts[1] -lt 10 -or [int]$parts[1] -gt 12) {
+    throw "Python 3.10~3.12 64비트가 필요합니다. 현재: $versionText"
 }
+$is64Bit = & $python.Source -c "import sys; print('true' if sys.maxsize > 2**32 else 'false')"
+if ($is64Bit -ne 'true') { throw '64비트 Python이 필요합니다.' }
 Write-Host "Python $versionText 확인"
 $venvPython = Join-Path $Root '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $venvPython)) {
     Write-Host 'AI PRONOTE 전용 Python 환경을 만듭니다.'
     & $python.Source -m venv (Join-Path $Root '.venv')
     if ($LASTEXITCODE -ne 0) { throw '전용 Python 환경 생성에 실패했습니다.' }
+}
+$venvVersion = & $venvPython -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+if ($LASTEXITCODE -ne 0 -or $venvVersion -notmatch '^3\.(10|11|12)$') {
+    throw "기존 .venv가 지원 Python 환경이 아닙니다. 폴더를 보존한 채 고객지원에 문의하세요. 현재: $venvVersion"
 }
 & $venvPython -m pip install --disable-pip-version-check --upgrade pip
 if ($LASTEXITCODE -ne 0) { throw 'pip 준비에 실패했습니다.' }

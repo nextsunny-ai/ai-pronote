@@ -70,6 +70,10 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('PRONOTE_EXPERIMENTAL_CLI="true"', start)
         self.assertIn('python3 -m venv .venv', setup)
         self.assertIn('.venv/bin/python', start)
+        self.assertIn('EXPECTED_VERSION="v1.5.0-p0"', start)
+        self.assertIn('health_version()', start)
+        self.assertIn('kill -0 "$owner"', start)
+        self.assertIn('trap on_error ERR', setup)
 
     def test_external_beta_uses_an_isolated_python_environment(self):
         installer = (ROOT / "install_external_beta.ps1").read_text(encoding="utf-8")
@@ -78,6 +82,8 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn(".venv\\Scripts\\python.exe", installer)
         self.assertIn(".venv\\Scripts\\pythonw.exe", launcher)
         self.assertNotIn("2_CLAUDE_LOGIN.cmd", installer)
+        self.assertIn("64비트 Python", installer)
+        self.assertIn("-gt 12", installer)
 
 
 if __name__ == "__main__":
