@@ -1,0 +1,10 @@
+# Release dependency set, validated on Windows Python 3.12.
+# Keep direct dependencies exact so the same installer does not silently adopt
+# a new release after packaging. Transitive wheels remain platform-resolved.
+faster-whisper==1.2.1
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+python-multipart==0.0.32
+requests==2.34.2
+ddgs==9.16.0
+qrcode[pil]==8.2

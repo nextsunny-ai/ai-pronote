@@ -22,9 +22,9 @@ if [[ ! -x ".venv/bin/python" ]]; then
   echo "AI PRONOTE 전용 Python 환경을 만듭니다."
   python3 -m venv .venv
 fi
-".venv/bin/python" -c 'import sys; assert (3,10) <= sys.version_info[:2] <= (3,12), "기존 .venv의 Python이 지원 범위가 아닙니다"'
-".venv/bin/python" -m pip install --disable-pip-version-check --upgrade pip
-".venv/bin/python" -m pip install --disable-pip-version-check -r requirements.txt
+".venv/bin/python" -c 'import platform,struct,sys; machine=platform.machine().lower(); assert (3,10) <= sys.version_info[:2] <= (3,12), "기존 .venv의 Python이 지원 범위가 아닙니다"; assert struct.calcsize("P")*8 == 64 and machine in {"arm64","x86_64"}, f"기존 .venv가 지원 Mac 64비트 환경이 아닙니다: {machine}"'
+".venv/bin/python" -m pip install --disable-pip-version-check 'pip==26.2.1'
+".venv/bin/python" -m pip install --disable-pip-version-check -r requirements-lock.txt
 ".venv/bin/python" -c 'import fastapi, uvicorn, multipart, faster_whisper, requests; print("핵심 구성요소 확인 완료")'
 mkdir -p data_v15
 echo "설치 완료. 다음으로 mac/2_AI_LOGIN.command를 실행하세요."

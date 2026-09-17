@@ -4,9 +4,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MAIN = (ROOT / "main.py").read_text(encoding="utf-8")
+LOCK = (ROOT / "requirements-lock.txt").read_text(encoding="utf-8")
 
 
 class ServerSecurityContractTests(unittest.TestCase):
+    def test_release_direct_dependencies_are_exactly_pinned(self):
+        requirement_lines = [line for line in LOCK.splitlines() if line and not line.startswith("#")]
+        self.assertGreaterEqual(len(requirement_lines), 7)
+        self.assertTrue(all("==" in line for line in requirement_lines))
+
+    def test_mac_existing_venv_requires_supported_64_bit_architecture(self):
+        installer = (ROOT / "mac" / "1_FIRST_SETUP.command").read_text(encoding="utf-8")
+        self.assertIn('struct.calcsize("P")*8 == 64', installer)
+        self.assertIn('{"arm64","x86_64"}', installer)
+
     def test_job_ids_are_strict_and_json_writes_are_atomic(self):
         self.assertIn('re.compile(r"^[0-9a-f]{12}$")', MAIN)
         self.assertIn("temp.replace(path)", MAIN)

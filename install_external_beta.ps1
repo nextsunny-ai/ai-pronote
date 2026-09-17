@@ -25,9 +25,13 @@ $venvVersion = & $venvPython -c "import sys; print(f'{sys.version_info.major}.{s
 if ($LASTEXITCODE -ne 0 -or $venvVersion -notmatch '^3\.(10|11|12)$') {
     throw "기존 .venv가 지원 Python 환경이 아닙니다. 폴더를 보존한 채 고객지원에 문의하세요. 현재: $venvVersion"
 }
-& $venvPython -m pip install --disable-pip-version-check --upgrade pip
+$venvArchitecture = & $venvPython -c "import platform,sys; print(f'{platform.machine().lower()}|{64 if sys.maxsize > 2**32 else 32}')"
+if ($LASTEXITCODE -ne 0 -or $venvArchitecture -notmatch '^(amd64|x86_64)\|64$') {
+    throw "기존 .venv가 지원 Windows 64비트 환경이 아닙니다. 폴더를 보존한 채 고객지원에 문의하세요. 현재: $venvArchitecture"
+}
+& $venvPython -m pip install --disable-pip-version-check 'pip==26.2.1'
 if ($LASTEXITCODE -ne 0) { throw 'pip 준비에 실패했습니다.' }
-& $venvPython -m pip install --disable-pip-version-check --requirement (Join-Path $Root 'requirements.txt')
+& $venvPython -m pip install --disable-pip-version-check --requirement (Join-Path $Root 'requirements-lock.txt')
 if ($LASTEXITCODE -ne 0) { throw '필수 구성요소 설치에 실패했습니다.' }
 & $venvPython -c "import fastapi, uvicorn, multipart, faster_whisper, requests; print('핵심 구성요소 확인 완료')"
 if ($LASTEXITCODE -ne 0) { throw '설치 후 구성요소 확인에 실패했습니다.' }
