@@ -61,6 +61,16 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("...cameraStream.getVideoTracks()", HTML)
         self.assertIn("state.cameraStream?.getTracks().forEach", HTML)
 
+    def test_recording_storage_and_device_failures_have_recovery_paths(self):
+        self.assertIn("navigator.storage?.estimate", HTML)
+        self.assertIn("긴급복구_", HTML)
+        self.assertIn("track.addEventListener('ended'", HTML)
+        self.assertIn("if (!recordingStored)", HTML)
+        failure = HTML.index("if (!recordingStored)")
+        meeting = HTML.index("saveMeetingFromLive(elapsed", failure)
+        self.assertLess(failure, meeting)
+        self.assertIn("document.addEventListener('visibilitychange'", HTML)
+
     def test_live_view_opens_only_after_media_recorder_starts(self):
         start_call = HTML.index("recordingStarted = !!(window.__pronoteRecording")
         start_result = HTML.index("if (!recordingStarted) return;", start_call)

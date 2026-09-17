@@ -5605,9 +5605,82 @@ if ('serviceWorker' in navigator) {
     let state = freshState();
     let recordingStarting = false;
     let startAttempt = 0;
+
+    async function hasRecordingSpace(recordVideo) {
+      if (!navigator.storage?.estimate) return true;
+      try {
+        const { quota, usage } = await navigator.storage.estimate();
+        if (!Number.isFinite(quota) || !Number.isFinite(usage)) return true;
+        const freeBytes = Math.max(0, quota - usage);
+        const requiredBytes = recordVideo ? 1024 ** 3 : 200 * 1024 ** 2;
+        if (freeBytes >= requiredBytes) return true;
+        window.showToast?.(`저장 공간이 부족합니다 — ${recordVideo ? '영상은 1GB' : '음성은 200MB'} 이상 비운 뒤 다시 시작하세요`);
+        return false;
+      } catch (e) {
+        console.warn('[Rec] 저장 공간 확인 실패 — 녹음은 계속 허용', e);
+        return true;
+      }
+    }
+
+    function requestEmergencyDownload(recovery) {
+      try {
+        const url = URL.createObjectURL(recovery.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `긴급복구_${recovery.filename}`;
+        a.hidden = true;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        return true;
+      } catch (e) {
+        console.error('[Rec] 긴급 복구 파일 다운로드 실패', e);
+        return false;
+      }
+    }
+
+    function renderEmergencyRecoveryPanel() {
+      const recoveries = window.__pronoteEmergencyRecoveries || [];
+      if (!recoveries.length) return;
+      let panel = document.getElementById('emergencyRecoveryPanel');
+      if (!panel) {
+        panel = document.createElement('section');
+        panel.id = 'emergencyRecoveryPanel';
+        panel.setAttribute('role', 'alert');
+        panel.style.cssText = 'position:fixed;z-index:10050;right:20px;bottom:20px;width:min(430px,calc(100vw - 32px));padding:16px;border:1px solid #ef4444;border-radius:14px;background:#fff;color:#111827;box-shadow:0 16px 48px rgba(0,0,0,.25);';
+        document.body.appendChild(panel);
+      }
+      panel.replaceChildren();
+      const title = document.createElement('strong');
+      title.textContent = '녹음 긴급 복구가 필요합니다';
+      panel.appendChild(title);
+      const guide = document.createElement('p');
+      guide.textContent = '아래 파일을 모두 다시 다운로드하고, 저장된 것을 확인한 뒤 이 창을 닫으세요.';
+      guide.style.cssText = 'margin:8px 0 12px;font-size:13px;line-height:1.5;';
+      panel.appendChild(guide);
+      recoveries.forEach(recovery => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = `다시 다운로드 — ${recovery.filename}`;
+        button.style.cssText = 'display:block;width:100%;margin-top:8px;padding:10px;text-align:left;border:1px solid #d1d5db;border-radius:9px;background:#f9fafb;color:#111827;cursor:pointer;';
+        button.addEventListener('click', () => requestEmergencyDownload(recovery));
+        panel.appendChild(button);
+      });
+    }
+
+    function downloadEmergencyCopy(blob, filename) {
+      const recovery = { id: `recovery_${Date.now()}_${Math.random()}`, blob, filename, createdAt: Date.now() };
+      const recoveries = window.__pronoteEmergencyRecoveries || [];
+      recoveries.push(recovery);
+      window.__pronoteEmergencyRecoveries = recoveries;
+      renderEmergencyRecoveryPanel();
+      return requestEmergencyDownload(recovery);
+    }
+
     function freshState() {
       return {
-        active: false, paused: false, mode: null, context: null,
+        active: false, paused: false, stopping: false, mode: null, context: null,
         recorder: null, videoRecorder: null, chunks: [], micStream: null, sysStream: null, cameraStream: null,
         audioCtx: null, startTime: 0, pausedTotal: 0, pauseStartedAt: 0,
         timerInterval: null, highlights: [], meta: {},
@@ -5681,6 +5754,8 @@ if ('serviceWorker' in navigator) {
         if (attempt !== startAttempt) throw new DOMException('Recording start cancelled', 'AbortError');
       };
       try {
+        if (!await hasRecordingSpace(!!opts.recordVideo)) return false;
+        assertCurrent();
         const baseAudio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
         micStream = await navigator.mediaDevices.getUserMedia({ audio: baseAudio });
         assertCurrent();
@@ -5777,7 +5852,13 @@ if ('serviceWorker' in navigator) {
                   durationSec: Math.round((Date.now() - vstart) / 1000), startedAt: vstart, endedAt: Date.now() });
                 if (window.__pronoteLibrary && window.__pronoteLibrary.refresh) window.__pronoteLibrary.refresh();
                 window.showToast && window.showToast('회의 영상도 저장됐습니다 (라이브러리)');
-              } catch (e) {}
+              } catch (e) {
+                console.error('[Rec] 영상 IDB 저장 실패', e);
+                const recovered = downloadEmergencyCopy(vblob, vtitle + ' (화면 영상).webm');
+                window.showToast?.(recovered
+                  ? '영상 저장공간 오류 — 긴급 복구 다운로드를 요청했습니다. 다운로드 목록을 확인하세요'
+                  : '영상 저장에 실패했습니다 — 화면을 닫지 말고 지원팀에 문의하세요');
+              }
             };
             vrec.start(1000);
             state.videoRecorder = vrec;
@@ -5795,6 +5876,13 @@ if ('serviceWorker' in navigator) {
         state.meta = opts.meta || {};
         state.mimeType = mimeType || 'audio/webm';
         state.fileExt = mimeType.includes('mp4') ? 'm4a' : 'webm';
+        micStream.getAudioTracks().forEach(track => {
+          track.addEventListener('ended', () => {
+            if (!state.active || state.stopping) return;
+            window.showToast?.('마이크 연결이 끊겨 현재까지 녹음을 안전하게 저장합니다');
+            stop();
+          }, { once: true });
+        });
         enterRecordingUI(mode);
         startTimer();
         // 실시간 초안 받아쓰기 = 회의 중 화면(live)에서만 가동
@@ -6000,7 +6088,8 @@ if ('serviceWorker' in navigator) {
     }
 
     function stop() {
-      if (!state.active || !state.recorder) return;
+      if (!state.active || !state.recorder || state.stopping) return;
+      state.stopping = true;
       rtStopPartial();
       try { state.recorder.stop(); } catch {}
       try { state.videoRecorder && state.videoRecorder.stop(); } catch {}
@@ -6009,26 +6098,31 @@ if ('serviceWorker' in navigator) {
 
     // ★ v1.4 자동저장 — 진행 중 녹음을 IndexedDB draft로 보존 (정지 전 크래시/새로고침 대비)
     let _autosaveBusy = false;
+    let _autosavePromise = null;
     async function autosaveDraft() {
-      if (_autosaveBusy || !window.__pronoteDB || !state.active || !state.chunks?.length) return;
+      if (_autosaveBusy) return _autosavePromise;
+      if (!window.__pronoteDB || !state.active || state.stopping || !state.chunks?.length) return;
       _autosaveBusy = true;
-      try {
-        const draftBlob = new Blob(state.chunks, { type: state.mimeType });
-        const tagPrefix = ({realtime:'회의',lecture:'강의',interview:'인터뷰'}[state.mode]) || '녹음';
-        await window.__pronoteDB.put({
-          id: '__draft_recording__',
-          isDraft: true,
-          blob: draftBlob,
-          mimeType: state.mimeType,
-          filename: '(중단된 녹음) ' + (state.meta.title || tagPrefix),
-          title: state.meta.title || '',
-          mode: state.mode,
-          durationSec: Math.floor((Date.now() - state.startTime - state.pausedTotal) / 1000),
-          startedAt: state.startTime,
-          savedAt: Date.now(),
-        });
-      } catch (e) { console.warn('[Rec] 자동저장 실패', e); }
-      finally { _autosaveBusy = false; }
+      _autosavePromise = (async () => {
+        try {
+          const draftBlob = new Blob(state.chunks, { type: state.mimeType });
+          const tagPrefix = ({realtime:'회의',lecture:'강의',interview:'인터뷰'}[state.mode]) || '녹음';
+          await window.__pronoteDB.put({
+            id: '__draft_recording__',
+            isDraft: true,
+            blob: draftBlob,
+            mimeType: state.mimeType,
+            filename: '(중단된 녹음) ' + (state.meta.title || tagPrefix),
+            title: state.meta.title || '',
+            mode: state.mode,
+            durationSec: Math.floor((Date.now() - state.startTime - state.pausedTotal) / 1000),
+            startedAt: state.startTime,
+            savedAt: Date.now(),
+          });
+        } catch (e) { console.warn('[Rec] 자동저장 실패', e); }
+        finally { _autosaveBusy = false; }
+      })();
+      return _autosavePromise;
     }
 
     async function handleStop() {
@@ -6068,7 +6162,11 @@ if ('serviceWorker' in navigator) {
       // 녹음 원본 = 자동 다운로드 X (다운로드 폴더 오염 방지) — 라이브러리에 보관, 필요 시 [MP3로 저장]
       rtStopPartial();
 
+      // 진행 중이던 자동저장보다 최종 저장·draft 삭제가 먼저 끝나는 경쟁을 막는다.
+      try { await _autosavePromise; } catch {}
+
       // IndexedDB 영속 저장 (라이브러리)
+      let recordingStored = false;
       try {
         if (window.__pronoteDB) {
           await window.__pronoteDB.put({
@@ -6093,8 +6191,22 @@ if ('serviceWorker' in navigator) {
             scenarioKey: autoScenarioKey,
             transcribed: false,
           });
+          recordingStored = true;
         }
       } catch (e) { console.error('[Rec] IDB save err', e); }
+
+      if (!recordingStored) {
+        const recovered = downloadEmergencyCopy(saveBlob, filename);
+        window.showToast?.(recovered
+          ? '저장공간 오류 — 긴급 복구 다운로드를 요청했습니다. 다운로드 목록을 확인하세요'
+          : '녹음 저장에 실패했습니다 — 이 화면을 닫지 말고 지원팀에 문의하세요');
+        cleanupTracks();
+        const failedContext = state.context;
+        state = freshState();
+        exitRecordingUI(failedContext);
+        if (typeof window.switchView === 'function') window.switchView('library');
+        return;
+      }
 
       // recordings 메타 (localStorage) — 호환성
       try {
@@ -6237,6 +6349,15 @@ if ('serviceWorker' in navigator) {
       if (det) det.textContent = info.detail;
     }
 
+    document.addEventListener('visibilitychange', () => {
+      if (!state.active) return;
+      if (document.visibilityState === 'hidden') {
+        autosaveDraft();
+      } else {
+        window.showToast?.('녹음이 계속 진행 중입니다');
+      }
+    });
+
     // 외부 노출
     window.__pronoteRecording = {
       start: startRecording,
@@ -6247,6 +6368,12 @@ if ('serviceWorker' in navigator) {
       getMode: () => state.mode,
       setMode: applyDictMode,
       cancelStart,
+      saveDraftNow: autosaveDraft,
+      retryEmergencyDownload: () => {
+        const recoveries = window.__pronoteEmergencyRecoveries || [];
+        const recovery = recoveries[recoveries.length - 1];
+        return recovery ? requestEmergencyDownload(recovery) : false;
+      },
     };
 
     // 받아쓰기 모드 칩 + 마이크 버튼 = capture phase로 옛 핸들러 인터셉트
