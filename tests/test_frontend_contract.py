@@ -39,9 +39,9 @@ class FrontendContractTests(unittest.TestCase):
 
     def test_wave_note_is_used_only_by_v15_web_assets(self):
         manifest = (ROOT / "static" / "manifest.webmanifest").read_text(encoding="utf-8")
-        self.assertIn("v15-wave-note/full-192.png", HTML)
-        self.assertIn("v15-wave-note/full-512.png", manifest)
-        self.assertTrue((ROOT / "icon_v15_wave_note.ico").exists())
+        self.assertIn("v15-pro-note/full-192.png", HTML)
+        self.assertIn("v15-pro-note/full-512.png", manifest)
+        self.assertTrue((ROOT / "icon_v15_pro_note.ico").exists())
 
     def test_terminal_job_lookup_errors_do_not_poll_forever(self):
         self.assertIn("e.status === 404 || e.status === 410", HTML)
@@ -70,6 +70,8 @@ class FrontendContractTests(unittest.TestCase):
         meeting = HTML.index("saveMeetingFromLive(elapsed", failure)
         self.assertLess(failure, meeting)
         self.assertIn("document.addEventListener('visibilitychange'", HTML)
+        self.assertIn("'__draft_video__'", HTML)
+        self.assertIn("source: 'recovered-video'", HTML)
 
     def test_live_view_opens_only_after_media_recorder_starts(self):
         start_call = HTML.index("recordingStarted = !!(window.__pronoteRecording")

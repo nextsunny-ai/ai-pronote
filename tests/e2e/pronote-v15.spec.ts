@@ -958,4 +958,133 @@ test.describe('카메라 회의 녹화·보존 계약', () => {
       recovered: { source: 'recovered', isDraft: false }
     });
   });
+
+  test('중단된 카메라 회의의 음성과 영상을 함께 복구한다', async ({ page }) => {
+    await mockBackend(page);
+    await openApp(page);
+    await page.evaluate(async () => {
+      const startedAt = Date.now() - 12_000;
+      await window.__pronoteDB.put({
+        id: '__draft_recording__', isDraft: true,
+        blob: new Blob(['audio-draft'], { type: 'audio/webm' }),
+        mimeType: 'audio/webm', filename: '(중단된 녹음) 카메라 회의',
+        title: '카메라 회의', mode: 'realtime', durationSec: 12, startedAt, savedAt: Date.now()
+      });
+      await window.__pronoteDB.put({
+        id: '__draft_video__', isDraft: true, isVideo: true,
+        blob: new Blob(['video-draft'], { type: 'video/webm' }),
+        mimeType: 'video/webm', filename: '(중단된 영상) 카메라 회의.webm',
+        title: '카메라 회의', durationSec: 12, startedAt, savedAt: Date.now()
+      });
+    });
+
+    await page.reload();
+    await expect(page.locator('#recoverRun')).toBeVisible();
+    await expect(page.locator('body')).toContainText('중단된 녹음과 영상');
+    await page.locator('#recoverRun').click();
+
+    await expect.poll(async () => page.evaluate(async () => {
+      const records = await window.__pronoteDB.getAll();
+      return {
+        drafts: records.filter((record: { isDraft?: boolean }) => record.isDraft).length,
+        audio: records.some((record: { source?: string }) => record.source === 'recovered'),
+        video: records.some((record: { source?: string }) => record.source === 'recovered-video')
+      };
+    })).toEqual({ drafts: 0, audio: true, video: true });
+  });
+
+  test('이전 영상 저장이 늦어져도 다음 회의의 영상 복구본을 지우지 않는다', async ({ page }) => {
+    test.setTimeout(60_000);
+    await installSyntheticCameraAndMicrophone(page);
+    await mockBackend(page);
+    await openApp(page);
+
+    await page.evaluate(() => {
+      const db = window.__pronoteDB;
+      const originalPut = db.put.bind(db);
+      let releaseFinal!: () => void;
+      const gate = new Promise<void>(resolve => { releaseFinal = resolve; });
+      (window as typeof window & { __releaseVideoFinal?: () => void; __videoFinalWaiting?: boolean }).__releaseVideoFinal = releaseFinal;
+      db.put = async (record: { source?: string }) => {
+        if (record.source === 'recorded-video') {
+          (window as typeof window & { __videoFinalWaiting?: boolean }).__videoFinalWaiting = true;
+          await gate;
+        }
+        return originalPut(record);
+      };
+    });
+
+    expect(await page.evaluate(() => window.__pronoteRecording.start('realtime', {
+      context: 'live', recordVideo: true, meta: { title: '첫 영상 회의' }
+    }))).toBeTruthy();
+    await page.waitForTimeout(1200);
+    await page.evaluate(() => window.__pronoteRecording.stop());
+    await expect.poll(() => page.evaluate(() =>
+      !!(window as typeof window & { __videoFinalWaiting?: boolean }).__videoFinalWaiting
+    )).toBeTruthy();
+    await expect.poll(() => page.evaluate(() => window.__pronoteRecording.isActive())).toBeFalsy();
+
+    expect(await page.evaluate(() => window.__pronoteRecording.start('realtime', {
+      context: 'live', recordVideo: true, meta: { title: '두 번째 영상 회의' }
+    }))).toBeTruthy();
+    await page.waitForTimeout(1200);
+    await page.evaluate(async () => {
+      await window.__pronoteDB.put({
+        id: '__draft_video__second-session', isDraft: true, isVideo: true,
+        blob: new Blob(['second-video-draft'], { type: 'video/webm' }),
+        mimeType: 'video/webm', filename: '(중단된 영상) 두 번째 영상 회의.webm',
+        title: '두 번째 영상 회의', durationSec: 4, startedAt: Date.now(), savedAt: Date.now()
+      });
+    });
+    await expect.poll(() => page.evaluate(async () => {
+      const all = await window.__pronoteDB.getAll();
+      return all.filter((record: { id?: string }) => String(record.id || '').startsWith('__draft_video__')).length;
+    })).toBe(1);
+
+    await page.evaluate(() =>
+      (window as typeof window & { __releaseVideoFinal?: () => void }).__releaseVideoFinal?.()
+    );
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(async () => {
+      const all = await window.__pronoteDB.getAll();
+      return all.some((record: { id?: string; title?: string }) =>
+        String(record.id || '').startsWith('__draft_video__') && record.title === '두 번째 영상 회의'
+      );
+    })).toBeTruthy();
+    await page.evaluate(() => window.__pronoteRecording.stop());
+  });
+
+  test('이전 세션 영상 자동저장이 지연돼도 새 세션 복구본을 독립 저장한다', async ({ page }) => {
+    await installSyntheticCameraAndMicrophone(page);
+    await mockBackend(page);
+    await openApp(page);
+    expect(await page.evaluate(() => window.__pronoteRecording.start('realtime', {
+      context: 'live', recordVideo: false, meta: { title: '자동저장 경합 시험' }
+    }))).toBeTruthy();
+
+    await page.evaluate(async () => {
+      const db = window.__pronoteDB;
+      const originalPut = db.put.bind(db);
+      let release!: () => void;
+      const gate = new Promise<void>(resolve => { release = resolve; });
+      (window as typeof window & { __releaseOldDraft?: () => void }).__releaseOldDraft = release;
+      db.put = async (record: { id?: string }) => {
+        if (record.id === '__draft_video__old-session') await gate;
+        return originalPut(record);
+      };
+      void window.__pronoteRecording.saveVideoDraftNow(
+        [new Blob(['old'], { type: 'video/webm' })], 'video/webm', '이전 회의', Date.now() - 5000, '__draft_video__old-session'
+      );
+      await window.__pronoteRecording.saveVideoDraftNow(
+        [new Blob(['new'], { type: 'video/webm' })], 'video/webm', '새 회의', Date.now(), '__draft_video__new-session'
+      );
+    });
+
+    expect(await page.evaluate(async () => !!(await window.__pronoteDB.get('__draft_video__new-session')))).toBeTruthy();
+    await page.evaluate(() =>
+      (window as typeof window & { __releaseOldDraft?: () => void }).__releaseOldDraft?.()
+    );
+    await expect.poll(() => page.evaluate(async () => !!(await window.__pronoteDB.get('__draft_video__old-session')))).toBeTruthy();
+    await page.evaluate(() => window.__pronoteRecording.stop());
+  });
 });

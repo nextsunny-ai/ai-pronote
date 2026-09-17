@@ -4507,12 +4507,20 @@ if ('serviceWorker' in navigator) {
           return;
         }
         const d = await window.__pronoteDB.get('__draft_recording__');
-        if (!d || !d.blob || (d.durationSec || 0) < 3) return;
+        const allDrafts = window.__pronoteDB.getAll ? await window.__pronoteDB.getAll() : [];
+        const videoDrafts = allDrafts.filter(item => item?.isDraft && (item.id === '__draft_video__' || String(item.id || '').startsWith('__draft_video__')))
+          .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+        const vd = videoDrafts[0] || null;
+        const hasAudioDraft = !!(d && d.blob && (d.durationSec || 0) >= 3);
+        const hasVideoDraft = !!(vd && vd.blob && (vd.durationSec || 0) >= 3);
+        if (!hasAudioDraft && !hasVideoDraft) return;
+        const primary = hasAudioDraft ? d : vd;
         const bar = document.createElement('div');
         bar.id = 'dictRecoverBar';
         bar.style.cssText = 'margin:0 0 14px; padding:12px 14px; border:1px solid #d9534f; border-radius:10px; background:var(--bg-elev); display:flex; align-items:center; gap:12px; font-size:13px; line-height:1.5;';
-        const mins = Math.floor((d.durationSec || 0) / 60), secs = (d.durationSec || 0) % 60;
-        bar.innerHTML = '<span style="flex:1;">⚠️ 중단된 녹음이 있습니다 — <b>' + escapeHtml(d.title || d.filename || '녹음') + '</b> (' + mins + '분 ' + secs + '초). 복구할까요?</span>' +
+        const mins = Math.floor((primary.durationSec || 0) / 60), secs = (primary.durationSec || 0) % 60;
+        const draftKind = hasAudioDraft && hasVideoDraft ? '녹음과 영상' : hasVideoDraft ? '영상' : '녹음';
+        bar.innerHTML = '<span style="flex:1;">⚠️ 중단된 ' + draftKind + '이 있습니다 — <b>' + escapeHtml(primary.title || primary.filename || '회의 기록') + '</b> (' + mins + '분 ' + secs + '초). 복구할까요?</span>' +
           '<button type="button" id="recoverRun" class="dict-rec-btn" style="white-space:nowrap;">복구</button>' +
           '<button type="button" id="recoverSkip" class="dict-rec-btn" style="white-space:nowrap;">버리기</button>';
         // 복구 안내는 사용자가 앱을 다시 열었을 때 실제로 보이는 현재 화면 맨 위에 둔다.
@@ -4525,17 +4533,25 @@ if ('serviceWorker' in navigator) {
           recoverRun.disabled = true;
           recoverSkip.disabled = true;
           recoverRun.textContent = '복구 중…';
-          const newId = 'rec_recovered_' + Date.now();
-          const sk = d.mode === 'lecture' ? 'lecture' : d.mode === 'interview' ? 'interview' : 'meeting';
+          const newId = 'rec_recovered_' + (d?.startedAt || d?.savedAt || Date.now());
+          const videoId = 'vid_recovered_' + (vd?.startedAt || vd?.savedAt || Date.now());
+          const sk = d?.mode === 'lecture' ? 'lecture' : d?.mode === 'interview' ? 'interview' : 'meeting';
           try {
-            await window.__pronoteDB.put({ ...d, id: newId, isDraft: false, source: 'recovered',
-              filename: (d.filename || '복구된 녹음').replace('(중단된 녹음) ', '복구_'),
-              endedAt: Date.now(), transcribed: false, scenarioKey: sk });
+            if (hasAudioDraft) {
+              await window.__pronoteDB.put({ ...d, id: newId, isDraft: false, source: 'recovered',
+                filename: (d.filename || '복구된 녹음').replace('(중단된 녹음) ', '복구_'),
+                endedAt: Date.now(), transcribed: false, scenarioKey: sk });
+            }
+            if (hasVideoDraft) {
+              await window.__pronoteDB.put({ ...vd, id: videoId, isDraft: false, isVideo: true, source: 'recovered-video',
+                filename: (vd.filename || '복구된 영상.webm').replace('(중단된 영상) ', '복구_'), endedAt: Date.now() });
+            }
             await window.__pronoteDB.delete('__draft_recording__');
+            if (vd?.id) await window.__pronoteDB.delete(vd.id);
             bar.remove();
             try { window.__pronoteLibrary?.refresh?.(); } catch {}
-            window.showToast?.('녹음 복구 완료 — 받아쓰기를 시작합니다');
-            setTimeout(() => { try { window.__pronoteLibrary?.runTranscribe?.(newId); } catch (e) {} }, 600);
+            window.showToast?.(hasAudioDraft ? '회의 기록 복구 완료 — 받아쓰기를 시작합니다' : '회의 영상 복구 완료');
+            if (hasAudioDraft) setTimeout(() => { try { window.__pronoteLibrary?.runTranscribe?.(newId); } catch (e) {} }, 600);
           } catch (e) {
             console.error('[Rec] 중단 녹음 복구 실패', e);
             recoverRun.textContent = '다시 복구';
@@ -4550,6 +4566,7 @@ if ('serviceWorker' in navigator) {
           recoverSkip.textContent = '삭제 중…';
           try {
             await window.__pronoteDB.delete('__draft_recording__');
+            if (vd?.id) await window.__pronoteDB.delete(vd.id);
             bar.remove();
           } catch (e) {
             console.error('[Rec] 중단 녹음 삭제 실패', e);
@@ -5737,7 +5754,7 @@ if ('serviceWorker' in navigator) {
     function freshState() {
       return {
         active: false, paused: false, stopping: false, mode: null, context: null,
-        recorder: null, videoRecorder: null, chunks: [], micStream: null, sysStream: null, cameraStream: null,
+        recorder: null, videoRecorder: null, chunks: [], videoChunks: [], micStream: null, sysStream: null, cameraStream: null,
         audioCtx: null, startTime: 0, pausedTotal: 0, pauseStartedAt: 0,
         timerInterval: null, highlights: [], meta: {},
         mimeType: null, fileExt: null,
@@ -5897,15 +5914,23 @@ if ('serviceWorker' in navigator) {
             const vchunks = [];
             const vtitle = (opts.meta && opts.meta.title) || '회의';
             const vstart = Date.now();
-            vrec.ondataavailable = e => { if (e.data && e.data.size > 0) vchunks.push(e.data); };
+            const videoDraftId = '__draft_video__' + vstart;
+            vrec.ondataavailable = e => {
+              if (e.data && e.data.size > 0) {
+                vchunks.push(e.data);
+                if (vchunks.length % 60 === 0) autosaveVideoDraft(vchunks, vmime, vtitle, vstart, videoDraftId);
+              }
+            };
             vrec.onstop = async () => {
               if (!vchunks.length) return;
               const vblob = new Blob(vchunks, { type: 'video/webm' });
               try {
+                try { await _videoAutosaves.get(videoDraftId); } catch {}
                 await window.__pronoteDB.put({ id: 'vid_' + vstart, blob: vblob, mimeType: 'video/webm',
                   filename: vtitle + ' (화면 영상).webm', title: vtitle, size: vblob.size,
                   isVideo: true, source: 'recorded-video',
                   durationSec: Math.round((Date.now() - vstart) / 1000), startedAt: vstart, endedAt: Date.now() });
+                await window.__pronoteDB.delete(videoDraftId);
                 if (window.__pronoteLibrary && window.__pronoteLibrary.refresh) window.__pronoteLibrary.refresh();
                 window.showToast && window.showToast('회의 영상도 저장됐습니다 (라이브러리)');
               } catch (e) {
@@ -5918,6 +5943,11 @@ if ('serviceWorker' in navigator) {
             };
             vrec.start(1000);
             state.videoRecorder = vrec;
+            state.videoChunks = vchunks;
+            state.videoMimeType = vmime;
+            state.videoTitle = vtitle;
+            state.videoStart = vstart;
+            state.videoDraftId = videoDraftId;
           } catch (e) { console.warn('[Rec] 영상 녹화 실패(무시)', e); }
         }
         state.chunks = chunks;
@@ -6155,6 +6185,7 @@ if ('serviceWorker' in navigator) {
     // ★ v1.4 자동저장 — 진행 중 녹음을 IndexedDB draft로 보존 (정지 전 크래시/새로고침 대비)
     let _autosaveBusy = false;
     let _autosavePromise = null;
+    const _videoAutosaves = new Map();
     async function autosaveDraft() {
       if (_autosaveBusy) return _autosavePromise;
       if (!window.__pronoteDB || !state.active || state.stopping || !state.chunks?.length) return;
@@ -6179,6 +6210,33 @@ if ('serviceWorker' in navigator) {
         finally { _autosaveBusy = false; }
       })();
       return _autosavePromise;
+    }
+
+    async function autosaveVideoDraft(chunks = state.videoChunks, mimeType = state.videoMimeType, title = state.videoTitle, startedAt = state.videoStart, draftId = state.videoDraftId) {
+      if (!window.__pronoteDB || !state.active || state.stopping || !chunks?.length) return;
+      const sessionDraftId = draftId || ('__draft_video__' + startedAt);
+      if (_videoAutosaves.has(sessionDraftId)) return _videoAutosaves.get(sessionDraftId);
+      const savePromise = (async () => {
+        try {
+          const draftBlob = new Blob(chunks, { type: mimeType || 'video/webm' });
+          await window.__pronoteDB.put({
+            id: sessionDraftId,
+            isDraft: true,
+            isVideo: true,
+            blob: draftBlob,
+            mimeType: mimeType || 'video/webm',
+            filename: '(중단된 영상) ' + (title || '회의') + '.webm',
+            title: title || '',
+            source: 'recorded-video-draft',
+            durationSec: Math.floor((Date.now() - startedAt) / 1000),
+            startedAt,
+            savedAt: Date.now(),
+          });
+        } catch (e) { console.warn('[Rec] 영상 자동저장 실패', e); }
+        finally { _videoAutosaves.delete(sessionDraftId); }
+      })();
+      _videoAutosaves.set(sessionDraftId, savePromise);
+      return savePromise;
     }
 
     async function handleStop() {
@@ -6409,6 +6467,7 @@ if ('serviceWorker' in navigator) {
       if (!state.active) return;
       if (document.visibilityState === 'hidden') {
         autosaveDraft();
+        autosaveVideoDraft();
       } else {
         window.showToast?.('녹음이 계속 진행 중입니다');
       }
@@ -6425,6 +6484,7 @@ if ('serviceWorker' in navigator) {
       setMode: applyDictMode,
       cancelStart,
       saveDraftNow: autosaveDraft,
+      saveVideoDraftNow: autosaveVideoDraft,
       retryEmergencyDownload: () => {
         const recoveries = window.__pronoteEmergencyRecoveries || [];
         const recovery = recoveries[recoveries.length - 1];
