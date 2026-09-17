@@ -4874,14 +4874,16 @@ if ('serviceWorker' in navigator) {
         chips.forEach(chip => { chip.hidden = false; });
         const pv = st.providers || {};
         const guide = {
-          gemini: { not_installed: '제미나이 미설치 — 설치: npm i -g @google/gemini-cli', not_logged_in: '제미나이 설치됨 — 터미널에서 gemini 실행해 구글 로그인 1회' },
-          codex: { not_installed: 'Codex CLI 미설치', not_logged_in: 'Codex CLI 설치됨 — 로그인 필요' },
+          gemini: { not_installed: '제미나이 미설치 — 설치: npm i -g @google/gemini-cli', not_logged_in: '제미나이 설치됨 — 터미널에서 gemini 실행해 구글 로그인 1회', login_unverified: '제미나이 로그인 정보 발견 — 계정 자격은 첫 회의록 생성 때 확인됩니다.' },
+          codex: { not_installed: 'Codex CLI 미설치', not_logged_in: 'Codex CLI 설치됨 — 로그인 필요', login_unverified: 'Codex 로그인 정보 발견 — 실제 사용 가능 여부는 첫 회의록 생성 때 확인됩니다.' },
           claude: { not_installed: '클로드 미설치 — 화면의 AI 로그인 안내에서 설치', not_logged_in: '클로드 로그인 필요 — 화면의 AI 로그인 안내에서 로그인' },
         };
         chips.forEach(chip => {
           const p = chip.dataset.provider;
           const state2 = pv[p] || 'not_installed';
-          if (state2 !== 'ready') {
+          if (state2 === 'login_unverified') {
+            chip.title = guide[p][state2];
+          } else if (state2 !== 'ready') {
             chip.style.opacity = '0.45';
             chip.dataset.disabledReason = (guide[p] && guide[p][state2]) || '사용 불가';
             chip.title = chip.dataset.disabledReason;

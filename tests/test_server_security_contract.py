@@ -44,6 +44,11 @@ class ServerSecurityContractTests(unittest.TestCase):
         self.assertGreaterEqual(MAIN.count('_end_data_operation()'), 4)
         self.assertIn('purge_managed_data(DATA_ROOT, (UPLOAD_DIR, RESULT_DIR, LOG_DIR))', MAIN)
 
+    def test_cli_login_files_are_not_reported_as_verified_ready(self):
+        self.assertIn('out["gemini"] = "login_unverified"', MAIN)
+        self.assertIn('out["codex"] = "login_unverified"', MAIN)
+        self.assertIn('"account_unsupported"', MAIN)
+
 
 if __name__ == "__main__":
     unittest.main()

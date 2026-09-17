@@ -386,15 +386,20 @@ def codex_bin() -> Optional[str]:
 
 
 def provider_status() -> dict:
-    """AI 엔진별 상태 — not_installed | not_logged_in | ready"""
+    """AI 엔진별 상태.
+
+    Gemini/Codex의 로컬 로그인 파일은 실제 호출 자격까지 증명하지 못한다. 특히
+    Gemini는 로그인 파일이 있어도 계정 tier/client 정책으로 거절될 수 있으므로
+    첫 호출 전에는 ready라고 단정하지 않는다.
+    """
     cs = claude_state()
     out = {"claude": cs["state"]}
     if gemini_bin():
-        out["gemini"] = "ready" if (Path.home() / ".gemini" / "oauth_creds.json").exists() else "not_logged_in"
+        out["gemini"] = "login_unverified" if (Path.home() / ".gemini" / "oauth_creds.json").exists() else "not_logged_in"
     else:
         out["gemini"] = "not_installed"
     if codex_bin():
-        out["codex"] = "ready" if (Path.home() / ".codex" / "auth.json").exists() else "not_logged_in"
+        out["codex"] = "login_unverified" if (Path.home() / ".codex" / "auth.json").exists() else "not_logged_in"
     else:
         out["codex"] = "not_installed"
     return out
@@ -409,7 +414,7 @@ def _run_cli_text(cmd: list, stdin_text: str, timeout: int, label: str) -> str:
         )
     if proc.returncode != 0:
         raw = (proc.stderr or proc.stdout or "").strip() or f"종료 코드 {proc.returncode}"
-        kind, msg = _classify_llm_error(raw)
+        kind, msg = _classify_llm_error(raw, label)
         log(f"{label} 호출 실패 [{kind}] rc={proc.returncode}: {raw[:1000]}", "ERROR")
         raise LLMError(f"{label}: {msg}", kind, raw[:1500])
     return (proc.stdout or "").strip()
@@ -488,21 +493,29 @@ class LLMError(RuntimeError):
         self.detail = detail
 
 
-def _classify_llm_error(raw: str) -> tuple:
+def _classify_llm_error(raw: str, provider: str = "AI") -> tuple:
     """실패 원문에서 원인을 가려낸다.
     재시도가 소용없는 것(auth)과 잠시 뒤 되는 것(rate·network·overloaded)을 나눈다.
     옛 코드는 원문을 300자에서 잘라버려 정작 원인("OAuth session expired")이
     화면에 닿지 못했다 = 무엇이 잘못됐는지 알 수 없었다.
     """
     low = (raw or "").lower()
+    display_name = {"claude": "Claude", "gemini": "Gemini", "codex": "Codex"}.get(
+        (provider or "").lower(), provider or "AI"
+    )
+    if ("ineligibletiererror" in low or "unsupported_client" in low
+            or "client is no longer supported" in low):
+        return ("account_unsupported",
+                f"{display_name} 로그인은 발견했지만 이 계정·클라이언트 조합은 사용할 수 없습니다. "
+                "공식 API 연결을 사용하거나 공급자 계정 정책을 확인해 주세요.")
     if ("failed to authenticate" in low or "oauth session expired" in low
             or "not logged in" in low or "invalid api key" in low
             or "authentication_error" in low or "401" in low):
-        return ("auth", "Claude 로그인이 만료됐습니다. 화면의 로그인 안내에서 다시 로그인해 주세요.")
+        return ("auth", f"{display_name} 로그인이 만료됐습니다. 로그인 안내에서 다시 로그인해 주세요.")
     if "rate limit" in low or "429" in low or "usage limit" in low or "quota" in low:
-        return ("rate", "Claude 사용량 한도에 걸렸습니다. 잠시 후 다시 시도합니다.")
+        return ("rate", f"{display_name} 사용량 한도에 걸렸습니다. 잠시 후 다시 시도합니다.")
     if "overloaded" in low or "529" in low or "503" in low:
-        return ("overloaded", "Claude 서버가 혼잡합니다. 잠시 후 다시 시도합니다.")
+        return ("overloaded", f"{display_name} 서버가 혼잡합니다. 잠시 후 다시 시도합니다.")
     if any(k in low for k in ("econnreset", "etimedout", "enotfound", "socket hang up",
                               "fetch failed", "network", "getaddrinfo", "econnrefused")):
         return ("network", "네트워크 연결이 끊겼습니다. 연결을 확인해 주세요.")
@@ -568,7 +581,7 @@ def call_claude(system: str, prompt: str, content: str = "",
 
     def _fail(raw: str):
         """실패 처리 — 원문을 보존해 로그에 남기고, 화면에는 사람이 읽을 말로 준다."""
-        kind, msg = _classify_llm_error(raw)
+        kind, msg = _classify_llm_error(raw, "claude")
         if kind == "auth":
             invalidate_auth_cache()   # 다음 상태 조회가 곧바로 '로그인 필요'를 보고하게
         log(f"claude 호출 실패 [{kind}] rc={proc.returncode}: {raw[:1000]}", "ERROR")

@@ -7,6 +7,10 @@ HTML = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
 
 
 class FrontendContractTests(unittest.TestCase):
+    def test_experimental_cli_login_is_present_but_not_claimed_verified(self):
+        self.assertIn("login_unverified", HTML)
+        self.assertIn("계정 자격은 첫 회의록 생성 때 확인됩니다", HTML)
+
     def test_persistent_job_center_is_present(self):
         self.assertIn('id="jobCenter"', HTML)
         self.assertIn('/api/jobs', HTML)
