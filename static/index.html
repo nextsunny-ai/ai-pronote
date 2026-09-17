@@ -4376,47 +4376,65 @@ if ('serviceWorker' in navigator) {
     // (창을 닫았거나 연결이 끊겨 결과를 못 받은 경우 — 서버에는 그대로 있다)
     (async function recoverServerResults() {
       try {
+        for (let i = 0; i < 100 && !window.__pronoteDB?.getAll; i++) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        if (!window.__pronoteDB?.getAll) return;
         const [results, records] = await Promise.all([
           fetch('/api/results').then(r => r.ok ? r.json() : []),
-          (window.__pronoteDB?.getAll ? window.__pronoteDB.getAll() : Promise.resolve([])),
+          window.__pronoteDB.getAll(),
         ]);
         if (!results.length) return;
-        const known = new Set(records.filter(r => r.jobId).map(r => r.jobId));
-        const orphans = results.filter(r => !known.has(r.job_id) && (r.char_count || 0) > 0);
+        const recordsByJobId = new Map(records.filter(r => r.jobId).map(r => [String(r.jobId), r]));
+        const known = new Set(records.filter(r => r.jobId && r.transcribed && r.transcript).map(r => String(r.jobId)));
+        let orphans = results.filter(r => !known.has(String(r.job_id)) && (r.char_count || 0) > 0);
         if (!orphans.length) return;
         const bar = document.createElement('div');
         bar.id = 'serverResultBar';
         bar.style.cssText = 'margin:0 0 14px; padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:var(--bg-elev); display:flex; align-items:center; gap:12px; font-size:13px; line-height:1.5;';
-        bar.innerHTML = '<span style="flex:1;">이 PC에 처리해 둔 받아쓰기 <b>' + orphans.length + '건</b>이 화면에 없습니다 — 가져오면 회의록을 만들 수 있습니다</span>' +
+        bar.innerHTML = '<span id="srvResStatus" style="flex:1;">이 PC에 처리해 둔 받아쓰기 <b>' + orphans.length + '건</b>이 화면에 없습니다 — 가져오면 회의록을 만들 수 있습니다</span>' +
           '<button type="button" id="srvResImport" class="dict-rec-btn" style="white-space:nowrap;">가져오기</button>' +
           '<button type="button" id="srvResSkip" class="dict-rec-btn" style="white-space:nowrap;">닫기</button>';
-        const stage = document.getElementById('dictStage');
-        if (!stage) return;
-        stage.parentNode.insertBefore(bar, stage);
+        const host = document.querySelector('.view.active') || document.getElementById('view-home');
+        if (!host) return;
+        host.insertBefore(bar, host.firstChild);
         document.getElementById('srvResSkip').onclick = () => bar.remove();
         document.getElementById('srvResImport').onclick = async () => {
-          bar.remove();
+          const importButton = document.getElementById('srvResImport');
+          const status = document.getElementById('srvResStatus');
+          importButton.disabled = true;
+          importButton.textContent = '가져오는 중…';
+          const failed = [];
+          let imported = 0;
           for (const o of orphans) {
             try {
-              const full = await fetch('/api/results/' + o.job_id).then(r => r.json());
+              const response = await fetch('/api/results/' + encodeURIComponent(String(o.job_id)));
+              if (!response.ok) throw new Error('결과를 불러오지 못했습니다 (' + response.status + ')');
+              const full = await response.json();
+              const transcript = typeof full.speaker_text === 'string' && full.speaker_text.trim()
+                ? full.speaker_text : (typeof full.full_text === 'string' ? full.full_text : '');
+              if (!transcript.trim()) throw new Error('받아쓰기 본문이 없습니다');
+              if (full.segments != null && !Array.isArray(full.segments)) throw new Error('잘못된 구간 데이터입니다');
+              const existing = recordsByJobId.get(String(o.job_id));
               const rec = {
-                id: 'rec_' + o.job_id,
-                jobId: o.job_id,
-                filename: o.filename || (o.job_id + '.webm'),
-                title: (full.job && full.job.title) || '',
-                tag: (full.job && full.job.tag) || '',
-                attendees: (full.job && full.job.attendees) || '',
-                scenario: '회의록',
-                scenarioKey: (full.job && full.job.scenario) || 'meeting',
-                durationSec: Math.round(o.duration || 0),
-                size: 0,
-                startedAt: (o.saved_at ? o.saved_at * 1000 : Date.now()),
+                ...(existing || {}),
+                id: existing?.id || ('rec_' + o.job_id),
+                jobId: String(o.job_id),
+                filename: existing?.filename || o.filename || (o.job_id + '.webm'),
+                title: existing?.title || (full.job && full.job.title) || '',
+                tag: existing?.tag || (full.job && full.job.tag) || '',
+                attendees: existing?.attendees || (full.job && full.job.attendees) || '',
+                scenario: existing?.scenario || '회의록',
+                scenarioKey: existing?.scenarioKey || (full.job && full.job.scenario) || 'meeting',
+                durationSec: existing?.durationSec || Math.round(o.duration || 0),
+                size: existing?.size || 0,
+                startedAt: existing?.startedAt || (o.saved_at ? o.saved_at * 1000 : Date.now()),
                 transcribed: true,
-                transcript: full.speaker_text || full.full_text || '',
-                transcriptSegments: full.segments,
-                transcriptModel: full.model,
+                transcript,
+                transcriptSegments: Array.isArray(full.segments) ? full.segments : [],
+                transcriptModel: full.model || existing?.transcriptModel || '',
                 transcriptedAt: Date.now(),
-                source: 'server',
+                source: existing?.source || 'server',
               };
               if (full.summary_result && full.summary_result.summary) {
                 rec.summary = full.summary_result.summary;
@@ -4425,9 +4443,24 @@ if ('serviceWorker' in navigator) {
                 if (full.summary_result.title) rec.title = rec.title || full.summary_result.title;
               }
               await window.__pronoteDB.put(rec);
-            } catch (e) { console.error('[Recover]', e); }
+              recordsByJobId.set(String(o.job_id), rec);
+              imported += 1;
+            } catch (e) {
+              failed.push(o);
+              console.error('[Recover]', e);
+            }
           }
-          window.showToast?.(orphans.length + '건을 가져왔습니다 — 라이브러리에서 확인하세요');
+          orphans = failed;
+          if (!failed.length) {
+            bar.remove();
+            window.showToast?.(imported + '건을 가져왔습니다 — 라이브러리에서 확인하세요');
+          } else {
+            status.textContent = imported
+              ? imported + '건을 가져왔고 ' + failed.length + '건은 실패했습니다. 다시 시도해 주세요.'
+              : failed.length + '건을 가져오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.';
+            importButton.disabled = false;
+            importButton.textContent = '다시 시도';
+          }
           try { window.__pronoteLibrary?.refresh?.(); } catch {}
         };
       } catch (e) { /* 서버 옛 버전 등 = 조용히 무시 */ }

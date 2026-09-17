@@ -1,0 +1,841 @@
+import { test, expect, Page } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const artifactRoot = path.join(process.cwd(), 'tests', 'e2e', 'artifacts', 'screenshots');
+
+const syntheticMeeting = {
+  id: 'e2e-meeting-001',
+  title: 'E2E 합성 주간 회의',
+  tag: '회의',
+  date: '2026-09-17',
+  dateLabel: '오늘',
+  duration: '12분',
+  attendees: 3,
+  recordingId: 'e2e-recording-001',
+  transcript: '합성 회의 원문입니다. 실제 사용자 데이터가 아닙니다.',
+  summary: '합성 회의 요약입니다.',
+  mynote: '<p>E2E 합성 노트입니다.</p>'
+};
+
+async function mockBackend(page: Page, options?: { jobs?: unknown[]; providers?: unknown[] }) {
+  await page.route('**/api/**', async route => {
+    const url = new URL(route.request().url());
+    const json = (body: unknown, status = 200) => route.fulfill({
+      status,
+      contentType: 'application/json; charset=utf-8',
+      body: JSON.stringify(body)
+    });
+
+    if (url.pathname === '/api/health') return json({ status: 'ok', version: 'v1.5.0-p0', default_model: 'medium', device: 'cpu' });
+    if (url.pathname === '/api/jobs') return json(options?.jobs ?? []);
+    if (url.pathname === '/api/results') return json([]);
+    if (url.pathname === '/api/pending') return json([]);
+    if (url.pathname === '/api/auth/config') return json({ auth_enabled: false });
+    if (url.pathname === '/api/llm/status') return json({ available: false, provider: 'none' });
+    if (url.pathname === '/api/v15/providers') return json({
+      experimental_cli: true,
+      providers: options?.providers ?? [
+        { name: 'openai', state: 'needs_key', message: 'API 키가 필요합니다.', models: ['gpt-5-mini'] },
+        { name: 'gemini', state: 'needs_key', message: 'API 키가 필요합니다.', models: ['gemini-2.5-flash'] },
+        { name: 'anthropic', state: 'needs_key', message: 'API 키가 필요합니다.', models: ['claude-haiku'] },
+        { name: 'mock', state: 'mock', message: '테스트 전용입니다.', models: ['mock-success'] },
+        { name: 'codex_cli', state: 'login_required', message: '로그인이 필요합니다.', models: [] },
+        { name: 'claude_cli', state: 'not_installed', message: '설치되지 않았습니다.', models: [] },
+      ]
+    });
+    if (url.pathname === '/api/data/purge') return json({ ok: true, removed_entries: 3, removed_credentials: [], failed_credentials: [] });
+    return json({ detail: 'E2E mock: endpoint intentionally unavailable' }, 404);
+  });
+}
+
+async function seedSyntheticMeeting(page: Page) {
+  await page.addInitScript(meeting => {
+    localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify([meeting]));
+    localStorage.setItem('ai_pronote.current_view_meeting.v1', meeting.id);
+  }, syntheticMeeting);
+}
+
+async function openApp(page: Page) {
+  await page.goto('/');
+  await expect(page.locator('#view-home')).toHaveClass(/active/);
+  await expect(page.locator('#newMeetingBtn')).toBeVisible();
+}
+
+async function installSyntheticCameraAndMicrophone(page: Page) {
+  await page.addInitScript(() => {
+    const retained: Array<AudioContext | OscillatorNode | HTMLCanvasElement> = [];
+    const mediaStreams: MediaStream[] = [];
+    const recorderStreams: Array<{ audioTracks: number; videoTracks: number }> = [];
+    const NativeMediaRecorder = window.MediaRecorder;
+    class InstrumentedMediaRecorder extends NativeMediaRecorder {
+      constructor(stream: MediaStream, options?: MediaRecorderOptions) {
+        recorderStreams.push({
+          audioTracks: stream.getAudioTracks().length,
+          videoTracks: stream.getVideoTracks().length
+        });
+        super(stream, options);
+      }
+    }
+    Object.defineProperty(window, 'MediaRecorder', { configurable: true, value: InstrumentedMediaRecorder });
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: async (constraints: MediaStreamConstraints) => {
+          if (constraints.video) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 640;
+            canvas.height = 360;
+            const context = canvas.getContext('2d')!;
+            context.fillStyle = '#172033';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.fillStyle = '#f5a623';
+            context.fillRect(90, 70, 460, 220);
+            retained.push(canvas);
+            const stream = canvas.captureStream(12);
+            mediaStreams.push(stream);
+            return stream;
+          }
+
+          const audioContext = new AudioContext();
+          await audioContext.resume();
+          const oscillator = audioContext.createOscillator();
+          const destination = audioContext.createMediaStreamDestination();
+          oscillator.frequency.value = 440;
+          oscillator.connect(destination);
+          oscillator.start();
+          retained.push(audioContext, oscillator);
+          mediaStreams.push(destination.stream);
+          return destination.stream;
+        }
+      }
+    });
+    (window as typeof window & {
+      __syntheticMedia?: unknown[];
+      __recorderStreams?: Array<{ audioTracks: number; videoTracks: number }>;
+      __syntheticStreams?: MediaStream[];
+    }).__syntheticMedia = retained;
+    (window as typeof window & {
+      __recorderStreams?: Array<{ audioTracks: number; videoTracks: number }>;
+    }).__recorderStreams = recorderStreams;
+    (window as typeof window & { __syntheticStreams?: MediaStream[] }).__syntheticStreams = mediaStreams;
+  });
+}
+
+async function openNavView(page: Page, demo: string) {
+  const menu = page.locator('#mobileMenuBtn');
+  if (await menu.isVisible()) await menu.click();
+  await page.locator(`.nav-item[data-demo="${demo}"]`).click();
+}
+
+test.beforeAll(() => fs.mkdirSync(artifactRoot, { recursive: true }));
+
+test.describe('v1.5 핵심 발견성과 반응형', () => {
+  test.beforeEach(async ({ page }) => mockBackend(page));
+
+  test('홈에서 즉석 회의·외부 업로드·라이브러리·작업함을 바로 찾는다', async ({ page }, testInfo) => {
+    await openApp(page);
+    await expect(page.locator('#newMeetingBtn')).toBeVisible();
+    await expect(page.locator('#newMeetingBtn')).toContainText('녹음 시작');
+    await expect(page.locator('#homeUploadCard')).toBeVisible();
+    await expect(page.locator('#homeUploadCard')).toContainText('파일로 회의록 만들기');
+    await expect(page.locator('[data-demo="library"]').first()).toBeAttached();
+    await expect(page.getByTestId('job-center-toggle')).toBeVisible();
+    await page.screenshot({ path: path.join(artifactRoot, `${testInfo.project.name}-home.png`), fullPage: true });
+  });
+
+  test('홈 업로드 진입점이 파일 선택기를 연다', async ({ page }) => {
+    await openApp(page);
+    const chooserPromise = page.waitForEvent('filechooser');
+    await page.locator('#homeUploadCard').click();
+    const chooser = await chooserPromise;
+    expect(chooser.isMultiple()).toBeFalsy();
+    expect(await chooser.element().getAttribute('id')).toBe('libraryFileInput');
+    expect(await chooser.element().getAttribute('accept')).toContain('.mp4');
+  });
+
+  test('MP4 파일을 고르면 문서 형식과 다음 행동을 명확히 안내한다', async ({ page }) => {
+    await openApp(page);
+    const chooserPromise = page.waitForEvent('filechooser');
+    await page.locator('#homeUploadCard').click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles({ name: '합성_회의영상.mp4', mimeType: 'video/mp4', buffer: Buffer.from('e2e synthetic media') });
+    await expect(page.locator('#view-library')).toHaveClass(/active/);
+    await expect(page.locator('#scenarioModal')).toHaveClass(/open/);
+    await expect(page.getByRole('heading', { name: '어떤 문서로 정리할까요?' })).toBeVisible();
+    await expect(page.locator('#scenarioConfirm')).toHaveText('받아쓰기·회의록 만들기');
+    await expect(page.locator('#scenarioGrid')).toContainText('회의록');
+    await expect(page.locator('#scenarioGrid')).toContainText('강의 노트');
+    await page.locator('#scenarioCancel').click();
+    await expect(page.locator('#libraryUploadBtn')).toBeVisible();
+    await expect(page.locator('#libraryUploadBtn')).toHaveText('파일로 회의록 만들기');
+  });
+
+  test('드래그앤드롭도 같은 검증·라이브러리·문서형식 흐름을 사용한다', async ({ page }) => {
+    await openApp(page);
+    await openNavView(page, 'dict');
+    await page.evaluate(() => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([new Uint8Array([1, 2, 3, 4])], '드롭_회의.mp3', { type: 'audio/mpeg' }));
+      document.getElementById('dictStage')!.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+    });
+    await expect(page.locator('#view-library')).toHaveClass(/active/);
+    await expect(page.locator('#scenarioModal')).toHaveClass(/open/);
+    await expect(page.locator('#scenarioTitle')).toHaveValue('드롭_회의');
+  });
+
+  test('지원하지 않거나 빈 파일을 접근 가능한 메시지로 거절하고 버튼을 복구한다', async ({ page }) => {
+    await openApp(page);
+    await page.evaluate(async () => {
+      await window.__pronoteLibrary.importFiles([new File([], '빈파일.mp3', { type: 'audio/mpeg' })]);
+    });
+    await expect(page.locator('#toast')).toHaveAttribute('role', 'status');
+    await expect(page.locator('#toast')).toHaveAttribute('aria-live', 'polite');
+    await expect(page.locator('#toast')).toContainText('내용이 없는 파일');
+    await expect(page.locator('#homeUploadCard')).toHaveAttribute('aria-busy', 'false');
+
+    await page.evaluate(async () => {
+      await window.__pronoteLibrary.importFiles([new File([new Uint8Array([1])], '회의.aac', { type: 'audio/aac' })]);
+    });
+    await expect(page.locator('#toast')).toContainText('지원하지 않는 파일');
+    await expect(page.locator('#scenarioModal')).not.toHaveClass(/open/);
+  });
+
+  test('빈 작업함은 무응답 대신 명확한 빈 상태를 보인다', async ({ page }) => {
+    await openApp(page);
+    await page.getByTestId('job-center-toggle').click();
+    await expect(page.getByTestId('job-center')).toHaveAttribute('aria-hidden', 'false');
+    await expect(page.locator('#jobCenterList')).toContainText('진행 중인 작업이 없습니다');
+    await page.getByRole('button', { name: '작업함 닫기' }).click();
+    await expect(page.getByTestId('job-center')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  test('설치본 데이터 삭제는 범위를 정확히 알리고 브라우저 데이터를 정리한다', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('ai_pronote.trash.v1', '[{"id":"private"}]');
+      localStorage.setItem('pronote_claude_override', 'legacy');
+    });
+    await openApp(page);
+    await openNavView(page, 'admin');
+    await page.locator('#view-admin .admin-card[data-admin="account"]').click();
+    const deleteButton = page.locator('#acctDelete');
+    await expect(deleteButton).toHaveText('이 설치본 데이터 영구 삭제');
+    let dialogCount = 0;
+    page.on('dialog', async dialog => { dialogCount += 1; await dialog.accept(); });
+    await deleteButton.click();
+    await expect.poll(() => dialogCount).toBe(2);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('ai_pronote.trash.v1'))).toBeNull();
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('pronote_claude_override'))).toBeNull();
+    await expect(deleteButton).not.toHaveAttribute('aria-busy', 'true');
+  });
+
+  test('안전한 진단정보는 회의 내용·제목·파일명·비밀정보 없이 내려받는다', async ({ page }) => {
+    await seedSyntheticMeeting(page);
+    await openApp(page);
+    await openNavView(page, 'admin');
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('#diagnosticExportBtn').click();
+    const download = await downloadPromise;
+    const downloadPath = await download.path();
+    expect(download.suggestedFilename()).toMatch(/^AI_PRONOTE_진단정보_\d{8}-\d{6}\.json$/);
+    expect(downloadPath).toBeTruthy();
+    const raw = fs.readFileSync(downloadPath!, 'utf8');
+    const diagnostic = JSON.parse(raw);
+    expect(diagnostic.format).toBe('ai-pronote-safe-diagnostics');
+    expect(diagnostic.schema_version).toBe(1);
+    expect(diagnostic.local_counts.meetings).toBe(1);
+    expect(diagnostic.excluded_fields).toContain('credentials_tokens');
+    expect(diagnostic.environment.browser_family).toBeTruthy();
+    expect(diagnostic.environment.os_family).toBeTruthy();
+    expect(diagnostic.environment.browser).toBeUndefined();
+    expect(raw).not.toContain(syntheticMeeting.title);
+    expect(raw).not.toContain(syntheticMeeting.transcript);
+    expect(raw).not.toContain(syntheticMeeting.summary);
+    expect(raw).not.toContain(syntheticMeeting.mynote);
+    await expect(page.locator('#toast')).toContainText('민감정보를 제외한 진단정보');
+  });
+});
+
+test.describe('작업함 상태와 오류 복구', () => {
+  test('진행·실패 상태, 퍼센트, ETA, 재시도를 표시한다', async ({ page }) => {
+    await mockBackend(page, { jobs: [
+      { job_id: 'e2e-running', filename: '합성-60분.m4a', status: 'running', progress: 42, queue_view: { stage_label: '받아쓰기 중', eta_seconds: 180 } },
+      { job_id: 'e2e-error', filename: '합성-오류.wav', status: 'error', progress: 12, error: '지원하지 않는 오디오', queue_view: { stage_label: '실패', can_retry: true } }
+    ] });
+    await openApp(page);
+    await page.getByTestId('job-center-toggle').click();
+    await expect(page.locator('[data-job-id="e2e-running"]')).toContainText('42%');
+    await expect(page.locator('[data-job-id="e2e-running"]')).toContainText('약 3분 남음');
+    await expect(page.locator('[data-job-id="e2e-error"]')).toContainText('지원하지 않는 오디오');
+    await expect(page.locator('[data-job-id="e2e-error"] button')).toHaveText('다시 시도');
+  });
+});
+
+test.describe('라이브러리 재열기 회귀', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockBackend(page);
+    await seedSyntheticMeeting(page);
+  });
+
+  test('합성 회의는 카드 하나로 나타나며 보기 버튼으로 결과를 연다', async ({ page }) => {
+    await openApp(page);
+    await openNavView(page, 'library');
+    const card = page.locator('.library-card[data-item-id="e2e-meeting-001"][data-item-type="meeting"]');
+    await expect(card).toHaveCount(1);
+    await expect(card).toContainText('E2E 합성 주간 회의');
+    await card.getByRole('button', { name: /보기/ }).click();
+    await expect(page.locator('#view-result')).toHaveClass(/active/);
+    await expect(page.locator('#meetingResultTabs')).toBeVisible();
+    await expect(page.locator('#mynoteBlock')).toBeAttached();
+  });
+
+  test('카드 전체 클릭도 같은 결과 화면을 연다', async ({ page }) => {
+    await openApp(page);
+    await openNavView(page, 'library');
+    const card = page.locator('.library-card[data-item-id="e2e-meeting-001"]');
+    await card.click({ position: { x: 120, y: 30 } });
+    await expect(page.locator('#view-result')).toHaveClass(/active/);
+  });
+
+  test('구버전 서버 결과를 홈에서 발견하고 가져와 회의록 생성 흐름을 연다', async ({ page }) => {
+    await page.unroute('**/api/**');
+    await page.route('**/api/**', async route => {
+      const url = new URL(route.request().url());
+      const json = (body: unknown, status = 200) => route.fulfill({
+        status, contentType: 'application/json; charset=utf-8', body: JSON.stringify(body)
+      });
+      if (url.pathname === '/api/results') return json([{
+        job_id: 'legacy-result-001', filename: 'legacy.m4a', duration: 12.7,
+        char_count: 24, saved_at: 1_789_000_000, preview: '구버전 시험'
+      }, {
+        job_id: 'legacy/result-실패', filename: 'retry.m4a', duration: 8,
+        char_count: 10, saved_at: 1_789_000_001, preview: '재시도 시험'
+      }]);
+      if (url.pathname === '/api/results/legacy-result-001') return json({
+        filename: 'legacy.m4a', duration: 12.7, model: 'medium',
+        full_text: '구버전 결과 복구를 확인하는 비민감 시험 문장입니다.', segments: [], job: {}
+      });
+      if (url.pathname === '/api/results/legacy%2Fresult-%EC%8B%A4%ED%8C%A8') return json({ detail: 'temporary' }, 503);
+      if (url.pathname === '/api/health') return json({ status: 'ok', version: 'v1.5.0-p0' });
+      if (url.pathname === '/api/jobs' || url.pathname === '/api/pending') return json([]);
+      if (url.pathname === '/api/auth/config') return json({ auth_enabled: false });
+      if (url.pathname === '/api/llm/status') return json({ available: false, provider: 'none' });
+      if (url.pathname === '/api/v15/providers') return json({ providers: [], experimental_cli: false });
+      return json({ detail: 'not found' }, 404);
+    });
+    await openApp(page);
+    await expect(page.locator('#serverResultBar')).toBeVisible();
+    await page.evaluate(async () => {
+      await (window as typeof window & { __pronoteDB: { put: (record: unknown) => Promise<string> } }).__pronoteDB.put({
+        id: 'rec_pending-legacy', jobId: 'legacy-result-001', filename: '원본-녹음.webm',
+        blob: new Blob(['original-audio'], { type: 'audio/webm' }), transcribed: false,
+        startedAt: 1_789_000_000_000, source: 'recorded'
+      });
+    });
+    await page.reload();
+    await expect(page.locator('#serverResultBar')).toBeVisible();
+    await page.locator('#srvResImport').click();
+    await expect(page.locator('#srvResStatus')).toContainText('1건을 가져왔고 1건은 실패했습니다');
+    await expect(page.locator('#srvResImport')).toHaveText('다시 시도');
+    await openNavView(page, 'library');
+    const card = page.locator('.library-card[data-item-id="rec_pending-legacy"]');
+    await expect(card).toHaveCount(1);
+    const restored = await page.evaluate(async () => {
+      const rec = await (
+        window as typeof window & { __pronoteDB: { get: (id: string) => Promise<Record<string, unknown>> } }
+      ).__pronoteDB.get('rec_pending-legacy');
+      return { filename: rec.filename, transcribed: rec.transcribed, transcript: rec.transcript, hasBlob: rec.blob instanceof Blob };
+    });
+    expect(restored.filename).toBe('원본-녹음.webm');
+    expect(restored.transcribed).toBe(true);
+    expect(restored.transcript).toContain('구버전 결과 복구');
+    expect(restored.hasBlob).toBe(true);
+    await card.getByRole('button', { name: /회의록/ }).click();
+    await expect(page.locator('#scenarioModal')).toHaveClass(/open/);
+    await expect(page.getByRole('heading', { name: '어떤 문서로 정리할까요?' })).toBeVisible();
+  });
+});
+
+test.describe('필기 저장·복원 계약', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockBackend(page);
+    await seedSyntheticMeeting(page);
+  });
+
+  test('필기 탭, 도구, 캔버스, undo/redo와 회의별 IndexedDB 저장을 제공한다', async ({ page }) => {
+    await openApp(page);
+    await openNavView(page, 'result-mynote');
+    await page.locator('#noteModeInk').click();
+    await expect(page.locator('#inkPanel')).toBeVisible();
+    await expect(page.locator('#inkCanvas')).toBeVisible();
+    await expect(page.locator('[data-ink-tool="pen"]')).toBeVisible();
+    await expect(page.locator('[data-ink-tool="eraser"]')).toBeVisible();
+    await expect(page.locator('#inkUndo')).toBeVisible();
+    await expect(page.locator('#inkRedo')).toBeVisible();
+
+    const canvas = page.locator('#inkCanvas');
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+    await page.mouse.move(box!.x + 30, box!.y + 30);
+    await page.mouse.down();
+    await page.mouse.move(box!.x + 130, box!.y + 100, { steps: 8 });
+    await page.mouse.up();
+
+    await expect.poll(() => page.evaluate(async () => {
+      const request = indexedDB.open('pronote-ink-v1', 1);
+      const db: IDBDatabase = await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      return await new Promise<number>((resolve, reject) => {
+        const tx = db.transaction('documents', 'readonly');
+        const get = tx.objectStore('documents').get('e2e-meeting-001');
+        get.onsuccess = () => resolve(get.result?.strokes?.length || 0);
+        get.onerror = () => reject(get.error);
+      });
+    })).toBeGreaterThan(0);
+
+    await page.locator('#inkUndo').click();
+    await page.locator('#inkRedo').click();
+    await page.reload();
+    await openNavView(page, 'result-mynote');
+    await page.locator('#noteModeInk').click();
+    await expect(page.locator('#inkCanvas')).toBeVisible();
+  });
+});
+
+test.describe('AI 연결 구분', () => {
+  test('공식 BYOK와 실험 CLI를 오인 없이 구분한다', async ({ page }) => {
+    await mockBackend(page);
+    await openApp(page);
+    await openNavView(page, 'admin');
+    await expect(page.getByRole('heading', { name: '공식 API · BYOK' })).toBeVisible();
+    await expect(page.locator('#officialProviderSelect')).toContainText('OpenAI API (BYOK)');
+    await expect(page.locator('#officialProviderSelect')).toContainText('Gemini API (BYOK)');
+    await expect(page.locator('#officialProviderSelect')).toContainText('Anthropic API (BYOK)');
+    await expect(page.locator('#providerConsent')).not.toBeChecked();
+    await expect(page.locator('#experimentalCliPanel')).toBeVisible();
+    await expect(page.locator('#experimentalCliStatuses')).toContainText('Codex CLI (실험)');
+    await expect(page.locator('#experimentalCliStatuses')).toContainText('Claude CLI (실험)');
+    await expect(page.locator('#experimentalCliStatuses')).not.toContainText('Gemini CLI (실험)');
+    await expect(page.locator('#experimentalCliStatuses')).toContainText(/로그인 필요|미설치/);
+  });
+
+  test('기존 Gemini CLI 설정은 선택·저장·실행 경계에서 정책 차단한다', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('ai_pronote.settings.v1', JSON.stringify({ ai: { provider: 'gemini' } }));
+    });
+    await mockBackend(page);
+    await openApp(page);
+    await openNavView(page, 'admin');
+    await page.locator('#view-admin .admin-card[data-admin="transcribe"]').click();
+    const blocked = page.locator('[data-provider="gemini_cli"]');
+    await expect(blocked).toHaveAttribute('aria-disabled', 'true');
+    await expect(blocked).not.toHaveClass(/active/);
+    expect(await page.evaluate(() => window.__pronoteGetAIProvider())).toBe('policy_blocked');
+    await page.evaluate(() => document.getElementById('adminModalSave')!.click());
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.settings.v1') || '{}').ai)).toBeUndefined();
+  });
+});
+
+test.describe('PWA 설치 준비 계약', () => {
+  test('manifest, service worker, 아이콘과 standalone 설정이 유효하다', async ({ page, request }) => {
+    await mockBackend(page);
+    const manifestResponse = await request.get('/static/manifest.webmanifest');
+    expect(manifestResponse.ok()).toBeTruthy();
+    const manifest = await manifestResponse.json();
+    expect(manifest.display).toBe('standalone');
+    expect(manifest.icons.some((icon: { sizes?: string }) => icon.sizes === '192x192')).toBeTruthy();
+    expect(manifest.icons.some((icon: { sizes?: string }) => icon.sizes === '512x512')).toBeTruthy();
+
+    const swResponse = await request.get('/static/sw.js');
+    expect(swResponse.ok()).toBeTruthy();
+    expect(await swResponse.text()).toContain('CACHE');
+
+    await openApp(page);
+    await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/static/manifest.webmanifest');
+    await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveCount(1);
+    await expect(page.locator('meta[name="viewport"]')).toHaveAttribute('content', /viewport-fit=cover/);
+  });
+});
+
+test.describe('카메라 회의 녹화·보존 계약', () => {
+  test('마이크 권한이 거부되면 가짜 녹음 화면으로 전환하지 않는다', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+          getUserMedia: async () => {
+            throw new DOMException('Permission denied by E2E', 'NotAllowedError');
+          }
+        }
+      });
+    });
+    await mockBackend(page);
+    await openApp(page);
+
+    await page.locator('#newMeetingBtn').click();
+    await expect(page.locator('#meetingTypeModal')).toHaveClass(/open/);
+    await page.locator('#newMeetingTitle').fill('권한 거부 회의');
+    await page.locator('#meetingTypeStart').click();
+
+    await expect(page.locator('#meetingTypeModal')).toHaveClass(/open/);
+    await expect(page.locator('#view-live')).not.toHaveClass(/active/);
+    await expect(page.locator('#meetingTypeStart')).toBeEnabled();
+    await expect(page.locator('#meetingTypeStart')).toHaveText('녹음 시작 →');
+    await expect(page.locator('body')).toContainText('녹음 시작 실패: 마이크 권한 거부');
+    expect(await page.evaluate(() => window.__pronoteRecording.isActive())).toBeFalsy();
+  });
+
+  test('장치 연결 성공 뒤에만 실제 회의 화면과 타이머를 연다', async ({ page }) => {
+    await installSyntheticCameraAndMicrophone(page);
+    await mockBackend(page);
+    await openApp(page);
+
+    await page.locator('#newMeetingBtn').click();
+    await page.locator('#newMeetingTitle').fill('UI 장치 연결 성공 회의');
+    await page.locator('#newMeetingVideo').locator('xpath=ancestor::label').click();
+    await expect(page.locator('#newMeetingVideo')).toBeChecked();
+    await page.locator('#meetingTypeStart').click();
+
+    await expect(page.locator('#meetingTypeModal')).not.toHaveClass(/open/);
+    await expect(page.locator('#view-live')).toHaveClass(/active/);
+    await expect.poll(() => page.evaluate(() => window.__pronoteRecording.isActive())).toBeTruthy();
+    await expect(page.locator('#view-live .rec-status-pill')).toContainText(/녹음 중 · 00:00:0[0-9]/);
+
+    await page.waitForTimeout(1200);
+    await page.evaluate(() => window.__pronoteRecording.stop());
+    await expect.poll(() => page.evaluate(() => window.__pronoteRecording.isActive()), { timeout: 10_000 }).toBeFalsy();
+  });
+
+  test('장치 초기화 실패 시 획득한 미디어 트랙과 AudioContext를 정리한다', async ({ page }) => {
+    await installSyntheticCameraAndMicrophone(page);
+    await page.addInitScript(() => {
+      const nativeClose = AudioContext.prototype.close;
+      (window as typeof window & { __closedAudioContexts?: number }).__closedAudioContexts = 0;
+      AudioContext.prototype.close = function() {
+        (window as typeof window & { __closedAudioContexts?: number }).__closedAudioContexts =
+          ((window as typeof window & { __closedAudioContexts?: number }).__closedAudioContexts || 0) + 1;
+        return nativeClose.call(this);
+      };
+      Object.defineProperty(window, 'MediaRecorder', {
+        configurable: true,
+        value: class BrokenMediaRecorder {
+          static isTypeSupported() { return true; }
+          constructor() { throw new Error('synthetic recorder failure'); }
+        }
+      });
+    });
+    await mockBackend(page);
+    await openApp(page);
+
+    const started = await page.evaluate(() => window.__pronoteRecording.start('realtime', {
+      context: 'live', recordVideo: true, meta: { title: '초기화 실패 정리' }
+    }));
+    expect(started).toBeFalsy();
+    await expect.poll(() => page.evaluate(() => {
+      const streams = (window as typeof window & { __syntheticStreams?: MediaStream[] }).__syntheticStreams || [];
+      return streams.length >= 2 && streams.every(stream => stream.getTracks().every(track => track.readyState === 'ended'));
+    })).toBeTruthy();
+    await expect.poll(() => page.evaluate(() =>
+      (window as typeof window & { __closedAudioContexts?: number }).__closedAudioContexts || 0
+    )).toBeGreaterThanOrEqual(1);
+  });
+
+  test('동시에 두 번 시작해도 recorder는 하나만 만든다', async ({ page }) => {
+    await installSyntheticCameraAndMicrophone(page);
+    await mockBackend(page);
+    await openApp(page);
+
+    const results = await page.evaluate(() => Promise.all([
+      window.__pronoteRecording.start('realtime', { context: 'live', meta: { title: '첫 시작' } }),
+      window.__pronoteRecording.start('realtime', { context: 'live', meta: { title: '중복 시작' } })
+    ]));
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(await page.evaluate(() =>
+      (window as typeof window & { __syntheticStreams?: MediaStream[] }).__syntheticStreams?.length || 0
+    )).toBe(1);
+    await page.evaluate(() => window.__pronoteRecording.stop());
+    await expect.poll(() => page.evaluate(() => window.__pronoteRecording.isActive()), { timeout: 10_000 }).toBeFalsy();
+  });
+
+  test('실시간 초안 recorder 시작 실패가 본 녹음을 숨기거나 중단하지 않는다', async ({ page }) => {
+    await installSyntheticCameraAndMicrophone(page);
+    await page.addInitScript(() => {
+      const NativeMediaRecorder = window.MediaRecorder;
+      let starts = 0;
+      class PartialStartFailureRecorder extends NativeMediaRecorder {
+        start(timeslice?: number) {
+          starts += 1;
+          if (starts === 2) throw new Error('synthetic partial recorder start failure');
+          return super.start(timeslice);
+        }
+      }
+      Object.defineProperty(window, 'MediaRecorder', { configurable: true, value: PartialStartFailureRecorder });
+    });
+    await mockBackend(page);
+    await openApp(page);
+
+    const started = await page.evaluate(() => window.__pronoteRecording.start('realtime', {
+      context: 'live', meta: { title: '부분 받아쓰기 실패 회의' }
+    }));
+    expect(started).toBeTruthy();
+    expect(await page.evaluate(() => window.__pronoteRecording.isActive())).toBeTruthy();
+    await page.waitForTimeout(1200);
+    await page.evaluate(() => window.__pronoteRecording.stop());
+    await expect.poll(() => page.evaluate(() => window.__pronoteRecording.isActive()), { timeout: 10_000 }).toBeFalsy();
+  });
+
+  test('권한 대기 중 취소하면 뒤늦게 회의 화면을 열지 않고 트랙을 정리한다', async ({ page }) => {
+    await installSyntheticCameraAndMicrophone(page);
+    await page.addInitScript(() => {
+      const media = navigator.mediaDevices;
+      const original = media.getUserMedia.bind(media);
+      media.getUserMedia = async constraints => {
+        await new Promise(resolve => setTimeout(resolve, 400));
+        return original(constraints);
+      };
+    });
+    await mockBackend(page);
+    await openApp(page);
+
+    await page.locator('#newMeetingBtn').click();
+    await page.locator('#meetingTypeStart').click();
+    await expect(page.locator('#meetingTypeStart')).toBeDisabled();
+    await page.locator('#meetingTypeCancel').click();
+    await expect(page.locator('#meetingTypeModal')).not.toHaveClass(/open/);
+    await page.waitForTimeout(700);
+    await expect(page.locator('#view-live')).not.toHaveClass(/active/);
+    expect(await page.evaluate(() => window.__pronoteRecording.isActive())).toBeFalsy();
+    await expect.poll(() => page.evaluate(() => {
+      const streams = (window as typeof window & { __syntheticStreams?: MediaStream[] }).__syntheticStreams || [];
+      return streams.length > 0 && streams.every(stream => stream.getTracks().every(track => track.readyState === 'ended'));
+    })).toBeTruthy();
+  });
+
+  test('영상과 별도 음성 원본을 함께 저장하고 회의 기록을 만든다', async ({ page }) => {
+    await installSyntheticCameraAndMicrophone(page);
+    await mockBackend(page);
+    await openApp(page);
+
+    const started = await page.evaluate(() => window.__pronoteRecording.start('realtime', {
+      context: 'live',
+      recordVideo: true,
+      meta: { title: 'E2E 카메라 회의', tag: '프로젝트', language: 'ko' }
+    }));
+    expect(started).toBeTruthy();
+    await expect.poll(() => page.evaluate(() => window.__pronoteRecording.isActive())).toBeTruthy();
+
+    await page.waitForTimeout(2200);
+    await page.evaluate(() => window.__pronoteRecording.stop());
+    await expect.poll(() => page.evaluate(() => window.__pronoteRecording.isActive()), { timeout: 10_000 }).toBeFalsy();
+
+    await expect.poll(async () => page.evaluate(async () => {
+      const records = await window.__pronoteDB.getAll();
+      return records.filter((record: { source?: string }) =>
+        record.source === 'recorded' || record.source === 'recorded-video').length;
+    }), { timeout: 10_000 }).toBe(2);
+
+    const result = await page.evaluate(async () => {
+      const records = await window.__pronoteDB.getAll();
+      const audio = records.find((record: { source?: string }) => record.source === 'recorded');
+      const video = records.find((record: { source?: string }) => record.source === 'recorded-video');
+      const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+      const recorderStreams = (window as typeof window & {
+        __recorderStreams?: Array<{ audioTracks: number; videoTracks: number }>;
+      }).__recorderStreams || [];
+      const audioContexts = ((window as typeof window & { __syntheticMedia?: unknown[] }).__syntheticMedia || [])
+        .filter((item): item is AudioContext => item instanceof AudioContext);
+      return {
+        audioSize: audio?.blob?.size || 0,
+        videoSize: video?.blob?.size || 0,
+        videoHasAudio: recorderStreams.some(stream => stream.videoTracks > 0 && stream.audioTracks > 0),
+        separateAudioRecorder: recorderStreams.some(stream => stream.videoTracks === 0 && stream.audioTracks > 0),
+        audioContextsRunning: audioContexts.length > 0 && audioContexts.every(context => context.state === 'running'),
+        meetingRecordingId: meetings[0]?.recordingId || '',
+        summaryPending: meetings[0]?.summaryPending === true
+      };
+    });
+    expect(result.audioSize).toBeGreaterThan(0);
+    expect(result.videoSize).toBeGreaterThan(0);
+    expect(result.videoHasAudio).toBeTruthy();
+    expect(result.separateAudioRecorder).toBeTruthy();
+    expect(result.audioContextsRunning).toBeTruthy();
+    expect(result.meetingRecordingId).toMatch(/^rec_/);
+    expect(result.summaryPending).toBeTruthy();
+  });
+
+  test('녹음 전 저장공간이 부족하면 장치 권한 요청 전에 시작을 막는다', async ({ page }) => {
+    await installSyntheticCameraAndMicrophone(page);
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'storage', {
+        configurable: true,
+        value: { estimate: async () => ({ quota: 300 * 1024 ** 2, usage: 250 * 1024 ** 2 }) }
+      });
+    });
+    await mockBackend(page);
+    await openApp(page);
+
+    const started = await page.evaluate(() => window.__pronoteRecording.start('realtime', {
+      context: 'live', recordVideo: true, meta: { title: '저장공간 부족 회의' }
+    }));
+    expect(started).toBeFalsy();
+    expect(await page.evaluate(() =>
+      (window as typeof window & { __syntheticStreams?: MediaStream[] }).__syntheticStreams?.length || 0
+    )).toBe(0);
+    await expect(page.locator('body')).toContainText('저장 공간이 부족합니다');
+  });
+
+  test('마이크 연결이 끊기면 현재 녹음을 자동 종료해 저장한다', async ({ page }) => {
+    await installSyntheticCameraAndMicrophone(page);
+    await mockBackend(page);
+    await openApp(page);
+
+    expect(await page.evaluate(() => window.__pronoteRecording.start('realtime', {
+      context: 'live', meta: { title: '마이크 분리 회의' }
+    }))).toBeTruthy();
+    await page.waitForTimeout(1200);
+    await page.evaluate(() => {
+      const stream = (window as typeof window & { __syntheticStreams?: MediaStream[] }).__syntheticStreams?.[0];
+      stream?.getAudioTracks()[0]?.dispatchEvent(new Event('ended'));
+    });
+
+    await expect.poll(() => page.evaluate(() => window.__pronoteRecording.isActive()), { timeout: 10_000 }).toBeFalsy();
+    await expect.poll(async () => page.evaluate(async () =>
+      (await window.__pronoteDB.getAll()).filter((record: { source?: string }) => record.source === 'recorded').length
+    )).toBe(1);
+  });
+
+  test('최종 저장소 오류 시 회의 유령기록을 만들지 않고 긴급 복구 파일을 내려받는다', async ({ page }) => {
+    await installSyntheticCameraAndMicrophone(page);
+    await mockBackend(page);
+    await openApp(page);
+
+    expect(await page.evaluate(() => window.__pronoteRecording.start('realtime', {
+      context: 'live', meta: { title: '저장 실패 복구 회의' }
+    }))).toBeTruthy();
+    await page.waitForTimeout(1200);
+    await page.evaluate(() => {
+      const db = window.__pronoteDB;
+      const originalPut = db.put.bind(db);
+      db.put = async (record: { source?: string }) => {
+        if (record.source === 'recorded') throw new Error('synthetic quota exceeded');
+        return originalPut(record);
+      };
+    });
+    const downloadPromise = page.waitForEvent('download');
+    await page.evaluate(() => window.__pronoteRecording.stop());
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toMatch(/^긴급복구_.*\.(mp3|webm|m4a)$/);
+    await expect.poll(() => page.evaluate(() => window.__pronoteRecording.isActive()), { timeout: 10_000 }).toBeFalsy();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]').length)).toBe(0);
+    await expect(page.locator('#view-library')).toHaveClass(/active/);
+    await expect(page.locator('body')).toContainText('긴급 복구 다운로드를 요청했습니다');
+    await expect(page.locator('#emergencyRecoveryPanel')).toBeVisible();
+    await expect(page.locator('#emergencyRecoveryPanel button')).toHaveCount(1);
+  });
+
+  test('영상과 음성 저장이 모두 실패해도 두 복구 파일을 각각 다시 받을 수 있다', async ({ page }) => {
+    await installSyntheticCameraAndMicrophone(page);
+    await mockBackend(page);
+    await openApp(page);
+
+    expect(await page.evaluate(() => window.__pronoteRecording.start('realtime', {
+      context: 'live', recordVideo: true, meta: { title: '영상 음성 동시 복구' }
+    }))).toBeTruthy();
+    await page.waitForTimeout(1200);
+    await page.evaluate(() => {
+      const db = window.__pronoteDB;
+      const originalPut = db.put.bind(db);
+      db.put = async (record: { source?: string }) => {
+        if (record.source === 'recorded' || record.source === 'recorded-video') throw new Error('synthetic quota exceeded');
+        return originalPut(record);
+      };
+      window.__pronoteRecording.stop();
+    });
+
+    await expect.poll(() => page.evaluate(() => window.__pronoteRecording.isActive()), { timeout: 10_000 }).toBeFalsy();
+    await expect(page.locator('#emergencyRecoveryPanel button')).toHaveCount(2);
+    const recoveryNames = await page.evaluate(() => (window as typeof window & {
+      __pronoteEmergencyRecoveries?: Array<{ filename: string }>;
+    }).__pronoteEmergencyRecoveries?.map(item => item.filename) || []);
+    expect(recoveryNames).toHaveLength(2);
+    expect(recoveryNames).toContain('영상 음성 동시 복구 (화면 영상).webm');
+    expect(recoveryNames.some(name => /^회의_영상 음성 동시 복구_.*\.(mp3|webm|m4a)$/.test(name))).toBeTruthy();
+  });
+
+  test('진행 중 자동저장과 정지가 겹쳐도 완료 뒤 중단 초안을 남기지 않는다', async ({ page }) => {
+    await installSyntheticCameraAndMicrophone(page);
+    await mockBackend(page);
+    await openApp(page);
+
+    expect(await page.evaluate(() => window.__pronoteRecording.start('realtime', {
+      context: 'live', meta: { title: '자동저장 경쟁 회의' }
+    }))).toBeTruthy();
+    await page.waitForTimeout(1200);
+    await page.evaluate(() => {
+      const db = window.__pronoteDB;
+      const originalPut = db.put.bind(db);
+      db.put = async (record: { id?: string }) => {
+        if (record.id === '__draft_recording__') await new Promise(resolve => setTimeout(resolve, 500));
+        return originalPut(record);
+      };
+      window.__pronoteRecording.saveDraftNow();
+      window.__pronoteRecording.stop();
+    });
+
+    await expect.poll(() => page.evaluate(() => window.__pronoteRecording.isActive()), { timeout: 10_000 }).toBeFalsy();
+    expect(await page.evaluate(async () => !!(await window.__pronoteDB.get('__draft_recording__')))).toBeFalsy();
+  });
+
+  test('60개 녹음 조각마다 중단 복구본을 저장하고 다시 열어 복구한다', async ({ page }) => {
+    test.setTimeout(90_000);
+    await installSyntheticCameraAndMicrophone(page);
+    await mockBackend(page);
+    await openApp(page);
+
+    const started = await page.evaluate(() => window.__pronoteRecording.start('realtime', {
+      context: 'live',
+      recordVideo: false,
+      meta: { title: 'E2E 중단 복구 회의', tag: '프로젝트', language: 'ko' }
+    }));
+    expect(started).toBeTruthy();
+
+    await expect.poll(async () => page.evaluate(async () => {
+      const draft = await window.__pronoteDB.get('__draft_recording__');
+      return draft?.blob?.size || 0;
+    }), { timeout: 70_000, intervals: [1000] }).toBeGreaterThan(0);
+
+    await page.reload();
+    await expect(page.locator('#recoverRun')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('body')).toContainText('E2E 중단 복구 회의');
+    await page.evaluate(() => {
+      const db = window.__pronoteDB;
+      const originalPut = db.put.bind(db);
+      let failOnce = true;
+      db.put = async (...args: Parameters<typeof originalPut>) => {
+        if (failOnce) {
+          failOnce = false;
+          throw new Error('E2E 저장소 오류');
+        }
+        return originalPut(...args);
+      };
+    });
+    await page.locator('#recoverRun').click();
+    await expect(page.locator('#recoverRun')).toBeVisible();
+    await expect(page.locator('#recoverRun')).toHaveText('다시 복구');
+    await page.locator('#recoverRun').click();
+
+    await expect.poll(async () => page.evaluate(async () => {
+      const records = await window.__pronoteDB.getAll();
+      return {
+        draftExists: records.some((record: { id?: string }) => record.id === '__draft_recording__'),
+        recovered: records.find((record: { source?: string }) => record.source === 'recovered')
+      };
+    })).toMatchObject({
+      draftExists: false,
+      recovered: { source: 'recovered', isDraft: false }
+    });
+  });
+});
