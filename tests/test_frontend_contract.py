@@ -57,6 +57,16 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("...cameraStream.getVideoTracks()", HTML)
         self.assertIn("state.cameraStream?.getTracks().forEach", HTML)
 
+    def test_file_import_uses_one_validated_flow(self):
+        self.assertIn('id="libraryUploadBtn"', HTML)
+        self.assertIn('id="libraryEmptyUploadBtn"', HTML)
+        self.assertIn("importFiles: importFilesAndChoose", HTML)
+        self.assertIn("window.__pronoteLibrary.importFiles([file])", HTML)
+        self.assertIn("512 * 1024 * 1024", HTML)
+        self.assertIn("const timer = setTimeout(() => finish(0), 8000)", HTML)
+        self.assertIn('role="status" aria-live="polite"', HTML)
+        self.assertNotIn('id="libraryFileInput" accept="audio/*', HTML)
+
     def test_mac_beta_has_three_ai_login_and_safe_launchers(self):
         mac = ROOT / "mac"
         for name in ("1_FIRST_SETUP.command", "2_AI_LOGIN.command", "3_START_AI_PRONOTE.command", "STOP_AI_PRONOTE.command"):

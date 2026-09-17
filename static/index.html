@@ -2899,8 +2899,8 @@ if ('serviceWorker' in navigator) {
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
           <button type="button" class="quick-card" id="homeUploadCard" style="background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; padding:16px; text-align:left; cursor:pointer;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-secondary); margin-bottom:12px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-            <div style="font-size:14px; font-weight:700; margin-bottom:4px;">녹음 파일 가져오기</div>
-            <div style="font-size:11.5px; color:var(--text-secondary); line-height:1.5;">휴대폰·녹음기 파일을 받아쓰기</div>
+            <div style="font-size:14px; font-weight:700; margin-bottom:4px;">파일로 회의록 만들기</div>
+            <div style="font-size:11.5px; color:var(--text-secondary); line-height:1.5;">녹음·영상 파일 선택 → 받아쓰기 → AI 회의록</div>
           </button>
           <button type="button" class="quick-card" data-demo="library" style="background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; padding:16px; text-align:left; cursor:pointer;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-secondary); margin-bottom:12px;"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M4 4.5A2.5 2.5 0 016.5 2H20v20H6.5A2.5 2.5 0 014 19.5V4.5z"/></svg>
@@ -3016,7 +3016,7 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- 토스트 -->
-    <div class="toast" id="toast"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
     <!-- ━━━ 단독 노트 작성/보기 모달 ━━━ -->
     <div class="modal-overlay" id="standaloneNoteModal">
@@ -3366,8 +3366,9 @@ if ('serviceWorker' in navigator) {
         <div class="list-hero">
           <div class="list-hero-left">
             <h1>라이브러리</h1>
-            <p>이 도구로 만든 모든 자료 = 녹음·회의록·노트를 한 곳에서 통합 검색·재생·편집합니다.</p>
+            <p>녹음·회의록·노트를 한 곳에서 찾고 다시 열 수 있습니다.</p>
           </div>
+          <button type="button" class="modal-btn primary" id="libraryUploadBtn">파일로 회의록 만들기</button>
         </div>
         <div class="list-toolbar">
           <div class="list-search">
@@ -3392,12 +3393,13 @@ if ('serviceWorker' in navigator) {
         <div class="library-empty" id="libraryEmpty">
           <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.4" style="opacity:0.4; margin:0 auto var(--space-3);"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
           <h3>아직 저장된 자료가 없습니다</h3>
-          <p>회의를 녹음하거나, 회의록·노트를 작성하면 여기 모입니다.</p>
+          <p>새 회의를 녹음하거나 기존 녹음·영상 파일로 회의록을 만드세요.</p>
           <div style="display:flex; gap:8px; justify-content:center; margin-top:var(--space-4);">
             <button type="button" class="modal-btn primary" id="libraryEmptyStartBtn">새 회의 시작</button>
+            <button type="button" class="modal-btn ghost" id="libraryEmptyUploadBtn">파일 가져오기</button>
           </div>
         </div>
-        <input type="file" id="libraryFileInput" accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg,.flac" multiple style="display:none" />
+        <input type="file" id="libraryFileInput" accept="audio/mpeg,audio/wav,audio/mp4,audio/webm,audio/ogg,audio/flac,video/mp4,.mp3,.wav,.m4a,.webm,.ogg,.flac,.mp4" style="display:none" />
       </div>
     </section>
 
@@ -3417,8 +3419,8 @@ if ('serviceWorker' in navigator) {
       <div class="modal-card" style="max-width: 560px;">
         <div class="modal-header">
           <div>
-            <h2 class="modal-title">결과 형식 선택</h2>
-            <p class="modal-subtitle">이 녹음은 어떻게 정리할까요? 받아쓰기 엔진 통합 후 = AI 비서가 이 형식으로 자동 정리합니다.</p>
+            <h2 class="modal-title">어떤 문서로 정리할까요?</h2>
+            <p class="modal-subtitle">파일을 받아쓴 뒤 선택한 형식으로 AI가 정리합니다.</p>
           </div>
           <button type="button" class="modal-close" id="scenarioClose">&times;</button>
         </div>
@@ -3431,7 +3433,7 @@ if ('serviceWorker' in navigator) {
         </div>
         <div class="modal-footer">
           <button type="button" class="modal-btn ghost" id="scenarioCancel">취소</button>
-          <button type="button" class="modal-btn primary" id="scenarioConfirm">확정 →</button>
+          <button type="button" class="modal-btn primary" id="scenarioConfirm">받아쓰기·회의록 만들기</button>
         </div>
       </div>
     </div>
@@ -4042,7 +4044,7 @@ if ('serviceWorker' in navigator) {
       <div class="dict-stage" id="dictStage">
         <!-- 빈 상태 (모드별 동적 텍스트·아이콘) -->
         <div class="dict-empty-state" id="dictEmpty">
-          <input type="file" id="dictFileInput" accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg,.flac" style="display:none" />
+          <input type="file" id="dictFileInput" accept="audio/mpeg,audio/wav,audio/mp4,audio/webm,audio/ogg,audio/flac,video/mp4,.mp3,.wav,.m4a,.webm,.ogg,.flac,.mp4" style="display:none" />
           <button type="button" class="dict-mic-button" id="dictMicBtn" aria-label="녹음 시작">
             <svg id="dictMicIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 11a4 4 0 008 0V5a4 4 0 00-8 0z"/><path d="M5 11a7 7 0 0014 0M12 18v3M9 21h6"/></svg>
           </button>
@@ -4275,7 +4277,12 @@ if ('serviceWorker' in navigator) {
     // 드래그&드롭
     ['dragenter','dragover'].forEach(ev => dropStage.addEventListener(ev, e => { e.preventDefault(); dropStage.style.background = 'var(--accent-soft)'; }));
     ['dragleave','drop'].forEach(ev => dropStage.addEventListener(ev, e => { e.preventDefault(); dropStage.style.background = ''; }));
-    dropStage.addEventListener('drop', e => { if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+    dropStage.addEventListener('drop', e => {
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+      if (window.__pronoteLibrary?.importFiles) window.__pronoteLibrary.importFiles([file]);
+      else window.showToast?.('파일 가져오기를 준비하지 못했습니다. 앱을 다시 열어주세요');
+    });
 
     function fmtSec(s) {
       const mm = Math.floor(s / 60);
@@ -6783,14 +6790,23 @@ if ('serviceWorker' in navigator) {
         try {
           const url = URL.createObjectURL(file);
           const audio = document.createElement('audio');
+          let settled = false;
+          const finish = duration => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            audio.removeAttribute('src');
+            URL.revokeObjectURL(url);
+            resolve(duration);
+          };
+          const timer = setTimeout(() => finish(0), 8000);
           audio.preload = 'metadata';
           audio.src = url;
           audio.onloadedmetadata = () => {
             const d = audio.duration;
-            URL.revokeObjectURL(url);
-            resolve(isFinite(d) ? d : 0);
+            finish(isFinite(d) ? d : 0);
           };
-          audio.onerror = () => { URL.revokeObjectURL(url); resolve(0); };
+          audio.onerror = () => finish(0);
         } catch { resolve(0); }
       });
     }
@@ -6798,9 +6814,24 @@ if ('serviceWorker' in navigator) {
     // ─── 외부 파일 업로드 처리 (홈·라이브러리·받아쓰기 공용) ───────────
     async function handleUploadedFiles(files, opts = {}) {
       if (!files || !files.length) return [];
+      const allowedExtensions = new Set(['mp3', 'wav', 'm4a', 'webm', 'ogg', 'flac', 'mp4']);
+      const maxBytes = 512 * 1024 * 1024;
       const ids = [];
       for (const file of files) {
         try {
+          const extension = String(file.name || '').split('.').pop().toLowerCase();
+          if (!allowedExtensions.has(extension)) {
+            window.showToast?.('지원하지 않는 파일입니다. MP3, WAV, M4A, WEBM, OGG, FLAC, MP4를 선택하세요');
+            continue;
+          }
+          if (!file.size) {
+            window.showToast?.('내용이 없는 파일은 가져올 수 없습니다');
+            continue;
+          }
+          if (file.size > maxBytes) {
+            window.showToast?.('파일이 너무 큽니다. 512MB 이하 파일을 선택하세요');
+            continue;
+          }
           const dur = await getAudioDuration(file);
           const id = 'rec_' + Date.now() + '_' + Math.floor(Math.random()*9999);
           const record = {
@@ -6828,9 +6859,34 @@ if ('serviceWorker' in navigator) {
           window.showToast?.('업로드 실패: ' + (e.message || file.name));
         }
       }
-      window.showToast?.(`${ids.length}개 파일 라이브러리에 추가됨`);
+      if (ids.length) window.showToast?.('파일을 가져왔습니다. 원하는 문서 형식을 선택하세요');
       try { await refreshLibrary(); } catch {}
       return ids;
+    }
+
+    function setFileImportBusy(busy) {
+      ['homeUploadCard', 'libraryUploadBtn', 'libraryEmptyUploadBtn'].forEach(id => {
+        const button = document.getElementById(id);
+        if (!button) return;
+        button.disabled = busy;
+        button.setAttribute('aria-busy', String(busy));
+      });
+    }
+
+    async function importFilesAndChoose(files) {
+      if (!files || !files.length) return [];
+      setFileImportBusy(true);
+      window.showToast?.('파일을 안전하게 가져오는 중…');
+      try {
+        const ids = await handleUploadedFiles(files);
+        if (ids[0]) {
+          window.switchView?.('library');
+          setTimeout(() => openScenarioModal(ids[0]), 250);
+        }
+        return ids;
+      } finally {
+        setFileImportBusy(false);
+      }
     }
 
     // ─── 라이브러리 렌더 (통합 = 녹음 + 회의록 + 노트) ──────────────
@@ -7616,7 +7672,7 @@ if ('serviceWorker' in navigator) {
 
     async function runTranscribeForRecord(recId) {
       const r = await dbGet(recId);
-      if (!r || !r.blob) { window.showToast?.('파일 X'); return; }
+      if (!r || !r.blob) { window.showToast?.('원본 파일을 찾을 수 없습니다. 파일을 다시 가져오세요'); return; }
       let modelChoice = 'medium';
       let diarizeOn = false;
       try {
@@ -7624,7 +7680,7 @@ if ('serviceWorker' in navigator) {
         modelChoice = s?.transcribe?.model || 'medium';
         diarizeOn = !!s?.transcribe?.diarize;
       } catch {}
-      const minutesEst = modelChoice === 'small' ? Math.ceil((r.durationSec || 0) / 60 / 7) : Math.ceil((r.durationSec || 0) / 60 / 3);
+      const minutesEst = Math.max(1, modelChoice === 'small' ? Math.ceil((r.durationSec || 0) / 60 / 7) : Math.ceil((r.durationSec || 0) / 60 / 3));
       window.showToast?.(`받아쓰기 시작 — ${modelChoice} 모델 · 약 ${minutesEst}분 예상`);
       updateMeetingProgress(recId, { progress: `받아쓰기 준비 중… (약 ${minutesEst}분 예상) — 창을 닫으셔도 됩니다` });
       try {
@@ -7795,6 +7851,7 @@ if ('serviceWorker' in navigator) {
       playRecording, downloadRecording, deleteRecording, playVideo, downloadVideo,
       runTranscribe: runTranscribeForRecord,
       runSummarize: runSummarizeForRecord,
+      importFiles: importFilesAndChoose,
     };
 
     // ─── DOMContentLoaded 후 바인딩 ──────────────────────────────
@@ -7818,11 +7875,8 @@ if ('serviceWorker' in navigator) {
       libraryFileInput?.addEventListener('change', async e => {
         const files = Array.from(e.target.files || []);
         if (!files.length) return;
-        const ids = await handleUploadedFiles(files);
-        e.target.value = '';
-        // 라이브러리 페이지로 이동 + 첫 파일 시나리오 모달 자동
-        window.switchView?.('library');
-        if (ids[0]) setTimeout(() => openScenarioModal(ids[0]), 250);
+        try { await importFilesAndChoose(files); }
+        finally { e.target.value = ''; }
       });
 
       // 받아쓰기 페이지의 dictFileInput = 옛 Whisper 호출 핸들러를 우리 라이브러리 흐름으로 인터셉트
@@ -7833,10 +7887,8 @@ if ('serviceWorker' in navigator) {
           if (!files.length) return;
           // capture phase = 옛 handleFile(transcribe API 호출)을 차단
           e.stopImmediatePropagation();
-          const ids = await handleUploadedFiles(files);
-          e.target.value = '';
-          window.switchView?.('library');
-          if (ids[0]) setTimeout(() => openScenarioModal(ids[0]), 250);
+          try { await importFilesAndChoose(files); }
+          finally { e.target.value = ''; }
         }, true);  // capture
       }
 
