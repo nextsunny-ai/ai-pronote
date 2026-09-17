@@ -4450,7 +4450,16 @@ if ('serviceWorker' in navigator) {
     // ★ v1.4 중단 녹음 복구 배너 — 녹음 중 크래시/새로고침 시 자동저장(draft)된 녹음을 살림
     (async function recoverDraft() {
       try {
-        const d = await window.__pronoteDB?.get?.('__draft_recording__');
+        // 이 블록은 IndexedDB 모듈보다 먼저 파싱된다. 초기 로드에서 DB가 준비되기 전에
+        // optional chaining을 평가하면 복구본이 있어도 영원히 건너뛰므로 준비 완료를 기다린다.
+        for (let i = 0; i < 100 && !window.__pronoteDB?.get; i++) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        if (!window.__pronoteDB?.get) {
+          console.warn('[Rec] 복구 저장소를 준비하지 못했습니다');
+          return;
+        }
+        const d = await window.__pronoteDB.get('__draft_recording__');
         if (!d || !d.blob || (d.durationSec || 0) < 3) return;
         const bar = document.createElement('div');
         bar.id = 'dictRecoverBar';
@@ -4459,24 +4468,49 @@ if ('serviceWorker' in navigator) {
         bar.innerHTML = '<span style="flex:1;">⚠️ 중단된 녹음이 있습니다 — <b>' + escapeHtml(d.title || d.filename || '녹음') + '</b> (' + mins + '분 ' + secs + '초). 복구할까요?</span>' +
           '<button type="button" id="recoverRun" class="dict-rec-btn" style="white-space:nowrap;">복구</button>' +
           '<button type="button" id="recoverSkip" class="dict-rec-btn" style="white-space:nowrap;">버리기</button>';
-        const stage = $('dictStage');
-        if (stage && stage.parentNode) stage.parentNode.insertBefore(bar, stage);
-        else document.body.appendChild(bar);
-        document.getElementById('recoverRun').onclick = async () => {
-          bar.remove();
+        // 복구 안내는 사용자가 앱을 다시 열었을 때 실제로 보이는 현재 화면 맨 위에 둔다.
+        // 받아쓰기 화면 내부에만 넣으면 기본 홈 화면에서는 DOM에 있어도 숨겨진다.
+        const host = document.querySelector('.view.active') || document.body;
+        host.insertBefore(bar, host.firstChild);
+        const recoverRun = document.getElementById('recoverRun');
+        const recoverSkip = document.getElementById('recoverSkip');
+        recoverRun.onclick = async () => {
+          recoverRun.disabled = true;
+          recoverSkip.disabled = true;
+          recoverRun.textContent = '복구 중…';
           const newId = 'rec_recovered_' + Date.now();
           const sk = d.mode === 'lecture' ? 'lecture' : d.mode === 'interview' ? 'interview' : 'meeting';
-          await window.__pronoteDB.put({ ...d, id: newId, isDraft: false, source: 'recovered',
-            filename: (d.filename || '복구된 녹음').replace('(중단된 녹음) ', '복구_'),
-            endedAt: Date.now(), transcribed: false, scenarioKey: sk });
-          await window.__pronoteDB.delete('__draft_recording__');
-          try { window.__pronoteLibrary?.refresh?.(); } catch {}
-          window.showToast?.('녹음 복구 완료 — 받아쓰기를 시작합니다');
-          setTimeout(() => { try { window.__pronoteLibrary?.runTranscribe?.(newId); } catch (e) {} }, 600);
+          try {
+            await window.__pronoteDB.put({ ...d, id: newId, isDraft: false, source: 'recovered',
+              filename: (d.filename || '복구된 녹음').replace('(중단된 녹음) ', '복구_'),
+              endedAt: Date.now(), transcribed: false, scenarioKey: sk });
+            await window.__pronoteDB.delete('__draft_recording__');
+            bar.remove();
+            try { window.__pronoteLibrary?.refresh?.(); } catch {}
+            window.showToast?.('녹음 복구 완료 — 받아쓰기를 시작합니다');
+            setTimeout(() => { try { window.__pronoteLibrary?.runTranscribe?.(newId); } catch (e) {} }, 600);
+          } catch (e) {
+            console.error('[Rec] 중단 녹음 복구 실패', e);
+            recoverRun.textContent = '다시 복구';
+            recoverRun.disabled = false;
+            recoverSkip.disabled = false;
+            window.showToast?.('복구하지 못했습니다. 원본은 보존되어 있으니 다시 시도하세요');
+          }
         };
-        document.getElementById('recoverSkip').onclick = async () => {
-          bar.remove();
-          try { await window.__pronoteDB.delete('__draft_recording__'); } catch {}
+        recoverSkip.onclick = async () => {
+          recoverRun.disabled = true;
+          recoverSkip.disabled = true;
+          recoverSkip.textContent = '삭제 중…';
+          try {
+            await window.__pronoteDB.delete('__draft_recording__');
+            bar.remove();
+          } catch (e) {
+            console.error('[Rec] 중단 녹음 삭제 실패', e);
+            recoverSkip.textContent = '다시 버리기';
+            recoverRun.disabled = false;
+            recoverSkip.disabled = false;
+            window.showToast?.('삭제하지 못했습니다. 녹음은 그대로 보존되어 있습니다');
+          }
         };
       } catch (e) { /* 무시 */ }
     })();
