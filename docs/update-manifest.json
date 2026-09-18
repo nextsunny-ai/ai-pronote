@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "version": "v1.5.0-beta8.20260918",
+  "channel": "beta",
+  "published_at": "2026-09-18T05:08:47Z",
+  "release_notes_url": "https://github.com/nextsunny-ai/ai-pronote/releases/tag/v1.5.0-beta8-20260918",
+  "artifacts": {
+    "windows": {
+      "url": "https://github.com/nextsunny-ai/ai-pronote/releases/download/v1.5.0-beta8-20260918/AI_PRONOTE_v1.5_windows_beta8_2026-09-18.zip",
+      "sha256": "47d11203fc57f8a3da90c0ddb5efd994a9fc52bf21a33b7c084fcb379e4d505f",
+      "size": 677612
+    },
+    "mac": {
+      "url": "https://github.com/nextsunny-ai/ai-pronote/releases/download/v1.5.0-beta8-20260918/AI_PRONOTE_v1.5_mac_beta8_2026-09-18.zip",
+      "sha256": "354a9c41e820c2ce94f6784df96883a42403cf78d75472daa291938123a377f9",
+      "size": 813317
+    }
+  }
+}
