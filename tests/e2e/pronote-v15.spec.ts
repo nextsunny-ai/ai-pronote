@@ -472,11 +472,12 @@ test.describe('필기 저장·복원 계약', () => {
     await page.locator('#mynoteBlockContent').fill('문서 저장과 보내기 점검 본문');
     await expect(page.locator('#mynoteSaveState')).toContainText('저장됨', { timeout: 3000 });
 
-    for (const format of ['txt', 'md', 'html', 'native']) {
+    for (const format of ['txt', 'md', 'html', 'png', 'native']) {
       const downloadPromise = page.waitForEvent('download');
       await page.locator('#mynoteExportSelect').selectOption(format);
       const download = await downloadPromise;
       expect(download.suggestedFilename()).toContain('내보내기 점검 노트');
+      if (format === 'png') expect(download.suggestedFilename()).toMatch(/\.png$/);
     }
     await expect(page.locator('#mynoteExportSelect')).toContainText('인쇄 · PDF 저장');
     await page.evaluate(() => {
@@ -485,6 +486,68 @@ test.describe('필기 저장·복원 계약', () => {
     });
     await page.locator('#mynoteShareBtn').click();
     expect(await page.evaluate(() => (window as typeof window & { __sharedNote?: string }).__sharedNote)).toContain('문서 저장과 보내기 점검 본문');
+  });
+
+  test('프로노트 JSON 백업을 원본을 덮어쓰지 않고 새 노트로 복구한다', async ({ page }) => {
+    await openApp(page);
+    await page.locator('#homeNoteOnlyCard').click();
+    await expect(page.locator('#view-result')).toHaveClass(/active/);
+    await expect(page.locator('#mynoteBlock')).toHaveClass(/fullpage/);
+    await page.evaluate(() => {
+      const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+      for (let i = 0; i < 51; i += 1) meetings.push({ id: `preserve-${i}`, title: `보존 노트 ${i}`, note: `<p>보존 ${i}</p>`, standalone: true });
+      localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(meetings));
+    });
+    const before = await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]').length);
+    await page.locator('#mynoteImportInput').setInputFiles({
+      name: '복구시험.pronote.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify({
+        format: 'ai-pronote-note', version: 1, title: '백업에서 복구한 노트',
+        html: '<h2>복구 제목</h2><p>다시 편집할 수 있어야 하는 본문</p><script>window.__bad = true</script>',
+        text: '복구 제목\n다시 편집할 수 있어야 하는 본문', createdAt: '2026-09-18T00:00:00.000Z'
+      }))
+    });
+    await expect(page.locator('#toast')).toContainText('새 노트로 복구했습니다');
+    await expect(page.locator('#mynoteTitleInput')).toHaveValue('백업에서 복구한 노트');
+    await expect(page.locator('#mynoteBlockContent')).toContainText('다시 편집할 수 있어야 하는 본문');
+    expect(await page.evaluate(() => (window as typeof window & { __bad?: boolean }).__bad)).toBeUndefined();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]').length)).toBe(before + 1);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]').some((m: { id: string }) => m.id === 'preserve-50'))).toBeTruthy();
+  });
+
+  test('너무 긴 PNG는 잘린 성공 파일 대신 PDF·HTML 사용을 안내한다', async ({ page }) => {
+    await openApp(page);
+    await page.locator('#homeNoteOnlyCard').click();
+    await expect(page.locator('#view-result')).toHaveClass(/active/);
+    await page.locator('#mynoteBlockContent').fill(Array.from({ length: 170 }, (_, i) => `길이 점검 문장 ${i}`).join('\n'));
+    await page.locator('#mynoteExportSelect').selectOption('png');
+    await expect(page.locator('#toast')).toContainText('PDF 또는 HTML');
+  });
+
+  test('PNG 텍스트 스냅샷은 정상 길이 노트의 마지막 줄까지 캔버스 안에 그린다', async ({ page }) => {
+    await openApp(page);
+    await page.locator('#homeNoteOnlyCard').click();
+    await expect(page.locator('#view-result')).toHaveClass(/active/);
+    await page.evaluate(() => {
+      const original = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function(text: string, x: number, y: number, maxWidth?: number) {
+        const w = window as typeof window & { __pngDraws?: Array<{ text: string; y: number; height: number }> };
+        (w.__pngDraws ||= []).push({ text, y, height: this.canvas.height });
+        return maxWidth === undefined ? original.call(this, text, x, y) : original.call(this, text, x, y, maxWidth);
+      };
+    });
+    const finalLine = '마지막 줄도 반드시 포함';
+    await page.locator('#mynoteBlockContent').fill([...Array.from({ length: 20 }, (_, i) => `본문 ${i}`), finalLine].join('\n'));
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('#mynoteExportSelect').selectOption('png');
+    await downloadPromise;
+    const draw = await page.evaluate(finalText => {
+      const all = (window as typeof window & { __pngDraws?: Array<{ text: string; y: number; height: number }> }).__pngDraws || [];
+      return all.find(item => item.text === finalText);
+    }, finalLine);
+    expect(draw).toBeTruthy();
+    expect(draw!.y).toBeLessThan(draw!.height);
   });
 
   test('첨부 이미지를 줄여 자동저장하고 새로고침 뒤에도 복원한다', async ({ page }) => {

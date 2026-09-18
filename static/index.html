@@ -3593,9 +3593,14 @@ if ('serviceWorker' in navigator) {
                 <option value="txt">텍스트 (.txt)</option>
                 <option value="md">Markdown (.md)</option>
                 <option value="html">웹 문서 (.html)</option>
+                <option value="png">텍스트 스냅샷 (.png · 사진 제외)</option>
                 <option value="native">노트 백업 (.json)</option>
                 <option value="pdf">인쇄 · PDF 저장</option>
               </select>
+              <button class="mynote-tool-btn" id="mynoteImportBtn" title="프로노트 백업 파일을 새 노트로 복구">
+                백업 불러오기
+              </button>
+              <input type="file" id="mynoteImportInput" accept=".json,.pronote.json,application/json" hidden />
               <button class="mynote-tool-btn" id="mynoteShareBtn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5l6.8-4M8.6 13.5l6.8 4"/></svg>
                 보내기
@@ -7049,13 +7054,47 @@ if ('serviceWorker' in navigator) {
       a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
-    function exportNote(format) {
+    async function exportNotePng(p, base) {
+      const width = 1000, pad = 72, bodyWidth = width - pad * 2;
+      const probe = document.createElement('canvas').getContext('2d');
+      probe.font = '24px system-ui, sans-serif';
+      const lines = [];
+      String(p.text || '').split(/\n/).forEach(paragraph => {
+        if (!paragraph) { lines.push(''); return; }
+        let line = '';
+        Array.from(paragraph).forEach(ch => {
+          const candidate = line + ch;
+          if (probe.measureText(candidate).width > bodyWidth && line) { lines.push(line); line = ch; }
+          else line = candidate;
+        });
+        lines.push(line);
+      });
+      const textStartY = 205;
+      const requestedHeight = textStartY + lines.length * 40 + pad;
+      if (requestedHeight > 6000) throw new Error('긴 노트는 PNG 대신 PDF 또는 HTML로 내보내 주세요.');
+      const height = Math.max(420, requestedHeight);
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = '#20201e'; ctx.font = '700 44px system-ui, sans-serif';
+      ctx.fillText(p.title, pad, 105, bodyWidth);
+      ctx.strokeStyle = '#deddd8'; ctx.beginPath(); ctx.moveTo(pad, 145); ctx.lineTo(width - pad, 145); ctx.stroke();
+      ctx.font = '24px system-ui, sans-serif';
+      let y = textStartY;
+      lines.forEach(line => { ctx.fillText(line, pad, y, bodyWidth); y += 40; });
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('PNG 파일을 만들지 못했습니다.');
+      downloadFile(`${base}.png`, blob, 'image/png');
+    }
+    async function exportNote(format) {
       if (!persistCurrentNote()) { showToast('저장 후 내보내기에 실패했습니다.'); return; }
       const p = currentNotePayload();
       const base = safeFilename(p.title);
       if (format === 'txt') downloadFile(`${base}.txt`, `${p.title}\n\n${p.text}`, 'text/plain;charset=utf-8');
       if (format === 'md') downloadFile(`${base}.md`, `# ${p.title}\n\n${p.text}`, 'text/markdown;charset=utf-8');
       if (format === 'html') downloadFile(`${base}.html`, `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${escapeHtml(p.title)}</title><style>body{max-width:760px;margin:48px auto;padding:0 24px;font:16px/1.75 system-ui,sans-serif;color:#20201e}h1{font-size:32px}</style></head><body><h1>${escapeHtml(p.title)}</h1>${p.html}</body></html>`, 'text/html;charset=utf-8');
+      if (format === 'png') await exportNotePng(p, base);
       if (format === 'native') downloadFile(`${base}.pronote.json`, JSON.stringify(p, null, 2), 'application/json;charset=utf-8');
       if (format === 'pdf') {
         const w = window.open('', '_blank');
@@ -7069,7 +7108,65 @@ if ('serviceWorker' in navigator) {
     exportSelect?.addEventListener('change', () => {
       const format = exportSelect.value;
       exportSelect.value = '';
-      if (format) exportNote(format);
+      if (format) exportNote(format).catch(err => showToast(err?.message || '노트 내보내기에 실패했습니다.'));
+    });
+    const importInput = document.getElementById('mynoteImportInput');
+    const importBtn = document.getElementById('mynoteImportBtn');
+    let noteImportInProgress = false;
+    importBtn?.addEventListener('click', () => { if (!noteImportInProgress) importInput?.click(); });
+    importInput?.addEventListener('change', async () => {
+      const file = importInput.files?.[0];
+      importInput.value = '';
+      if (!file || noteImportInProgress) return;
+      noteImportInProgress = true;
+      if (importBtn) { importBtn.disabled = true; importBtn.setAttribute('aria-busy', 'true'); importBtn.textContent = '불러오는 중…'; }
+      let importedId = null;
+      let importCommitted = false;
+      try {
+        if (file.size > 8 * 1024 * 1024) throw new Error('노트 백업은 8MB 이하만 불러올 수 있습니다.');
+        const raw = JSON.parse(await file.text());
+        if (raw?.format !== 'ai-pronote-note' || raw?.version !== 1 || typeof raw?.html !== 'string') {
+          throw new Error('프로노트에서 내보낸 노트 백업 파일이 아닙니다.');
+        }
+        const safeHtml = sanitizeNoteHtml(raw.html);
+        const now = new Date();
+        const id = `note_import_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        importedId = id;
+        const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+        let meetings = [];
+        try { meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]'); } catch {}
+        meetings.unshift({
+          id,
+          title: String(raw.title || '복구한 노트').trim().slice(0, 120) || '복구한 노트',
+          tag: '노트', date, dateLabel: '오늘', duration: '', attendees: 0,
+          summary: '', summaryPending: false, note: safeHtml, noteOnly: true,
+          createdAt: raw.createdAt || now.toISOString(), updatedAt: now.toISOString()
+        });
+        localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(meetings));
+        const switched = await switchNoteMeeting(id);
+        if (!switched) throw new Error('복구한 노트를 열지 못했습니다. 다시 시도해 주세요.');
+        importCommitted = true;
+        window.__pronoteRenderMyNotesList?.();
+        // 복구 직후에는 다른 화면 렌더 훅이 끼어들어도 새 노트가 즉시 보이게 고정한다.
+        loadedMeetingId = id;
+        if (titleInput) titleInput.value = meetings[0].title;
+        content.innerHTML = safeHtml;
+        noteDirty = false;
+        setSaveState('저장됨');
+        updateMeta();
+        showToast('백업을 새 노트로 복구했습니다');
+      } catch (err) {
+        if (importedId && !importCommitted) {
+          try {
+            const latest = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+            localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(latest.filter(item => item.id !== importedId)));
+          } catch {}
+        }
+        showToast(err?.message || '노트 백업을 불러오지 못했습니다.');
+      } finally {
+        noteImportInProgress = false;
+        if (importBtn) { importBtn.disabled = false; importBtn.removeAttribute('aria-busy'); importBtn.textContent = '백업 불러오기'; }
+      }
     });
     document.getElementById('mynoteShareBtn')?.addEventListener('click', async () => {
       if (!persistCurrentNote()) { showToast('저장 후 보내기에 실패했습니다.'); return; }
