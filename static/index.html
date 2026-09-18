@@ -1398,6 +1398,7 @@
   #view-result.mynote-fullpage .result-actionbar {
     display: none;
   }
+  #view-result.standalone-note #meetingResultTabs { display: none !important; }
   /* 풀 페이지 = 우상단 데모 스위처도 숨김 */
   body.mynote-fullpage-active .demo-switcher { display: none; }
 
@@ -1425,6 +1426,21 @@
     font-weight: 500;
   }
   .mynote-block.fullpage .mynote-fullpage-meta { display: block; }
+  .mynote-document-head {
+    display: none;
+    margin: 2px 0 var(--space-5);
+  }
+  .mynote-block.fullpage .mynote-document-head { display: block; }
+  .mynote-title-input {
+    width: 100%; border: 0; outline: 0; background: transparent;
+    color: var(--text-primary); font-family: inherit; font-size: clamp(25px, 3vw, 36px);
+    font-weight: 700; line-height: 1.25;
+    letter-spacing: -0.035em; padding: 0; margin: 0 0 8px;
+  }
+  .mynote-title-input::placeholder { color: var(--text-quaternary); }
+  .mynote-save-state { font-size: 11.5px; color: var(--text-quaternary); }
+  .mynote-save-state[data-state="saving"] { color: var(--accent); }
+  .mynote-save-state[data-state="error"] { color: var(--danger); }
 
   /* 풀 페이지 툴바 (다른 노트·다운로드·이미지) */
   .mynote-toolbar {
@@ -2631,6 +2647,12 @@
     --v15-muted: #66675F; --v15-border: #DDDAD1; --v15-warm: #9A735B;
     --v15-success: #287A55; --v15-warning: #9A651F; --v15-danger: #B13E3E;
   }
+  .mynote-export-select {
+    appearance: none; min-width: 126px; padding-right: 28px;
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: calc(100% - 13px) 50%, calc(100% - 9px) 50%;
+    background-size: 4px 4px, 4px 4px; background-repeat: no-repeat;
+  }
   :where(button, a, input, textarea, select, [contenteditable="true"]):focus-visible {
     outline: 3px solid #376A8A; outline-offset: 2px;
   }
@@ -3045,7 +3067,7 @@ if ('serviceWorker' in navigator) {
           <div class="form-row">
             <label class="form-label" for="standaloneNoteContent">내용</label>
             <div class="mynote-block-content" id="standaloneNoteContent" contenteditable="true" style="min-height:200px;">메모를 시작하세요…</div>
-            <div class="form-hint">개인용 노트입니다. 회의록과 별개로 저장 = 공유에서 자동 제외.</div>
+            <div class="form-hint">개인용 노트입니다. 회의록 자동 공유에서는 제외되며 직접 내보내기는 가능합니다.</div>
           </div>
         </div>
         <div class="modal-foot">
@@ -3344,7 +3366,7 @@ if ('serviceWorker' in navigator) {
             <p>회의 중 직접 쓴 개인 메모를 한 곳에서 모아 봅니다. 카드 클릭 = 결과 페이지에서 자세히 보기·편집.</p>
             <div class="privacy-note">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              내 노트는 회의록 본문과 별도 보관됩니다. 이메일·다운로드·공유에서 자동 제외 — 나만 봅니다.
+              내 노트는 회의록 자동 발송·공유에서 제외됩니다. 사용자가 직접 내보내거나 보낼 때만 외부로 나갑니다.
             </div>
           </div>
           <button class="modal-btn primary" id="newStandaloneNoteBtn" style="display:inline-flex; align-items:center; gap:6px;">
@@ -3525,16 +3547,20 @@ if ('serviceWorker' in navigator) {
 
             <!-- 풀 페이지 메타 (언제·어느 회의) -->
             <div class="mynote-fullpage-meta" id="mynoteFullpageMeta"></div>
+            <div class="mynote-document-head">
+              <input class="mynote-title-input" id="mynoteTitleInput" type="text" maxlength="120" placeholder="제목 없는 노트" aria-label="노트 제목" />
+              <span class="mynote-save-state" id="mynoteSaveState" role="status" aria-live="polite">저장됨</span>
+            </div>
 
             <!-- 풀 페이지 툴바 -->
             <div class="mynote-toolbar">
               <div class="mynote-list-dropdown">
-                <button class="mynote-tool-btn" id="mynoteListBtn">
+                <button class="mynote-tool-btn" id="mynoteListBtn" aria-expanded="false" aria-controls="mynoteListMenu" aria-haspopup="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
                   다른 노트
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:10px;height:10px;"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
-                <div class="mynote-list-menu" id="mynoteListMenu">
+                <div class="mynote-list-menu" id="mynoteListMenu" role="dialog" aria-label="다른 노트 선택">
                   <div class="mynote-list-search">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
                     <input type="search" id="mynoteListSearchInput" placeholder="노트 제목·내용 검색" autocomplete="off" />
@@ -3562,9 +3588,17 @@ if ('serviceWorker' in navigator) {
                 <span class="pen-swatch" data-color="#D4923D" style="background:#D4923D;"></span>
               </span>
               <span class="mynote-tool-divider"></span>
-              <button class="mynote-tool-btn" id="mynoteDownloadBtn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-                다운로드
+              <select class="mynote-tool-btn mynote-export-select" id="mynoteExportSelect" aria-label="노트 내보내기 형식">
+                <option value="">내보내기…</option>
+                <option value="txt">텍스트 (.txt)</option>
+                <option value="md">Markdown (.md)</option>
+                <option value="html">웹 문서 (.html)</option>
+                <option value="native">노트 백업 (.json)</option>
+                <option value="pdf">인쇄 · PDF 저장</option>
+              </select>
+              <button class="mynote-tool-btn" id="mynoteShareBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5l6.8-4M8.6 13.5l6.8 4"/></svg>
+                보내기
               </button>
               <button class="mynote-tool-btn primary" id="mynoteSaveBtn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
@@ -3575,7 +3609,7 @@ if ('serviceWorker' in navigator) {
               <div class="mynote-block-title-wrap">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4z"/></svg>
                 <div class="mynote-block-title">내가 쓴 노트</div>
-                <span class="privacy-mark">개인용 · 공유 X</span>
+                <span class="privacy-mark">개인용 · 자동 공유 제외</span>
                 <span class="mynote-block-meta" id="mynoteCharCount">0 글자</span>
               </div>
               <div class="mynote-block-toolbar">
@@ -3625,7 +3659,7 @@ if ('serviceWorker' in navigator) {
             </div>
             <div class="mynote-block-foot">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              이 노트는 회의록 본문과 별도 보관됩니다. 이메일·다운로드·공유에서 자동 제외.
+              이 노트는 회의록 자동 발송·공유에서 제외됩니다. 직접 내보내기·보내기는 사용자가 선택할 때만 실행됩니다.
             </div>
           </section>
 
@@ -5342,7 +5376,7 @@ if ('serviceWorker' in navigator) {
   function renderMyNotesGrid(filterMode, q) {
     const grid = document.getElementById('mynotesGrid');
     if (!grid) return;
-    const all = loadMeetings().filter(m => m.note && m.note.trim());
+    const all = loadMeetings().filter(m => m.standalone || (m.note && m.note.trim()));
     const needle = (q || '').trim().toLowerCase();
     const filtered = all.filter(m => {
       if (filterMode === '회의록 작성에 참고' && !m.noteUsedForMeeting) return false;
@@ -5514,7 +5548,45 @@ if ('serviceWorker' in navigator) {
     }
     function close() { modal.classList.remove('open'); }
 
-    newBtn.addEventListener('click', openCreate);
+    async function createInFullEditor() {
+      let all = [];
+      try { all = JSON.parse(localStorage.getItem(MEETINGS_KEY) || '[]'); } catch {}
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth()+1).padStart(2,'0');
+      const dd = String(now.getDate()).padStart(2,'0');
+      const id = 'note-' + Date.now();
+      const newNote = {
+        id,
+        title: '제목 없는 노트',
+        tag: '단독 메모',
+        date: `${yyyy}-${mm}-${dd}`,
+        dateLabel: '오늘',
+        duration: '—', attendees: 0, summary: '',
+        note: '<p><br></p>', noteUsedForMeeting: false, standalone: true,
+        createdAt: now.toISOString(), updatedAt: now.toISOString()
+      };
+      all.unshift(newNote);
+      try {
+        localStorage.setItem(MEETINGS_KEY, JSON.stringify(all));
+      } catch {
+        showToast('새 노트를 만들지 못했습니다. 저장 공간을 확인해 주세요.');
+        return;
+      }
+      const switched = await window.__pronoteSwitchMyNoteMeeting?.(id);
+      if (!switched) {
+        try {
+          const latest = JSON.parse(localStorage.getItem(MEETINGS_KEY) || '[]');
+          localStorage.setItem(MEETINGS_KEY, JSON.stringify(latest.filter(note => note.id !== id)));
+        } catch {}
+        return;
+      }
+      if (typeof switchView === 'function') switchView('result-mynote');
+      window.__pronoteShowMyNoteFullPage?.();
+      setTimeout(() => document.getElementById('mynoteTitleInput')?.select(), 120);
+    }
+
+    newBtn.addEventListener('click', createInFullEditor);
     closeBtn.addEventListener('click', close);
     cancelBtn.addEventListener('click', close);
     modal.addEventListener('click', e => { if (e.target === modal) close(); });
@@ -5547,7 +5619,9 @@ if ('serviceWorker' in navigator) {
         summary: '',
         note: c || '<p>(빈 노트)</p>',
         noteUsedForMeeting: false,
-        standalone: true
+        standalone: true,
+        createdAt: today.toISOString(),
+        updatedAt: today.toISOString()
       };
       all.unshift(newNote);
       localStorage.setItem(MEETINGS_KEY, JSON.stringify(all));
@@ -6746,13 +6820,15 @@ if ('serviceWorker' in navigator) {
       const dow = dayNames[today.getDay()];
       const dateStr = meeting?.date || `${yy}-${mm}-${dd}`;
       const dowStr = meeting?.date ? '' : ` (${dow})`;
-      const titlePart = meeting ? ` · <b>${escapeHtml(meeting.title)}</b>` : '';
+      const titlePart = meeting && !meeting.standalone ? ` · <b>${escapeHtml(meeting.title)}</b>` : '';
       metaEl.innerHTML = `${escapeHtml(dateStr)}${dowStr}${titlePart}`;
     }
     function showMyNoteMode(opts) {
       const o = opts || {};
       const fullPage = !!o.fullPage;
       const showBack = o.back !== false && !fullPage;
+      const ref = getCurMeetingRef?.();
+      viewResult.classList.toggle('standalone-note', !!ref?.m?.standalone);
       getMeetingEls().forEach(el => el.style.display = 'none');
       block.classList.add('visible');
       block.classList.toggle('fullpage', fullPage);
@@ -6793,6 +6869,13 @@ if ('serviceWorker' in navigator) {
 
     // 풀 페이지 툴바 = 저장·다운로드·이미지·노트 리스트
     const NOTE_DRAFT_KEY = 'ai_pronote.note_draft.v1';
+    const titleInput = document.getElementById('mynoteTitleInput');
+    const saveState = document.getElementById('mynoteSaveState');
+    function setSaveState(label, state = '') {
+      if (!saveState) return;
+      saveState.textContent = label;
+      saveState.dataset.state = state;
+    }
 
     // ── 회의별 노트 로드·저장 ──
     // 현재 보고 있는 회의(current_view_meeting)의 note 필드를 읽고/쓴다.
@@ -6808,10 +6891,15 @@ if ('serviceWorker' in navigator) {
     }
     function sanitizeNoteHtml(value) {
       const template = document.createElement('template'); template.innerHTML = value || '';
-      const allowed = new Set(['B','STRONG','I','EM','U','BR','P','DIV','UL','OL','LI','H1','H2','H3','BLOCKQUOTE','SPAN']);
+      const allowed = new Set(['B','STRONG','I','EM','U','BR','P','DIV','UL','OL','LI','H1','H2','H3','BLOCKQUOTE','SPAN','IMG']);
       template.content.querySelectorAll('*').forEach(el => {
         if (!allowed.has(el.tagName)) { el.replaceWith(document.createTextNode(el.textContent || '')); return; }
-        [...el.attributes].forEach(attr => { if (attr.name !== 'class') el.removeAttribute(attr.name); });
+        if (el.tagName === 'IMG') {
+          [...el.attributes].forEach(attr => { if (!['src','alt'].includes(attr.name)) el.removeAttribute(attr.name); });
+          if (!/^data:image\/(png|jpeg|gif|webp);base64,/i.test(el.getAttribute('src') || '')) el.remove();
+        } else {
+          [...el.attributes].forEach(attr => { if (attr.name !== 'class') el.removeAttribute(attr.name); });
+        }
       });
       return template.innerHTML;
     }
@@ -6835,14 +6923,17 @@ if ('serviceWorker' in navigator) {
       const ref = getCurMeetingRef(nextMeetingId);
       if (ref) {
         content.innerHTML = sanitizeNoteHtml(ref.m.note || '');
+        if (titleInput) titleInput.value = ref.m.title || '';
       } else {
         try {
           const draft = localStorage.getItem(NOTE_DRAFT_KEY);
           content.innerHTML = sanitizeNoteHtml(draft || '');
         } catch { content.innerHTML = ''; }
+        if (titleInput) titleInput.value = '';
       }
       loadedMeetingId = nextMeetingId;
       noteDirty = false;
+      setSaveState('저장됨');
       updateMeta();
       return true;
     }
@@ -6852,17 +6943,22 @@ if ('serviceWorker' in navigator) {
       const ref = getCurMeetingRef(meetingId);
       if (ref) {
         ref.m.note = html;
+        if (titleInput) ref.m.title = titleInput.value.trim() || '제목 없는 노트';
+        ref.m.updatedAt = new Date().toISOString();
         try {
           localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(ref.arr));
           noteDirty = false;
+          setSaveState(`저장됨 · ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`);
+          window.__pronoteRenderMyNotesList?.();
           return true;
-        } catch { return false; }
+        } catch { setSaveState('저장 실패', 'error'); return false; }
       }
       try {
         localStorage.setItem(NOTE_DRAFT_KEY, html);
         noteDirty = false;
+        setSaveState('저장됨');
         return true;
-      } catch { return false; }
+      } catch { setSaveState('저장 실패', 'error'); return false; }
     }
     let noteSwitchInProgress = false;
     async function switchNoteMeeting(nextMeetingId) {
@@ -6919,44 +7015,121 @@ if ('serviceWorker' in navigator) {
     // 자동 저장 (편집 멈춘 후 1초)
     content.addEventListener('input', () => {
       noteDirty = true;
+      setSaveState('저장 중…', 'saving');
       clearTimeout(autoSaveTimer);
       const targetMeetingId = loadedMeetingId;
       autoSaveTimer = setTimeout(() => persistCurrentNote(targetMeetingId), 1000);
     });
+    titleInput?.addEventListener('input', () => {
+      noteDirty = true;
+      setSaveState('저장 중…', 'saving');
+      clearTimeout(autoSaveTimer);
+      const targetMeetingId = loadedMeetingId;
+      autoSaveTimer = setTimeout(() => persistCurrentNote(targetMeetingId), 700);
+    });
 
-    // 다운로드 = .txt
-    const downloadBtn = document.getElementById('mynoteDownloadBtn');
-    if (downloadBtn) {
-      downloadBtn.addEventListener('click', () => {
-        const text = content.innerText.trim();
-        if (!text) { showToast('빈 노트입니다'); return; }
-        const today = new Date();
-        const y = today.getFullYear();
-        const m = String(today.getMonth()+1).padStart(2,'0');
-        const d = String(today.getDate()).padStart(2,'0');
-        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `내노트_${y}-${m}-${d}.txt`;
-        a.click();
-        URL.revokeObjectURL(url);
-      });
+    // 노트 내보내기·보내기
+    function safeFilename(value) {
+      return (value || '제목 없는 노트').replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 80) || '제목 없는 노트';
     }
+    function currentNotePayload() {
+      const ref = getCurMeetingRef();
+      return {
+        format: 'ai-pronote-note', version: 1,
+        title: titleInput?.value.trim() || ref?.m?.title || '제목 없는 노트',
+        html: sanitizeNoteHtml(content.innerHTML),
+        text: content.innerText.trim(),
+        createdAt: ref?.m?.createdAt || ref?.m?.date || null,
+        updatedAt: new Date().toISOString()
+      };
+    }
+    function downloadFile(name, value, type) {
+      const url = URL.createObjectURL(new Blob([value], { type }));
+      const a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    function exportNote(format) {
+      if (!persistCurrentNote()) { showToast('저장 후 내보내기에 실패했습니다.'); return; }
+      const p = currentNotePayload();
+      const base = safeFilename(p.title);
+      if (format === 'txt') downloadFile(`${base}.txt`, `${p.title}\n\n${p.text}`, 'text/plain;charset=utf-8');
+      if (format === 'md') downloadFile(`${base}.md`, `# ${p.title}\n\n${p.text}`, 'text/markdown;charset=utf-8');
+      if (format === 'html') downloadFile(`${base}.html`, `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${escapeHtml(p.title)}</title><style>body{max-width:760px;margin:48px auto;padding:0 24px;font:16px/1.75 system-ui,sans-serif;color:#20201e}h1{font-size:32px}</style></head><body><h1>${escapeHtml(p.title)}</h1>${p.html}</body></html>`, 'text/html;charset=utf-8');
+      if (format === 'native') downloadFile(`${base}.pronote.json`, JSON.stringify(p, null, 2), 'application/json;charset=utf-8');
+      if (format === 'pdf') {
+        const w = window.open('', '_blank');
+        if (!w) { showToast('인쇄 창이 차단됐습니다. 팝업을 허용해 주세요.'); return; }
+        w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${escapeHtml(p.title)}</title><style>body{max-width:760px;margin:40px auto;font:15px/1.75 system-ui,sans-serif;color:#1f1f1d}h1{font-size:30px}@media print{body{margin:0}}</style></head><body><h1>${escapeHtml(p.title)}</h1>${p.html}</body></html>`);
+        w.document.close(); w.focus(); setTimeout(() => w.print(), 250);
+      }
+      if (format !== 'pdf') showToast(`${p.title} 노트를 내보냈습니다`);
+    }
+    const exportSelect = document.getElementById('mynoteExportSelect');
+    exportSelect?.addEventListener('change', () => {
+      const format = exportSelect.value;
+      exportSelect.value = '';
+      if (format) exportNote(format);
+    });
+    document.getElementById('mynoteShareBtn')?.addEventListener('click', async () => {
+      if (!persistCurrentNote()) { showToast('저장 후 보내기에 실패했습니다.'); return; }
+      const p = currentNotePayload();
+      if (navigator.share) {
+        try { await navigator.share({ title: p.title, text: `${p.title}\n\n${p.text}` }); }
+        catch (err) { if (err?.name !== 'AbortError') showToast('보내기를 완료하지 못했습니다'); }
+      } else {
+        try { await navigator.clipboard.writeText(`${p.title}\n\n${p.text}`); showToast('노트를 복사했습니다. 원하는 앱에 붙여넣으세요.'); }
+        catch { showToast('이 기기에서는 보내기를 지원하지 않습니다. 내보내기를 이용해 주세요.'); }
+      }
+    });
 
-    // 이미지 첨부 = file → dataURL → contenteditable 안 <img>
+    // 이미지 첨부 = 크기 제한·리사이즈 후 dataURL 저장
     const imageBtn = document.getElementById('mynoteImageBtn');
     const imageInput = document.getElementById('mynoteImageInput');
     if (imageBtn && imageInput) {
       imageBtn.addEventListener('click', () => imageInput.click());
-      imageInput.addEventListener('change', () => {
-        const files = Array.from(imageInput.files || []);
+      async function optimizeNoteImage(file) {
+        if (!file.type.startsWith('image/')) throw new Error('이미지 파일만 첨부할 수 있습니다.');
+        if (file.size > 12 * 1024 * 1024) throw new Error('이미지는 한 장당 12MB 이하여야 합니다.');
+        const bitmap = await createImageBitmap(file);
+        const maxEdge = 1200;
+        const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close?.();
+        let quality = 0.72;
+        let dataUrl = canvas.toDataURL('image/jpeg', quality);
+        while (dataUrl.length > 450_000 && quality > 0.42) {
+          quality -= 0.1;
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
+        if (dataUrl.length > 450_000) throw new Error('이미지를 충분히 줄이지 못했습니다. 더 작은 이미지를 선택해 주세요.');
+        return dataUrl;
+      }
+      imageInput.addEventListener('change', async () => {
+        const files = Array.from(imageInput.files || []).slice(0, 3);
         if (!files.length) return;
-        files.forEach(file => {
-          const reader = new FileReader();
-          reader.onload = e => {
+        const targetMeetingId = loadedMeetingId || currentMeetingId();
+        if (content.querySelectorAll('img').length + files.length > 5) {
+          showToast('노트 한 개에는 이미지를 최대 5장까지 첨부할 수 있습니다.');
+          imageInput.value = '';
+          return;
+        }
+        imageBtn.disabled = true;
+        imageBtn.setAttribute('aria-busy', 'true');
+        let inserted = 0;
+        const previousHtml = content.innerHTML;
+        const previousDirty = noteDirty;
+        try {
+          for (const file of files) {
+            const dataUrl = await optimizeNoteImage(file);
+            if ((loadedMeetingId || currentMeetingId()) !== targetMeetingId) {
+              throw new Error('이미지 처리 중 노트가 바뀌어 첨부를 취소했습니다.');
+            }
             const img = document.createElement('img');
-            img.src = e.target.result;
+            img.src = dataUrl;
             img.alt = file.name;
             content.focus();
             // 커서 위치 또는 끝에 삽입
@@ -6970,12 +7143,30 @@ if ('serviceWorker' in navigator) {
             } else {
               content.appendChild(img);
             }
+            inserted += 1;
+          }
+          if (inserted) {
+            content.dispatchEvent(new Event('input', { bubbles: true }));
+            if (!persistCurrentNote(targetMeetingId)) throw new Error('이미지를 저장하지 못했습니다. 저장 공간을 확인해 주세요.');
+            showToast(`${inserted}개 이미지를 줄여서 안전하게 첨부했습니다`);
+          }
+        } catch (error) {
+          if ((loadedMeetingId || currentMeetingId()) === targetMeetingId) {
+            content.innerHTML = previousHtml;
+            clearTimeout(autoSaveTimer);
+            noteDirty = previousDirty;
+            if (previousDirty) {
+              const retryMeetingId = targetMeetingId;
+              autoSaveTimer = setTimeout(() => persistCurrentNote(retryMeetingId), 1000);
+            }
             updateMeta();
-          };
-          reader.readAsDataURL(file);
-        });
-        imageInput.value = '';
-        showToast(`${files.length}개 이미지 첨부됨`);
+          }
+          showToast(error?.message || '이미지를 첨부하지 못했습니다.');
+        } finally {
+          imageInput.value = '';
+          imageBtn.disabled = false;
+          imageBtn.removeAttribute('aria-busy');
+        }
       });
     }
 
@@ -7044,6 +7235,7 @@ if ('serviceWorker' in navigator) {
           const switched = await switchNoteMeeting(id);
           if (!switched) return;
           listMenu.classList.remove('open');
+          listBtn?.setAttribute('aria-expanded', 'false');
           updateFullpageMeta();
           showToast('노트를 불러왔습니다');
         });
@@ -7054,6 +7246,7 @@ if ('serviceWorker' in navigator) {
         e.stopPropagation();
         const wasOpen = listMenu.classList.contains('open');
         listMenu.classList.toggle('open');
+        listBtn.setAttribute('aria-expanded', wasOpen ? 'false' : 'true');
         if (!wasOpen) {
           renderListItems('');
           setTimeout(() => listSearchInput?.focus(), 50);
@@ -7062,6 +7255,14 @@ if ('serviceWorker' in navigator) {
       document.addEventListener('click', e => {
         if (!listMenu.contains(e.target) && e.target !== listBtn) {
           listMenu.classList.remove('open');
+          listBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && listMenu.classList.contains('open')) {
+          listMenu.classList.remove('open');
+          listBtn.setAttribute('aria-expanded', 'false');
+          listBtn.focus();
         }
       });
       if (listSearchInput) {

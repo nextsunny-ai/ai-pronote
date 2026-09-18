@@ -420,16 +420,18 @@ test.describe('필기 저장·복원 계약', () => {
   test('필기만 만든 노트는 새로고침 뒤 상세 화면에서 본문까지 다시 열린다', async ({ page }) => {
     await openApp(page);
     await page.locator('#homeNoteOnlyCard').click();
-    await page.locator('#standaloneNoteTitleInput').fill('단독 필기 복원 시험');
-    await page.locator('#standaloneNoteContent').fill('새로고침 뒤에도 보여야 하는 비민감 시험 본문입니다.');
-    await page.locator('#standaloneNoteSave').click();
-    await expect(page.locator('#mynotesGrid')).toContainText('단독 필기 복원 시험');
+    await expect(page.locator('#view-result')).toHaveClass(/active/);
+    await expect(page.locator('#mynoteBlock')).toHaveClass(/fullpage/);
+    await page.locator('#mynoteTitleInput').fill('단독 필기 복원 시험');
+    await page.locator('#mynoteBlockContent').fill('새로고침 뒤에도 보여야 하는 비민감 시험 본문입니다.');
+    await expect(page.locator('#mynoteSaveState')).toContainText('저장됨', { timeout: 3000 });
 
     const saved = await page.evaluate(() => {
       const meetings = localStorage.getItem('ai_pronote.meetings.v1') || '[]';
       const note = JSON.parse(meetings).find((item: { title?: string }) => item.title === '단독 필기 복원 시험');
-      return { meetings, noteId: note.id as string };
+      return { meetings, noteId: note.id as string, updatedAt: note.updatedAt as string };
     });
+    expect(saved.updatedAt).toBeTruthy();
     await page.addInitScript(data => {
       localStorage.setItem('ai_pronote.meetings.v1', data.meetings);
       localStorage.setItem('ai_pronote.current_view_meeting.v1', data.noteId);
@@ -461,6 +463,114 @@ test.describe('필기 저장·복원 계약', () => {
       return meetings.find((item: { id: string }) => item.id === noteId);
     }, saved.noteId);
     expect(firstNote.note).toContain('자동저장 1초 전에도 보존되어야 하는 수정 본문입니다.');
+  });
+
+  test('독립 노트를 주요 문서 형식으로 내보내고 기기 공유 대체 동작을 제공한다', async ({ page }) => {
+    await openApp(page);
+    await page.locator('#homeNoteOnlyCard').click();
+    await page.locator('#mynoteTitleInput').fill('내보내기 점검 노트');
+    await page.locator('#mynoteBlockContent').fill('문서 저장과 보내기 점검 본문');
+    await expect(page.locator('#mynoteSaveState')).toContainText('저장됨', { timeout: 3000 });
+
+    for (const format of ['txt', 'md', 'html', 'native']) {
+      const downloadPromise = page.waitForEvent('download');
+      await page.locator('#mynoteExportSelect').selectOption(format);
+      const download = await downloadPromise;
+      expect(download.suggestedFilename()).toContain('내보내기 점검 노트');
+    }
+    await expect(page.locator('#mynoteExportSelect')).toContainText('인쇄 · PDF 저장');
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'share', { configurable: true, value: undefined });
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { (window as typeof window & { __sharedNote?: string }).__sharedNote = value; } } });
+    });
+    await page.locator('#mynoteShareBtn').click();
+    expect(await page.evaluate(() => (window as typeof window & { __sharedNote?: string }).__sharedNote)).toContain('문서 저장과 보내기 점검 본문');
+  });
+
+  test('첨부 이미지를 줄여 자동저장하고 새로고침 뒤에도 복원한다', async ({ page }) => {
+    await openApp(page);
+    await page.locator('#homeNoteOnlyCard').click();
+    await page.locator('#mynoteTitleInput').fill('이미지 저장 점검');
+    await page.locator('#mynoteImageInput').setInputFiles({
+      name: 'memo.png', mimeType: 'image/png',
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAI0lEQVR4nGM8kWLEQApgIkk1w6gG4gATkergYFQDMYDkUAIAYgYBfoIBT3AAAAAASUVORK5CYII=', 'base64')
+    });
+    await expect(page.locator('#toast')).toContainText('안전하게 첨부했습니다');
+    const savedImageNote = await page.evaluate(() => {
+      const id = localStorage.getItem('ai_pronote.current_view_meeting.v1');
+      const meetings = localStorage.getItem('ai_pronote.meetings.v1') || '[]';
+      return { id, meetings, note: JSON.parse(meetings).find((m: { id: string }) => m.id === id)?.note as string };
+    });
+    expect(savedImageNote.note).toContain('data:image/jpeg;base64,');
+    await page.addInitScript(saved => {
+      localStorage.setItem('ai_pronote.meetings.v1', saved.meetings);
+      if (saved.id) localStorage.setItem('ai_pronote.current_view_meeting.v1', saved.id);
+    }, savedImageNote);
+    await page.reload();
+    await openNavView(page, 'result-mynote');
+    await expect(page.locator('#mynoteBlockContent img')).toHaveCount(1);
+  });
+
+  test('이미지 저장 실패 뒤에도 직전 미저장 텍스트를 재시도해 보존한다', async ({ page }) => {
+    await openApp(page);
+    await page.locator('#homeNoteOnlyCard').click();
+    await page.locator('#mynoteBlockContent').fill('이미지 오류 뒤에도 남아야 하는 텍스트');
+    await page.evaluate(() => {
+      const original = Storage.prototype.setItem;
+      (window as typeof window & { __restoreStorageSetItem?: () => void }).__restoreStorageSetItem = () => { Storage.prototype.setItem = original; };
+      Storage.prototype.setItem = function(key: string, value: string) {
+        if (key === 'ai_pronote.meetings.v1') throw new DOMException('quota', 'QuotaExceededError');
+        return original.call(this, key, value);
+      };
+    });
+    await page.locator('#mynoteImageInput').setInputFiles({
+      name: 'memo.png', mimeType: 'image/png',
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAI0lEQVR4nGM8kWLEQApgIkk1w6gG4gATkergYFQDMYDkUAIAYgYBfoIBT3AAAAAASUVORK5CYII=', 'base64')
+    });
+    await expect(page.locator('#toast')).toContainText('저장 공간을 확인해 주세요');
+    await page.evaluate(() => (window as typeof window & { __restoreStorageSetItem?: () => void }).__restoreStorageSetItem?.());
+    await expect(page.locator('#mynoteSaveState')).toContainText('저장됨', { timeout: 4000 });
+    expect(await page.evaluate(() => {
+      const id = localStorage.getItem('ai_pronote.current_view_meeting.v1');
+      return JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]').find((m: { id: string }) => m.id === id)?.note;
+    })).toContain('이미지 오류 뒤에도 남아야 하는 텍스트');
+  });
+
+  test('이미지 처리 중 다른 노트로 전환해도 새 노트를 이전 내용으로 덮지 않는다', async ({ page }) => {
+    await openApp(page);
+    await page.locator('#homeNoteOnlyCard').click();
+    await page.locator('#mynoteBlockContent').fill('A 노트 원문');
+    await page.locator('#mynoteSaveBtn').click();
+    await page.evaluate(() => {
+      const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+      meetings.push({ id: 'image-race-b', title: 'B 노트', note: '<p>B 노트 원문</p>', standalone: true });
+      localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(meetings));
+      const original = window.createImageBitmap.bind(window);
+      window.createImageBitmap = async (...args: Parameters<typeof createImageBitmap>) => {
+        await new Promise(resolve => setTimeout(resolve, 400));
+        return original(...args);
+      };
+    });
+    await page.locator('#mynoteImageInput').setInputFiles({
+      name: 'memo.png', mimeType: 'image/png',
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAI0lEQVR4nGM8kWLEQApgIkk1w6gG4gATkergYFQDMYDkUAIAYgYBfoIBT3AAAAAASUVORK5CYII=', 'base64')
+    });
+    expect(await page.evaluate(() => (window as typeof window & { __pronoteSwitchMyNoteMeeting: (id: string) => Promise<boolean> }).__pronoteSwitchMyNoteMeeting('image-race-b'))).toBe(true);
+    await expect(page.locator('#toast')).toContainText('노트가 바뀌어 첨부를 취소했습니다');
+    await expect(page.locator('#mynoteBlockContent')).toContainText('B 노트 원문');
+    await expect(page.locator('#mynoteBlockContent')).not.toContainText('A 노트 원문');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]').find((m: { id: string }) => m.id === 'image-race-b')?.note)).toBe('<p>B 노트 원문</p>');
+  });
+
+  test('새 노트 화면 전환이 실패하면 빈 고아 노트를 남기지 않는다', async ({ page }) => {
+    await openApp(page);
+    await page.evaluate(() => (window as typeof window & { switchView: (view: string) => void }).switchView('mynotes'));
+    const before = await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]').length);
+    await page.evaluate(() => {
+      (window as typeof window & { __pronoteSwitchMyNoteMeeting: (id: string) => Promise<boolean> }).__pronoteSwitchMyNoteMeeting = async () => false;
+    });
+    await page.locator('#newStandaloneNoteBtn').click();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]').length)).toBe(before);
   });
 
   test('전역 임시 노트에서 회의 노트로 이동해도 두 저장 대상을 섞지 않는다', async ({ page }) => {
@@ -515,7 +625,7 @@ test.describe('필기 저장·복원 계약', () => {
     });
     expect(switched).toBe(false);
     await expect(page.locator('#mynoteBlockContent')).toContainText('저장 실패 시 사라지면 안 되는 A 수정본');
-    await expect(page.getByRole('status')).toContainText('화면 이동을 중단했습니다');
+    await expect(page.locator('#toast')).toContainText('화면 이동을 중단했습니다');
     expect(await page.evaluate(() => localStorage.getItem('ai_pronote.current_view_meeting.v1'))).toBe('note-save-a');
     expect(await page.evaluate(() => (window as typeof window & { __inkMeetingSwitches: Array<string | null> }).__inkMeetingSwitches)).toEqual([]);
   });
@@ -549,6 +659,7 @@ test.describe('필기 저장·복원 계약', () => {
     await expect(page.locator('#inkRedo')).toBeVisible();
 
     const canvas = page.locator('#inkCanvas');
+    await canvas.scrollIntoViewIfNeeded();
     const box = await canvas.boundingBox();
     expect(box).not.toBeNull();
     await page.mouse.move(box!.x + 30, box!.y + 30);

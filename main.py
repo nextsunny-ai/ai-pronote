@@ -918,7 +918,7 @@ def version_info():
         "build_note": BUILD_NOTE,
         "drive_master": "Drive/SUNNY_TEAM/AI_PRONOTE/source_v1.3/",
         "github": "https://github.com/nextsunny-ai/ai-pronote",
-        "release": "https://github.com/nextsunny-ai/ai-pronote/releases/tag/v1.5.0-beta4-20260918",
+        "release": "https://github.com/nextsunny-ai/ai-pronote/releases/tag/v1.5.0-beta5-20260918",
     }
 
 
