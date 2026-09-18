@@ -169,8 +169,9 @@ test.describe('v1.5 핵심 발견성과 반응형', () => {
     });
     await page.locator('#resultContinueRecordingBtn').click();
     await expect(page.locator('#meetingTypeModal')).toHaveClass(/open/);
-    await expect(page.locator('#newMeetingTitle')).toHaveValue('E2E 합성 주간 회의 · 이어서');
-    await expect(page.locator('#toast')).toContainText('기존 회의록은 계속 생성됩니다');
+    await expect(page.locator('#newMeetingTitle')).toHaveValue('E2E 합성 주간 회의');
+    await expect(page.locator('#meetingTypeModal')).toHaveAttribute('data-continuation-meeting-id', syntheticMeeting.id);
+    await expect(page.locator('#toast')).toContainText('이 회의에 새 녹음 구간');
     await expect.poll(() => page.evaluate(() => (window as typeof window & { __continueOpenCount?: number }).__continueOpenCount)).toBe(1);
   });
 
@@ -1012,6 +1013,171 @@ test.describe('카메라 회의 녹화·보존 계약', () => {
     expect(result.audioContextsRunning).toBeTruthy();
     expect(result.meetingRecordingId).toMatch(/^rec_/);
     expect(result.summaryPending).toBeTruthy();
+  });
+
+  test('이어 녹음은 새 회의를 만들지 않고 원 회의에 두 번째 녹음 구간을 추가한다', async ({ page }) => {
+    await installSyntheticCameraAndMicrophone(page);
+    await mockBackend(page);
+    await seedSyntheticMeeting(page);
+    await openApp(page);
+    await page.evaluate(async () => {
+      await window.__pronoteDB.put({
+        id: 'e2e-recording-001', filename: '첫구간.webm', title: 'E2E 합성 주간 회의',
+        blob: new Blob(['first'], { type: 'audio/webm' }), durationSec: 720,
+        startedAt: Date.now() - 730_000, endedAt: Date.now() - 10_000,
+        source: 'recorded', transcribed: true, transcript: '첫 번째 구간 원문', summary: '첫 번째 구간 회의록'
+      });
+    });
+
+    const started = await page.evaluate(meetingId => window.__pronoteRecording.start('realtime', {
+      context: 'live',
+      meta: { title: 'E2E 합성 주간 회의', tag: '회의', language: 'ko', parentMeetingId: meetingId }
+    }), syntheticMeeting.id);
+    expect(started).toBeTruthy();
+    await page.waitForTimeout(1200);
+    await page.evaluate(() => window.__pronoteRecording.stop());
+    await expect.poll(() => page.evaluate(() => window.__pronoteRecording.isActive()), { timeout: 10_000 }).toBeFalsy();
+
+    const merged = await page.evaluate(async meetingId => {
+      const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+      const meeting = meetings.find((item: { id: string }) => item.id === meetingId);
+      const records = await window.__pronoteDB.getAll();
+      return {
+        meetingCount: meetings.length,
+        title: meeting?.title,
+        recordingIds: meeting?.recordingIds || [],
+        segments: meeting?.recordingSegments || [],
+        durationSec: meeting?.recordingDurationSec,
+        linkedMeetingIds: records.filter((record: { source?: string }) => record.source === 'recorded').map((record: { meetingId?: string }) => record.meetingId)
+      };
+    }, syntheticMeeting.id);
+    expect(merged.meetingCount).toBe(1);
+    expect(merged.title).toBe('E2E 합성 주간 회의');
+    expect(merged.recordingIds).toHaveLength(2);
+    expect(merged.recordingIds[0]).toBe('e2e-recording-001');
+    expect(merged.segments).toHaveLength(2);
+    expect(merged.durationSec).toBeGreaterThan(0);
+    expect(merged.linkedMeetingIds).toContain(syntheticMeeting.id);
+
+    await page.evaluate(() => window.switchView?.('result'));
+    await page.evaluate(() => window.__pronoteLoadResultAudio?.());
+    await expect(page.locator('#sideAudioSegmentSelect')).toBeVisible();
+    await expect(page.locator('#sideAudioSegmentSelect option')).toHaveCount(2);
+    await page.locator('#sideAudioSegmentSelect').selectOption('e2e-recording-001');
+    await page.locator('.side-tab[data-side-tab="transcript"]').click();
+    await expect(page.locator('#sideTranscriptPanel')).toBeVisible();
+    await page.evaluate(() => {
+      const select = document.getElementById('sideAudioSegmentSelect') as HTMLSelectElement;
+      select.selectedIndex = 1;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await expect(page.locator('#sideTranscriptPanel')).toBeHidden();
+  });
+
+  test('이어진 각 구간의 받아쓰기와 회의록 결과를 원 회의 순서로 합친다', async ({ page }) => {
+    await mockBackend(page);
+    await page.route('**/api/llm/summarize', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json; charset=utf-8',
+      body: JSON.stringify({ summary: '두 번째 구간 회의록', model_id: 'mock', elapsed_sec: 1, char_count: 12 })
+    }));
+    await page.addInitScript(() => {
+      localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify([{
+        id: 'merged-meeting', title: '합쳐진 회의', tag: '회의', date: '2026-09-18',
+        recordingId: 'merged-rec-1', recordingIds: ['merged-rec-1', 'merged-rec-2'],
+        recordingSegments: [{ id: 'merged-rec-1' }, { id: 'merged-rec-2' }], summaryPending: true
+      }]));
+      localStorage.setItem('ai_pronote.current_view_meeting.v1', 'merged-meeting');
+    });
+    await openApp(page);
+    await page.evaluate(async () => {
+      await window.__pronoteDB.put({
+        id: 'merged-rec-1', filename: '1.webm', blob: new Blob(['one']), source: 'recorded',
+        startedAt: Date.now() - 2000, transcribed: true, transcript: '첫 번째 구간 원문', summary: '첫 번째 구간 회의록', scenarioKey: 'meeting'
+      });
+      await window.__pronoteDB.put({
+        id: 'merged-rec-2', filename: '2.webm', blob: new Blob(['two']), source: 'recorded',
+        startedAt: Date.now() - 1000, transcribed: true, transcript: '두 번째 구간 원문', scenarioKey: 'meeting'
+      });
+      await window.__pronoteLibrary.runSummarize('merged-rec-2');
+    });
+    const merged = await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]')[0]);
+    expect(merged.title).toBe('합쳐진 회의');
+    expect(merged.transcript).toContain('녹음 구간 1');
+    expect(merged.transcript).toContain('첫 번째 구간 원문');
+    expect(merged.transcript).toContain('두 번째 구간 원문');
+    expect(merged.summary).toContain('녹음 구간 회의록 1');
+    expect(merged.summary).toContain('첫 번째 구간 회의록');
+    expect(merged.summary).toContain('두 번째 구간 회의록');
+  });
+
+  test('두 구간 결과가 동시에 끝나도 최신 노트 수정과 다른 편집 화면을 보존한다', async ({ page }) => {
+    await mockBackend(page);
+    await page.route('**/api/llm/summarize', async route => {
+      const payload = route.request().postDataJSON() as { transcript?: string };
+      if (payload.transcript?.includes('첫 구간')) await new Promise(resolve => setTimeout(resolve, 180));
+      await route.fulfill({
+        status: 200, contentType: 'application/json; charset=utf-8',
+        body: JSON.stringify({
+          summary: payload.transcript?.includes('첫 구간') ? '첫 구간 동시 완료 요약' : '둘째 구간 동시 완료 요약',
+          model_id: 'mock', elapsed_sec: 1, char_count: 12
+        })
+      });
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify([
+        { id: 'race-parent', title: '동시 완료 회의', tag: '회의', date: '2026-09-18', dateLabel: '오늘', duration: '2분', recordingId: 'race-1', recordingIds: ['race-1', 'race-2'], note: '<p>원래 노트</p>' },
+        { id: 'editing-note', title: '지금 편집 중인 노트', tag: '단독 메모', date: '2026-09-18', dateLabel: '오늘', duration: '—', note: '<p>편집 유지</p>', standalone: true }
+      ]));
+      localStorage.setItem('ai_pronote.current_view_meeting.v1', 'editing-note');
+    });
+    await openApp(page);
+    await page.evaluate(async () => {
+      await window.__pronoteDB.put({ id: 'race-1', blob: new Blob(['1']), transcript: '첫 구간 원문', transcribed: true, scenarioKey: 'meeting', startedAt: Date.now() - 2000 });
+      await window.__pronoteDB.put({ id: 'race-2', blob: new Blob(['2']), transcript: '둘째 구간 원문', transcribed: true, scenarioKey: 'meeting', startedAt: Date.now() - 1000 });
+      (window as typeof window & { __mergePromise?: Promise<unknown> }).__mergePromise = Promise.all([
+        window.__pronoteLibrary.runSummarize('race-1'),
+        window.__pronoteLibrary.runSummarize('race-2')
+      ]);
+    });
+    await page.waitForTimeout(70);
+    await page.evaluate(() => {
+      const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+      meetings.find((m: { id: string }) => m.id === 'race-parent').note = '<p>처리 중 사용자가 수정한 노트</p>';
+      localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(meetings));
+    });
+    await page.evaluate(() => (window as typeof window & { __mergePromise?: Promise<unknown> }).__mergePromise);
+    const state = await page.evaluate(() => {
+      const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+      return {
+        currentId: localStorage.getItem('ai_pronote.current_view_meeting.v1'),
+        parent: meetings.find((m: { id: string }) => m.id === 'race-parent')
+      };
+    });
+    expect(state.currentId).toBe('editing-note');
+    expect(state.parent.note).toContain('처리 중 사용자가 수정한 노트');
+    expect(state.parent.summary).toContain('첫 구간 동시 완료 요약');
+    expect(state.parent.summary).toContain('둘째 구간 동시 완료 요약');
+    expect(state.parent.transcript).toContain('첫 구간 원문');
+    expect(state.parent.transcript).toContain('둘째 구간 원문');
+  });
+
+  test('상태 기록이 없는 다른 구간이 남아 있으면 한 구간 실패를 전체 완료로 표시하지 않는다', async ({ page }) => {
+    await mockBackend(page);
+    await page.addInitScript(() => {
+      localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify([{
+        id: 'pending-parent', title: '상태 집계 회의', tag: '회의', date: '2026-09-18', dateLabel: '오늘', duration: '2분',
+        recordingId: 'pending-1', recordingIds: ['pending-1', 'pending-2'], summary: '', summaryPending: true
+      }]));
+    });
+    await openApp(page);
+    await page.evaluate(async () => {
+      await window.__pronoteDB.put({ id: 'pending-2', filename: 'pending.webm', blob: new Blob(['x']), scenarioKey: 'meeting', startedAt: Date.now() });
+      await window.__pronoteLibrary.runTranscribe('pending-2');
+    });
+    const meeting = await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]')[0]);
+    expect(meeting.recordingStatuses['pending-2'].error).toContain('받아쓰기 요청 실패');
+    expect(meeting.summaryPending).toBeTruthy();
   });
 
   test('녹음 전 저장공간이 부족하면 장치 권한 요청 전에 시작을 막는다', async ({ page }) => {

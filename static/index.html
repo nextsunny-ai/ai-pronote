@@ -4060,6 +4060,7 @@ if ('serviceWorker' in navigator) {
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
               </div>
+              <select id="sideAudioSegmentSelect" aria-label="재생할 녹음 구간" hidden style="width:100%;margin:0 0 8px;padding:7px 9px;border:1px solid var(--border);border-radius:7px;background:var(--bg-elev);color:var(--text-primary);"></select>
               <audio id="sideAudioPlayerAudio" controls preload="metadata"></audio>
               <div class="side-audio-speed" id="sideAudioSpeed" style="display:flex; gap:4px; margin-top:6px; align-items:center; flex-wrap:wrap;">
                 <span style="font-size:11px; color:var(--text-tertiary,#888); margin-right:2px;">배속</span>
@@ -5675,6 +5676,7 @@ if ('serviceWorker' in navigator) {
       startBtn.disabled = false;
       startBtn.textContent = '녹음 시작 →';
       modal.classList.remove('open');
+      delete modal.dataset.continuationMeetingId;
     }
 
     btn.addEventListener('click', e => {
@@ -5708,6 +5710,7 @@ if ('serviceWorker' in navigator) {
       const withSysAudio = !!sysAudioToggle?.checked;
       const recordVideo = !!document.getElementById('newMeetingVideo')?.checked;
       const language = document.getElementById('newMeetingLang')?.value || 'ko';
+      const parentMeetingId = modal.dataset.continuationMeetingId || null;
       const originalLabel = startBtn.textContent;
       startBtn.disabled = true;
       startBtn.textContent = recordVideo ? '마이크·카메라 연결 중…' : '마이크 연결 중…';
@@ -5716,7 +5719,7 @@ if ('serviceWorker' in navigator) {
         recordingStarted = !!(window.__pronoteRecording && !window.__pronoteRecording.isActive()
           && await window.__pronoteRecording.start('realtime', {
             context: 'live', withSysAudio, recordVideo,
-            meta: { tag, title: finalTitle, attendees, withSysAudio, language }
+            meta: { tag, title: finalTitle, attendees, withSysAudio, language, parentMeetingId }
           }));
       } finally {
         startBtn.disabled = false;
@@ -6386,6 +6389,7 @@ if ('serviceWorker' in navigator) {
             sysAudioUsed: !!state.sysStream,
             scenario: null,
             scenarioKey: autoScenarioKey,
+            meetingId: state.meta.parentMeetingId || null,
             transcribed: false,
           });
           recordingStored = true;
@@ -6430,7 +6434,13 @@ if ('serviceWorker' in navigator) {
       // ★ 모든 녹음 = 정지 즉시 자동 받아쓰기 → 회의록 자동 생성 (v1.4)
       //   기존: '새 회의 시작'(live)만 자동, '받아쓰기·강의 화면'(dict)은 저장만 →
       //   강의가 받아쓰기 안 되던 근본 원인. context 구분 폐지 = 어디서 녹음하든 동일.
-      saveMeetingFromLive(elapsed, filename, recordId);
+      const savedMeetingId = saveMeetingFromLive(elapsed, filename, recordId);
+      if (savedMeetingId) {
+        try {
+          const storedRecord = await window.__pronoteDB?.get?.(recordId);
+          if (storedRecord) { storedRecord.meetingId = savedMeetingId; await window.__pronoteDB.put(storedRecord); }
+        } catch (e) { console.warn('[Rec] meeting link save err', e); }
+      }
       setTimeout(() => {
         if (typeof window.switchView === 'function') window.switchView('result');
         try { window.__pronoteLoadResultAudio?.(); } catch (e) {}
@@ -6454,42 +6464,80 @@ if ('serviceWorker' in navigator) {
         const KEY = 'ai_pronote.meetings.v1';
         let arr = [];
         try { arr = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch {}
-        const meetingId = 'm_' + Date.now();
+        const parentMeetingId = state.meta.parentMeetingId || null;
+        const parent = parentMeetingId ? arr.find(m => m.id === parentMeetingId) : null;
+        const meetingId = parent?.id || ('m_' + Date.now());
         const now = new Date();
         const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-        const dur = durationSec >= 3600
-          ? `${Math.floor(durationSec/3600)}h ${String(Math.floor((durationSec%3600)/60)).padStart(2,'0')}m`
-          : `${String(Math.floor(durationSec/60)).padStart(2,'0')}m ${String(durationSec%60).padStart(2,'0')}s`;
+        const formatDuration = seconds => seconds >= 3600
+          ? `${Math.floor(seconds/3600)}h ${String(Math.floor((seconds%3600)/60)).padStart(2,'0')}m`
+          : `${String(Math.floor(seconds/60)).padStart(2,'0')}m ${String(seconds%60).padStart(2,'0')}s`;
         const attendeesCount = state.meta.attendees
           ? state.meta.attendees.split(/[,，]\s*/).filter(Boolean).length : 0;
         // 회의 중 작성한 내 노트 = 회의록과 함께 보존
         let liveNoteHtml = '';
         try { liveNoteHtml = window.__pronoteLiveNote?.getHtml?.() || ''; } catch {}
-        arr.unshift({
-          id: meetingId,
-          title: state.meta.title || `${state.meta.tag || '회의'} ${date}`,
-          tag: state.meta.tag || '회의',
-          date, dateLabel: '오늘', duration: dur,
-          attendees: attendeesCount,
-          summary: '',
-          summaryPending: true,
-          note: liveNoteHtml,
-          recordingFilename: filename,
-          recordingId: recordingId || null,
-          recordingDurationSec: durationSec,
-          highlights: state.highlights,
-          copilotLog: (window.__pronoteCopilotLog?.getLive?.() || []),
-          modeUsed: state.mode,
-          sysAudioUsed: !!state.sysStream,
-        });
-        localStorage.setItem(KEY, JSON.stringify(arr.slice(0, 50)));
+        const segment = { id: recordingId, filename, durationSec, startedAt: state.startTime, endedAt: Date.now() };
+        if (parent) {
+          const previousIds = Array.isArray(parent.recordingIds) ? parent.recordingIds.slice() : (parent.recordingId ? [parent.recordingId] : []);
+          if (recordingId && !previousIds.includes(recordingId)) previousIds.push(recordingId);
+          parent.recordingIds = previousIds;
+          parent.recordingStatuses = parent.recordingStatuses || {};
+          previousIds.forEach(id => {
+            if (!parent.recordingStatuses[id]) parent.recordingStatuses[id] = id === recordingId
+              ? { done: false, progress: '받아쓰기 대기 중…', error: null }
+              : { done: !!parent.summary, progress: parent.summary ? null : '기존 구간 상태 확인 중…', error: null };
+          });
+          if (!parent.recordingId) parent.recordingId = recordingId || null;
+          const segments = Array.isArray(parent.recordingSegments) ? parent.recordingSegments.slice() : [];
+          if (!segments.length && parent.recordingId && parent.recordingId !== recordingId) {
+            segments.push({ id: parent.recordingId, filename: parent.recordingFilename, durationSec: parent.recordingDurationSec || 0 });
+          }
+          segments.push(segment);
+          parent.recordingSegments = segments;
+          const previousDuration = Number(parent.recordingDurationSec) || 0;
+          parent.recordingDurationSec = previousDuration + durationSec;
+          parent.duration = formatDuration(parent.recordingDurationSec);
+          parent.summaryPending = true;
+          parent.summaryError = null;
+          const noteText = liveNoteHtml.replace(/<[^>]*>/g, '').trim();
+          if (noteText) parent.note = `${parent.note || ''}<p><strong>— 이어 녹음 메모 —</strong></p>${liveNoteHtml}`;
+          const offsetMs = previousDuration * 1000;
+          parent.highlights = [...(parent.highlights || []), ...(state.highlights || []).map(h => ({ ...h, at: (h.at || 0) + offsetMs, recordingId }))];
+          parent.copilotLog = [...(parent.copilotLog || []), ...(window.__pronoteCopilotLog?.getLive?.() || [])];
+          parent.updatedAt = now.toISOString();
+        } else {
+          arr.unshift({
+            id: meetingId,
+            title: state.meta.title || `${state.meta.tag || '회의'} ${date}`,
+            tag: state.meta.tag || '회의',
+            date, dateLabel: '오늘', duration: formatDuration(durationSec),
+            attendees: attendeesCount,
+            summary: '',
+            summaryPending: true,
+            note: liveNoteHtml,
+            recordingFilename: filename,
+            recordingId: recordingId || null,
+            recordingIds: recordingId ? [recordingId] : [],
+            recordingSegments: recordingId ? [segment] : [],
+            recordingStatuses: recordingId ? { [recordingId]: { done: false, progress: '받아쓰기 대기 중…', error: null } } : {},
+            recordingDurationSec: durationSec,
+            highlights: (state.highlights || []).map(h => ({ ...h, recordingId })),
+            copilotLog: (window.__pronoteCopilotLog?.getLive?.() || []),
+            modeUsed: state.mode,
+            sysAudioUsed: !!state.sysStream,
+          });
+        }
+        localStorage.setItem(KEY, JSON.stringify(arr));
         localStorage.setItem('ai_pronote.current_view_meeting.v1', meetingId);
         window.PronoteInk?.switchMeeting?.(meetingId).catch(() => {});
         // 노트가 회의에 보존됐으니 = 라이브 노트 세션 종료 (다음 회의는 빈 노트)
         try { window.__pronoteLiveNote?.endSession?.(); } catch {}
         // 비서 대화도 회의에 보존됐으니 = 라이브 대화 초기화
         try { window.__pronoteCopilotLog?.resetLive?.(); } catch {}
+        return meetingId;
       } catch (e) { console.error('[Rec] meeting save err', e); }
+      return null;
     }
 
     function cleanupTracks() {
@@ -7485,23 +7533,38 @@ if ('serviceWorker' in navigator) {
         const wrap = document.getElementById('sideAudioPlayer');
         const audio = document.getElementById('sideAudioPlayerAudio');
         const meta = document.getElementById('sideAudioPlayerMeta');
+        const segmentSelect = document.getElementById('sideAudioSegmentSelect');
         if (!wrap || !audio) return;
         const meetingId = localStorage.getItem('ai_pronote.current_view_meeting.v1');
         const all = await dbGetAll();
         const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
         const m = meetings.find(x => x.id === meetingId);
-        let rec = null;
-        if (m && m.recordingId) rec = all.find(r => r.id === m.recordingId);
+        const ids = m ? (Array.isArray(m.recordingIds) && m.recordingIds.length ? m.recordingIds : (m.recordingId ? [m.recordingId] : [])) : [];
+        let selectedId = segmentSelect?.value;
+        if (!ids.includes(selectedId)) selectedId = ids[ids.length - 1];
+        let rec = selectedId ? all.find(r => r.id === selectedId) : null;
         if (!rec && m && m.recordingFilename) rec = all.find(r => r.filename === m.recordingFilename);
         if (!rec || !rec.blob) { wrap.style.display = 'none'; return; }
         wrap.style.display = '';
         if (_resultAudioUrl) { try { URL.revokeObjectURL(_resultAudioUrl); } catch (e) {} }
         _resultAudioUrl = URL.createObjectURL(rec.blob);
         audio.src = _resultAudioUrl;
+        if (segmentSelect) {
+          segmentSelect.innerHTML = ids.map((id, index) => `<option value="${escapeHtml(id)}">녹음 구간 ${index + 1} / ${ids.length}</option>`).join('');
+          segmentSelect.value = rec.id;
+          segmentSelect.hidden = ids.length <= 1;
+        }
         if (meta) { const s = rec.durationSec || 0; meta.textContent = (rec.filename || '녹음') + ' · ' + Math.floor(s / 60) + '분 ' + (s % 60) + '초'; }
       } catch (e) {}
     }
     window.__pronoteLoadResultAudio = loadResultAudio;
+    document.getElementById('sideAudioSegmentSelect')?.addEventListener('change', () => {
+      ['sideTranscriptPanel', 'sideHighlightPanel'].forEach(id => {
+        const panel = document.getElementById(id);
+        if (panel) panel.hidden = true;
+      });
+      loadResultAudio();
+    });
 
     // ─── 헬퍼 ──────────────────────────────────────────────
     function fmtBytes(n) {
@@ -7707,7 +7770,7 @@ if ('serviceWorker' in navigator) {
               ts: m.id ? Number((m.id+'').replace(/[^0-9]/g, '')) || 0 : 0,
               attendees: m.attendees,
               recordingId: m.recordingId,
-              hasRecording: !!audios.find(a => (m.recordingId && a.id === m.recordingId) || (m.jobId && a.jobId === m.jobId) || (m.recordingFilename && a.filename === m.recordingFilename)),
+              hasRecording: !!audios.find(a => (Array.isArray(m.recordingIds) && m.recordingIds.includes(a.id)) || (m.recordingId && a.id === m.recordingId) || (m.jobId && a.jobId === m.jobId) || (m.recordingFilename && a.filename === m.recordingFilename)),
               hasNote: !!(m.note && m.note.trim()),
               _raw: m,
             });
@@ -7906,7 +7969,7 @@ if ('serviceWorker' in navigator) {
       const KEY = 'ai_pronote.meetings.v1';
       let meetings = [];
       try { meetings = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch {}
-      let meeting = meetings.find(m => m.recordingId === r.id || (r.jobId && m.jobId === r.jobId));
+      let meeting = meetings.find(m => meetingHasRecording(m, r.id) || (r.jobId && m.jobId === r.jobId));
       if (meeting) return meeting;
       if (!r.summary && !r.transcript) return null;
       meeting = {
@@ -7962,7 +8025,7 @@ if ('serviceWorker' in navigator) {
         try {
           const arr = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
           const m = arr.find(x => x.id === id);
-          if (m && m.recordingId) recId = m.recordingId;
+          if (m) { const ids = meetingRecordingIds(m); recId = ids[ids.length - 1] || null; }
         } catch {}
         runSummarizeForRecord(recId);
         return;
@@ -8212,14 +8275,83 @@ if ('serviceWorker' in navigator) {
     }
 
     // ─── 회의 결과 페이지 진행상태/에러 갱신 헬퍼 ────────────────────
+    function meetingRecordingIds(meeting) {
+      const ids = Array.isArray(meeting?.recordingIds) ? meeting.recordingIds.filter(Boolean) : [];
+      if (meeting?.recordingId && !ids.includes(meeting.recordingId)) ids.unshift(meeting.recordingId);
+      return ids;
+    }
+    function meetingHasRecording(meeting, recId) {
+      return meetingRecordingIds(meeting).includes(recId);
+    }
+    function findMeetingForRecording(meetings, recId) {
+      return meetings.find(meeting => meetingHasRecording(meeting, recId));
+    }
+    async function collectMeetingRecords(meeting) {
+      const records = [];
+      for (const id of meetingRecordingIds(meeting)) {
+        const record = await dbGet(id);
+        if (record) records.push(record);
+      }
+      return records;
+    }
+    function joinMeetingSections(records, field, label) {
+      const available = records.filter(record => String(record?.[field] || '').trim());
+      if (available.length <= 1) return available[0]?.[field] || '';
+      return available.map((record, index) => `## ${label} ${index + 1}\n\n${record[field]}`).join('\n\n---\n\n');
+    }
+    const meetingUpdateQueues = new Map();
+    async function updateMeetingFromLatest(recId, updater) {
+      let meetingId = null;
+      try {
+        const snapshot = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+        meetingId = findMeetingForRecording(snapshot, recId)?.id || null;
+      } catch {}
+      if (!meetingId) return null;
+      const previous = meetingUpdateQueues.get(meetingId) || Promise.resolve();
+      const current = previous.catch(() => {}).then(async () => {
+        let latest = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+        let meeting = latest.find(item => item.id === meetingId);
+        if (!meeting) return null;
+        let idsBefore = meetingRecordingIds(meeting).join('|');
+        let records = await collectMeetingRecords(meeting);
+        latest = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+        meeting = latest.find(item => item.id === meetingId);
+        if (!meeting) return null;
+        if (meetingRecordingIds(meeting).join('|') !== idsBefore) {
+          records = await collectMeetingRecords(meeting);
+          latest = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+          meeting = latest.find(item => item.id === meetingId);
+          if (!meeting) return null;
+        }
+        updater(meeting, records);
+        localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(latest));
+        return meeting;
+      });
+      meetingUpdateQueues.set(meetingId, current);
+      try { return await current; }
+      finally { if (meetingUpdateQueues.get(meetingId) === current) meetingUpdateQueues.delete(meetingId); }
+    }
     function updateMeetingProgress(recId, patch) {
       try {
         const KEY = 'ai_pronote.meetings.v1';
         const arr = JSON.parse(localStorage.getItem(KEY) || '[]');
-        const m = arr.find(x => x.recordingId === recId);
+        const m = findMeetingForRecording(arr, recId);
         if (m) {
-          if (patch.progress !== undefined) m._progress = patch.progress;
-          if (patch.error !== undefined) { m.summaryError = patch.error; m.summaryPending = false; }
+          m.recordingStatuses = m.recordingStatuses || {};
+          const status = m.recordingStatuses[recId] || {};
+          if (patch.progress !== undefined) { status.progress = patch.progress; status.error = null; status.done = false; m._progress = patch.progress; m.summaryPending = true; }
+          if (patch.error !== undefined) { status.error = patch.error; status.progress = null; status.done = false; }
+          m.recordingStatuses[recId] = status;
+          const statuses = Object.values(m.recordingStatuses);
+          const errors = statuses.map(item => item?.error).filter(Boolean);
+          m.summaryError = errors.length ? errors.join(' / ') : null;
+          if (patch.error !== undefined) {
+            m.summaryPending = meetingRecordingIds(m).some(id => {
+              const item = m.recordingStatuses[id];
+              if (item) return !item.done && !item.error;
+              return !(id === m.recordingId && m.summary);
+            });
+          }
           localStorage.setItem(KEY, JSON.stringify(arr));
         }
       } catch (e) { console.error('[Progress]', e); }
@@ -8264,6 +8396,12 @@ if ('serviceWorker' in navigator) {
       rec.transcriptElapsedSec = data.elapsed_sec;
       rec.transcriptedAt = Date.now();
       await dbPut(rec);
+      try {
+        await updateMeetingFromLatest(recId, (meeting, records) => {
+          meeting.transcript = joinMeetingSections(records, 'transcript', '녹음 구간');
+          meeting.transcriptPendingCount = records.filter(record => !record.transcribed).length;
+        });
+      } catch (e) { console.error('[Transcript] meeting merge', e); }
       refreshLibrary();
       return rec;
     }
@@ -8280,7 +8418,7 @@ if ('serviceWorker' in navigator) {
       try {
         const KEY = 'ai_pronote.meetings.v1';
         let arr = JSON.parse(localStorage.getItem(KEY) || '[]');
-        let m = arr.find(x => x.recordingId === recId);
+        let m = findMeetingForRecording(arr, recId);
         if (!m) {
           m = {
             id: 'm_' + Date.now(),
@@ -8295,20 +8433,27 @@ if ('serviceWorker' in navigator) {
             recordingDurationSec: r.durationSec,
           };
           arr.unshift(m);
+          localStorage.setItem(KEY, JSON.stringify(arr));
         }
-        if (out.title) m.title = out.title;
-        m.summary = out.summary;
-        m.summaryError = null;
-        m._progress = null;
-        m.transcript = r.transcript;
-        m.scenario = r.scenario;
-        m.scenarioKey = r.scenarioKey;
-        localStorage.setItem(KEY, JSON.stringify(arr));
-        localStorage.setItem('ai_pronote.current_view_meeting.v1', m.id);
-        window.PronoteInk?.switchMeeting?.(m.id).catch(() => {});
+        const updated = await updateMeetingFromLatest(recId, (meeting, records) => {
+          const ids = meetingRecordingIds(meeting);
+          if (out.title && ids.length <= 1) meeting.title = out.title;
+          meeting.recordingStatuses = meeting.recordingStatuses || {};
+          meeting.recordingStatuses[recId] = { done: true, progress: null, error: null };
+          const errors = Object.values(meeting.recordingStatuses).map(item => item?.error).filter(Boolean);
+          meeting.summary = joinMeetingSections(records, 'summary', '녹음 구간 회의록');
+          meeting.summaryPending = records.some(record => !String(record.summary || '').trim() && !meeting.recordingStatuses[record.id]?.error);
+          meeting.summaryError = errors.length ? errors.join(' / ') : null;
+          meeting._progress = meeting.summaryPending ? '이어진 녹음 구간 처리 중…' : null;
+          meeting.transcript = joinMeetingSections(records, 'transcript', '녹음 구간');
+          meeting.scenario = r.scenario;
+          meeting.scenarioKey = r.scenarioKey;
+        });
+        if (updated && localStorage.getItem('ai_pronote.current_view_meeting.v1') === updated.id) {
+          try { window.__pronoteResult?.render?.(); } catch {}
+        }
       } catch (e) { console.error('[Sum] meeting save', e); }
       refreshLibrary();
-      try { window.__pronoteResult?.render?.(); } catch {}
     }
 
     // 서버 작업 하나를 끝까지 지켜본다 (받아쓰기 → 회의록)
@@ -8542,40 +8687,7 @@ if ('serviceWorker' in navigator) {
         }
         const data = await res.json();
         const elapsed = Math.round((Date.now() - t0) / 1000);
-        const rec2 = await dbGet(recId);
-        rec2.summary = data.summary;
-        rec2.summaryModel = data.model_id;
-        rec2.summaryElapsedSec = data.elapsed_sec;
-        rec2.summarizedAt = Date.now();
-        await dbPut(rec2);
-        // 회의 메타에도 저장 (옛 회의록 결과 페이지에서 사용)
-        try {
-          const KEY = 'ai_pronote.meetings.v1';
-          let arr = JSON.parse(localStorage.getItem(KEY) || '[]');
-          let m = arr.find(x => x.recordingId === recId);
-          if (!m) {
-            m = {
-              id: 'm_' + Date.now(),
-              title: r.title || '회의',
-              tag: r.tag || (r.scenario || '회의'),
-              date: new Date(r.startedAt).toISOString().slice(0, 10),
-              dateLabel: '오늘',
-              duration: r.durationSec ? `${Math.floor(r.durationSec/60)}분` : '—',
-              attendees: r.attendees ? r.attendees.split(/[,，]\s*/).filter(Boolean).length : 0,
-              recordingId: recId,
-              recordingFilename: r.filename,
-              recordingDurationSec: r.durationSec,
-            };
-            arr.unshift(m);
-          }
-          m.summary = data.summary;
-          m.transcript = r.transcript;
-          m.scenario = r.scenario;
-          m.scenarioKey = r.scenarioKey;
-          localStorage.setItem(KEY, JSON.stringify(arr));
-          localStorage.setItem('ai_pronote.current_view_meeting.v1', m.id);
-          window.PronoteInk?.switchMeeting?.(m.id).catch(() => {});
-        } catch (e) { console.error('[Sum] meeting save', e); }
+        await saveSummaryToRecord(recId, data);
         refreshLibrary();
         try { window.__pronoteResult?.render?.(); } catch {}
         window.showToast?.(`AI 회의록 완료 — ${elapsed}초 · ${data.char_count}자.`);
@@ -8692,10 +8804,14 @@ if ('serviceWorker' in navigator) {
           return;
         }
         const currentTitle = document.querySelector('#view-result .result-title')?.textContent?.trim() || '';
+        const currentMeetingId = localStorage.getItem('ai_pronote.current_view_meeting.v1');
+        if (!currentMeetingId) { window.showToast?.('이어 녹음할 회의를 찾지 못했습니다'); return; }
         document.getElementById('newMeetingBtn')?.click();
+        const modal = document.getElementById('meetingTypeModal');
+        if (modal) modal.dataset.continuationMeetingId = currentMeetingId;
         const titleInput = document.getElementById('newMeetingTitle');
-        if (titleInput && currentTitle) titleInput.value = `${currentTitle} · 이어서`;
-        window.showToast?.('기존 회의록은 계속 생성됩니다. 이어진 회의를 바로 녹음하세요.');
+        if (titleInput && currentTitle) titleInput.value = currentTitle;
+        window.showToast?.('이 회의에 새 녹음 구간을 이어 붙입니다. 기존 회의록 생성은 계속됩니다.');
       });
 
       // 데모 스위처 단축키 = Ctrl+Shift+D 토글
@@ -8737,7 +8853,10 @@ if ('serviceWorker' in navigator) {
           try {
             const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
             const m = meetings.find(x => x.id === meetingId);
-            if (m?.recordingId) rec = all.find(r => r.id === m.recordingId);
+            const ids = Array.isArray(m?.recordingIds) && m.recordingIds.length ? m.recordingIds : (m?.recordingId ? [m.recordingId] : []);
+            const selectedId = document.getElementById('sideAudioSegmentSelect')?.value;
+            const targetId = ids.includes(selectedId) ? selectedId : ids[ids.length - 1];
+            if (targetId) rec = all.find(r => r.id === targetId);
             else if (m?.recordingFilename) rec = all.find(r => r.filename === m.recordingFilename);
           } catch {}
           if (!rec) { window.showToast?.('이 회의에 연결된 녹음 파일이 없습니다'); tab?.classList.remove('active'); return false; }
@@ -9151,7 +9270,10 @@ if ('serviceWorker' in navigator) {
           body.dataset.mockHtml = body.innerHTML; // 옛 데모 백업(표시엔 사용 안 함)
         }
         if (m.summary && m.summary.trim()) {
-          body.innerHTML = `<div class="meeting-real-summary">${mdToHtml(m.summary)}</div>`;
+          const pending = m.summaryPending
+            ? `<div role="status" style="margin:0 0 14px;padding:10px 12px;border-radius:8px;background:var(--bg-elev);color:var(--text-secondary);font-size:12.5px;">${escHtml(m._progress || '이어진 녹음 구간의 받아쓰기·회의록을 추가하는 중입니다…')}</div>`
+            : '';
+          body.innerHTML = pending + `<div class="meeting-real-summary">${mdToHtml(m.summary)}</div>`;
         } else if (m.summaryError) {
           body.innerHTML = `<div class="meeting-real-summary" style="padding:32px 8px">`
             + `<p style="font-weight:600;margin-bottom:6px">회의록 생성에 실패했습니다.</p>`
@@ -9239,8 +9361,11 @@ if ('serviceWorker' in navigator) {
 
       // 녹음 원본 = 라이브러리로 가지 않아도 여기서 바로 받는다
       if (fmt === 'audio') {
-        if (!m.recordingId) { window.showToast?.('이 회의에 연결된 녹음 파일이 없습니다'); return; }
-        try { window.__pronoteLibrary?.downloadRecording?.(m.recordingId); }
+        const ids = Array.isArray(m.recordingIds) && m.recordingIds.length ? m.recordingIds : (m.recordingId ? [m.recordingId] : []);
+        const selectedId = document.getElementById('sideAudioSegmentSelect')?.value;
+        const downloadId = ids.includes(selectedId) ? selectedId : ids[ids.length - 1];
+        if (!downloadId) { window.showToast?.('이 회의에 연결된 녹음 파일이 없습니다'); return; }
+        try { window.__pronoteLibrary?.downloadRecording?.(downloadId); }
         catch (e) { window.showToast?.('녹음 저장 실패: ' + e.message); }
         return;
       }
@@ -9447,7 +9572,9 @@ if ('serviceWorker' in navigator) {
           let segs = null;
           try {
             const all = await window.__pronoteDB.getAll();
-            const rec = all.find(r => r.id === m.recordingId) || all.find(r => r.filename === m.recordingFilename);
+            const ids = Array.isArray(m.recordingIds) && m.recordingIds.length ? m.recordingIds : (m.recordingId ? [m.recordingId] : []);
+            const selectedId = document.getElementById('sideAudioSegmentSelect')?.value;
+            const rec = all.find(r => r.id === (ids.includes(selectedId) ? selectedId : ids[ids.length - 1])) || all.find(r => r.filename === m.recordingFilename);
             segs = rec && rec.transcriptSegments;
           } catch (e2) {}
           if (segs && segs.length) {
@@ -9516,8 +9643,11 @@ if ('serviceWorker' in navigator) {
       }
       let segs = [];
       try {
-        if (m.recordingId && window.__pronoteDB?.get) {
-          const rec = await window.__pronoteDB.get(m.recordingId);
+        const ids = Array.isArray(m.recordingIds) && m.recordingIds.length ? m.recordingIds : (m.recordingId ? [m.recordingId] : []);
+        const selectedId = document.getElementById('sideAudioSegmentSelect')?.value;
+        const highlightRecordId = ids.includes(selectedId) ? selectedId : ids[ids.length - 1];
+        if (highlightRecordId && window.__pronoteDB?.get) {
+          const rec = await window.__pronoteDB.get(highlightRecordId);
           segs = (rec && rec.transcriptSegments) || [];
         }
       } catch {}
