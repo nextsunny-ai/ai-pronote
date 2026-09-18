@@ -517,6 +517,65 @@ test.describe('필기 저장·복원 계약', () => {
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]').some((m: { id: string }) => m.id === 'preserve-50'))).toBeTruthy();
   });
 
+  test('저장된 여러 노트를 ZIP 하나로 백업하고 기존 자료를 보존해 일괄 복구한다', async ({ page }) => {
+    await openApp(page);
+    await page.evaluate(() => {
+      localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify([
+        { id: 'zip-note-1', title: '해외 회의 메모', tag: '노트', date: '2026-09-17', note: '<p>영문 회의 핵심</p>', standalone: true, noteOnly: true, createdAt: '2026-09-17T01:00:00.000Z' },
+        { id: 'zip-note-2', title: '개발 회의 메모', tag: '노트', date: '2026-09-18', note: '<h2>릴리스</h2><p>오류 수정</p><script>window.__zipBad = true</script>', standalone: true, noteOnly: true },
+        { id: 'recording-only', title: '노트 없는 녹음', note: '', noteOnly: false },
+        { id: 'pen-only-meeting', title: '펜 필기만 있는 회의', tag: '회의', date: '2026-09-18', note: '', noteOnly: false }
+      ]));
+      localStorage.setItem('ai_pronote.current_view_meeting.v1', 'zip-note-1');
+    });
+    await page.evaluate(async () => {
+      await (window as typeof window & { __pronoteSwitchMyNoteMeeting?: (id: string) => Promise<boolean> }).__pronoteSwitchMyNoteMeeting?.('zip-note-1');
+      await (window as typeof window & { PronoteInk?: { importDocuments: (rows: unknown[]) => Promise<void> } }).PronoteInk?.importDocuments([{
+        schemaVersion: 1, meetingId: 'zip-note-2', strokes: [{ id: 'stroke-1', tool: 'pen', color: '#1A1A1A', width: 4, points: [{ x: 10, y: 20, pressure: 0.5, t: 1 }] }]
+      }, {
+        schemaVersion: 1, meetingId: 'pen-only-meeting', strokes: [{ id: 'stroke-2', tool: 'line', color: '#C8453B', width: 3, points: [{ x: 1, y: 2, pressure: 0.5, t: 1 }, { x: 3, y: 4, pressure: 0.5, t: 2 }] }]
+      }]);
+    });
+    await openNavView(page, 'result-mynote');
+    await expect(page.locator('#mynoteBackupAllBtn')).toBeVisible();
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('#mynoteBackupAllBtn').click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/AI_PRONOTE_전체노트_.*\.zip$/);
+    await expect(page.locator('#toast')).toContainText('노트 3개를 ZIP으로 백업했습니다');
+    const zipPath = await download.path();
+    expect(zipPath).toBeTruthy();
+    const before = await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]').length);
+    const zipBuffer = await fs.promises.readFile(zipPath!);
+    await page.locator('#mynoteImportInput').setInputFiles({
+      name: 'AI_PRONOTE_전체노트.zip', mimeType: 'application/zip', buffer: zipBuffer
+    });
+    await expect(page.locator('#toast')).toContainText('노트 3개를 새 노트로 복구했습니다');
+    const result = await page.evaluate(async () => {
+      const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+      const imported = meetings.filter((m: { id: string }) => m.id.startsWith('note_import_'));
+      const devNote = imported.find((m: { title: string }) => m.title === '개발 회의 메모');
+      const penOnly = imported.find((m: { title: string }) => m.title === '펜 필기만 있는 회의');
+      const ink = await (window as typeof window & { PronoteInk?: { exportDocuments: (ids: string[]) => Promise<Array<{ meetingId: string; strokes: unknown[] }>> } }).PronoteInk?.exportDocuments([devNote.id, penOnly.id]);
+      return { count: meetings.length, imported, inkCounts: ink?.map(row => row.strokes.length).sort() || [], bad: (window as typeof window & { __zipBad?: boolean }).__zipBad };
+    });
+    expect(result.count).toBe(before + 3);
+    expect(result.imported).toHaveLength(3);
+    expect(result.imported.map((m: { title: string }) => m.title)).toEqual(expect.arrayContaining(['해외 회의 메모', '개발 회의 메모', '펜 필기만 있는 회의']));
+    expect(result.imported.find((m: { title: string }) => m.title === '개발 회의 메모').note).not.toContain('<script');
+    expect(result.inkCounts).toEqual([1, 1]);
+    expect(result.bad).toBeUndefined();
+
+    const afterValidRestore = result.count;
+    const corrupted = Buffer.from(zipBuffer);
+    corrupted[50] ^= 0xff;
+    await page.locator('#mynoteImportInput').setInputFiles({
+      name: '손상된_전체노트.zip', mimeType: 'application/zip', buffer: corrupted
+    });
+    await expect(page.locator('#toast')).toContainText('무결성 검사에 실패했습니다');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]').length)).toBe(afterValidRestore);
+  });
+
   test('너무 긴 PNG는 잘린 성공 파일 대신 PDF·HTML 사용을 안내한다', async ({ page }) => {
     await openApp(page);
     await page.locator('#homeNoteOnlyCard').click();

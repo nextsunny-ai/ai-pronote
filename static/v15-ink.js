@@ -52,6 +52,22 @@
   }
   function switchMeeting(target){if(!target||target===loadedMeetingId)return switchQueue;const transition=++switchGeneration;canvas.style.pointerEvents='none';canvas.setAttribute('aria-busy','true');switchQueue=switchQueue.catch(()=>{}).then(async()=>{clearTimeout(saveTimer);if(loadedMeetingId)await save(loadedMeetingId);loadGeneration++;loadedMeetingId='';await saveQueue;await load(target);}).finally(()=>{if(transition===switchGeneration){canvas.style.pointerEvents='';canvas.removeAttribute('aria-busy');}});return switchQueue;}
   async function clearAll(){clearing=true;clearTimeout(saveTimer);loadGeneration++;switchGeneration++;active=null;activePointerId=null;try{await Promise.allSettled([saveQueue,switchQueue]);const db=await openDb();await new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).clear();tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();doc.strokes=[];redoStack=[];loadedMeetingId='';render();}finally{clearing=false;canvas.style.pointerEvents='';canvas.removeAttribute('aria-busy');}}
+  async function exportDocuments(meetingIds){
+    clearTimeout(saveTimer);if(loadedMeetingId)await save(loadedMeetingId);await saveQueue;
+    const wanted=new Set(meetingIds||[]),db=await openDb();
+    const rows=await new Promise((resolve,reject)=>{const req=db.transaction(STORE,'readonly').objectStore(STORE).getAll();req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error);});
+    db.close();return rows.filter(row=>wanted.has(row.meetingId)).map(row=>({schemaVersion:1,meetingId:row.meetingId,updatedAt:row.updatedAt||null,strokes:structuredClone(row.strokes||[])}));
+  }
+  async function importDocuments(rows){
+    if(!Array.isArray(rows)||!rows.length)return;
+    let totalPoints=0;const tools=new Set(['pen','line','arrow','rect','ellipse']);
+    const cleanRows=rows.map(row=>{if(!row||row.schemaVersion!==1||typeof row.meetingId!=='string'||!row.meetingId||!Array.isArray(row.strokes)||row.strokes.length>5000)throw new Error('펜 필기 백업 형식이 올바르지 않습니다.');const strokes=row.strokes.map(stroke=>{if(!stroke||!tools.has(stroke.tool)||typeof stroke.color!=='string'||!/^#[0-9a-f]{6}$/i.test(stroke.color)||!Number.isFinite(stroke.width)||stroke.width<0.5||stroke.width>64||!Array.isArray(stroke.points)||!stroke.points.length||stroke.points.length>10000)throw new Error('펜 필기 백업 형식이 올바르지 않습니다.');totalPoints+=stroke.points.length;if(totalPoints>200000)throw new Error('펜 필기 백업이 너무 큽니다.');const points=stroke.points.map(point=>{if(!point||!Number.isFinite(point.x)||!Number.isFinite(point.y)||Math.abs(point.x)>1000000||Math.abs(point.y)>1000000||!Number.isFinite(point.pressure)||point.pressure<0||point.pressure>1||!Number.isFinite(point.t))throw new Error('펜 필기 좌표가 올바르지 않습니다.');return{x:point.x,y:point.y,pressure:point.pressure,t:point.t};});return{id:typeof stroke.id==='string'?stroke.id:'',tool:stroke.tool,color:stroke.color,width:stroke.width,startMs:Number.isFinite(stroke.startMs)?Math.max(0,stroke.startMs):0,endMs:Number.isFinite(stroke.endMs)?Math.max(0,stroke.endMs):0,pointerType:typeof stroke.pointerType==='string'?stroke.pointerType:'pen',points};});return{schemaVersion:1,meetingId:row.meetingId,updatedAt:new Date().toISOString(),strokes};});
+    const db=await openDb();await new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite'),store=tx.objectStore(STORE);for(const row of cleanRows)store.put(row);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('펜 필기를 복원하지 못했습니다.'));});db.close();
+  }
+  async function deleteDocuments(meetingIds){
+    if(!Array.isArray(meetingIds)||!meetingIds.length)return;
+    const db=await openDb();await new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite'),store=tx.objectStore(STORE);meetingIds.forEach(id=>store.delete(id));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();
+  }
   function point(event) {
     const r = canvas.getBoundingClientRect();
     return {x:(event.clientX-r.left)*canvas.width/r.width, y:(event.clientY-r.top)*canvas.height/r.height,
@@ -105,5 +121,5 @@
   setInterval(()=>{if(!inkPanel.hidden&&meetingId()!==loadedMeetingId)switchMeeting(meetingId()).catch(console.warn);},500);
 
   window.__pronoteExternalConsent=()=>Boolean(document.getElementById('providerConsent')?.checked);
-  window.PronoteInk={load,save,render,clearAll,switchMeeting,document:doc};
+  window.PronoteInk={load,save,render,clearAll,switchMeeting,exportDocuments,importDocuments,deleteDocuments,document:doc};
 })();

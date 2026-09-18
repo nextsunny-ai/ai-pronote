@@ -3600,7 +3600,10 @@ if ('serviceWorker' in navigator) {
               <button class="mynote-tool-btn" id="mynoteImportBtn" title="프로노트 백업 파일을 새 노트로 복구">
                 백업 불러오기
               </button>
-              <input type="file" id="mynoteImportInput" accept=".json,.pronote.json,application/json" hidden />
+              <button class="mynote-tool-btn" id="mynoteBackupAllBtn" title="저장된 모든 노트를 ZIP 파일 하나로 백업">
+                전체 백업
+              </button>
+              <input type="file" id="mynoteImportInput" accept=".zip,.json,.pronote.json,application/zip,application/json" hidden />
               <button class="mynote-tool-btn" id="mynoteShareBtn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5l6.8-4M8.6 13.5l6.8 4"/></svg>
                 보내기
@@ -7160,6 +7163,128 @@ if ('serviceWorker' in navigator) {
       a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
+    const NOTE_BACKUP_MAX_BYTES = 16 * 1024 * 1024;
+    const NOTE_BACKUP_MAX_NOTES = 499;
+    const noteBackupCrcTable = (() => {
+      const table = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+        table[n] = c >>> 0;
+      }
+      return table;
+    })();
+    function noteBackupCrc32(bytes) {
+      let crc = 0xffffffff;
+      for (const byte of bytes) crc = noteBackupCrcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+      return (crc ^ 0xffffffff) >>> 0;
+    }
+    function writeZipU16(view, offset, value) { view.setUint16(offset, value, true); }
+    function writeZipU32(view, offset, value) { view.setUint32(offset, value >>> 0, true); }
+    function createStoredZip(entries) {
+      const encoder = new TextEncoder();
+      const prepared = entries.map(entry => {
+        const name = encoder.encode(entry.name);
+        const data = typeof entry.data === 'string' ? encoder.encode(entry.data) : entry.data;
+        if (!name.length || name.length > 65535 || data.length > NOTE_BACKUP_MAX_BYTES) throw new Error('백업할 노트가 너무 큽니다.');
+        return { name, data, crc: noteBackupCrc32(data), offset: 0 };
+      });
+      const localSize = prepared.reduce((sum, e) => sum + 30 + e.name.length + e.data.length, 0);
+      const centralSize = prepared.reduce((sum, e) => sum + 46 + e.name.length, 0);
+      const totalSize = localSize + centralSize + 22;
+      if (totalSize > NOTE_BACKUP_MAX_BYTES) throw new Error('전체 백업은 16MB 이하만 만들 수 있습니다.');
+      const out = new Uint8Array(totalSize);
+      const view = new DataView(out.buffer);
+      let cursor = 0;
+      for (const entry of prepared) {
+        entry.offset = cursor;
+        writeZipU32(view, cursor, 0x04034b50); writeZipU16(view, cursor + 4, 20); writeZipU16(view, cursor + 6, 0x0800);
+        writeZipU16(view, cursor + 8, 0); writeZipU16(view, cursor + 10, 0); writeZipU16(view, cursor + 12, 0);
+        writeZipU32(view, cursor + 14, entry.crc); writeZipU32(view, cursor + 18, entry.data.length); writeZipU32(view, cursor + 22, entry.data.length);
+        writeZipU16(view, cursor + 26, entry.name.length); writeZipU16(view, cursor + 28, 0);
+        out.set(entry.name, cursor + 30); out.set(entry.data, cursor + 30 + entry.name.length);
+        cursor += 30 + entry.name.length + entry.data.length;
+      }
+      const centralOffset = cursor;
+      for (const entry of prepared) {
+        writeZipU32(view, cursor, 0x02014b50); writeZipU16(view, cursor + 4, 20); writeZipU16(view, cursor + 6, 20);
+        writeZipU16(view, cursor + 8, 0x0800); writeZipU16(view, cursor + 10, 0); writeZipU16(view, cursor + 12, 0); writeZipU16(view, cursor + 14, 0);
+        writeZipU32(view, cursor + 16, entry.crc); writeZipU32(view, cursor + 20, entry.data.length); writeZipU32(view, cursor + 24, entry.data.length);
+        writeZipU16(view, cursor + 28, entry.name.length); writeZipU16(view, cursor + 30, 0); writeZipU16(view, cursor + 32, 0);
+        writeZipU16(view, cursor + 34, 0); writeZipU16(view, cursor + 36, 0); writeZipU32(view, cursor + 38, 0); writeZipU32(view, cursor + 42, entry.offset);
+        out.set(entry.name, cursor + 46); cursor += 46 + entry.name.length;
+      }
+      writeZipU32(view, cursor, 0x06054b50); writeZipU16(view, cursor + 4, 0); writeZipU16(view, cursor + 6, 0);
+      writeZipU16(view, cursor + 8, prepared.length); writeZipU16(view, cursor + 10, prepared.length);
+      writeZipU32(view, cursor + 12, centralSize); writeZipU32(view, cursor + 16, centralOffset); writeZipU16(view, cursor + 20, 0);
+      return out;
+    }
+    function parseStoredZip(buffer) {
+      const bytes = new Uint8Array(buffer);
+      if (bytes.length > NOTE_BACKUP_MAX_BYTES || bytes.length < 22) throw new Error('ZIP 백업은 16MB 이하만 불러올 수 있습니다.');
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      let eocd = -1;
+      for (let i = bytes.length - 22, min = Math.max(0, bytes.length - 65557); i >= min; i--) {
+        if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+      }
+      if (eocd < 0) throw new Error('올바른 프로노트 ZIP 백업이 아닙니다.');
+      const disk = view.getUint16(eocd + 4, true), centralDisk = view.getUint16(eocd + 6, true);
+      const diskCount = view.getUint16(eocd + 8, true), count = view.getUint16(eocd + 10, true);
+      const centralSize = view.getUint32(eocd + 12, true), centralOffset = view.getUint32(eocd + 16, true);
+      let cursor = centralOffset;
+      if (disk || centralDisk || diskCount !== count || !count || count > NOTE_BACKUP_MAX_NOTES + 1 || centralOffset + centralSize !== eocd) throw new Error('ZIP 백업의 파일 구조가 올바르지 않습니다.');
+      const decoder = new TextDecoder();
+      const files = new Map();
+      let total = 0;
+      for (let i = 0; i < count; i++) {
+        if (cursor + 46 > bytes.length || view.getUint32(cursor, true) !== 0x02014b50) throw new Error('ZIP 백업이 손상되었습니다.');
+        const flags = view.getUint16(cursor + 8, true), method = view.getUint16(cursor + 10, true);
+        const crc = view.getUint32(cursor + 16, true), compressed = view.getUint32(cursor + 20, true), size = view.getUint32(cursor + 24, true);
+        const nameLen = view.getUint16(cursor + 28, true), extraLen = view.getUint16(cursor + 30, true), commentLen = view.getUint16(cursor + 32, true);
+        const localOffset = view.getUint32(cursor + 42, true);
+        if ((flags & 1) || method !== 0 || compressed !== size) throw new Error('이 ZIP 형식은 지원하지 않습니다. 프로노트에서 만든 백업을 선택해 주세요.');
+        if (cursor + 46 + nameLen + extraLen + commentLen > bytes.length || localOffset + 30 > bytes.length || view.getUint32(localOffset, true) !== 0x04034b50) throw new Error('ZIP 백업이 손상되었습니다.');
+        const name = decoder.decode(bytes.subarray(cursor + 46, cursor + 46 + nameLen));
+        if (!name || name.includes('..') || name.startsWith('/') || name.startsWith('\\')) throw new Error('ZIP 백업에 안전하지 않은 파일명이 있습니다.');
+        const localFlags = view.getUint16(localOffset + 6, true), localMethod = view.getUint16(localOffset + 8, true);
+        const localCrc = view.getUint32(localOffset + 14, true), localCompressed = view.getUint32(localOffset + 18, true), localSize = view.getUint32(localOffset + 22, true);
+        const localNameLen = view.getUint16(localOffset + 26, true), localExtraLen = view.getUint16(localOffset + 28, true);
+        const dataStart = localOffset + 30 + localNameLen + localExtraLen;
+        const localName = decoder.decode(bytes.subarray(localOffset + 30, localOffset + 30 + localNameLen));
+        if (localFlags !== flags || localMethod !== method || localCrc !== crc || localCompressed !== compressed || localSize !== size || localName !== name || dataStart + size > centralOffset) throw new Error('ZIP 백업이 손상되었습니다.');
+        total += size;
+        if (total > NOTE_BACKUP_MAX_BYTES) throw new Error('압축을 푼 백업은 16MB 이하만 불러올 수 있습니다.');
+        const data = bytes.slice(dataStart, dataStart + size);
+        if (noteBackupCrc32(data) !== crc) throw new Error('ZIP 백업의 무결성 검사에 실패했습니다.');
+        if (files.has(name)) throw new Error('ZIP 백업에 중복 파일명이 있습니다.');
+        files.set(name, data);
+        cursor += 46 + nameLen + extraLen + commentLen;
+      }
+      return files;
+    }
+    function storedMeetingsForBackup() {
+      let meetings = [];
+      try { meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]'); } catch {}
+      return Array.isArray(meetings) ? meetings.filter(item => item && typeof item.id === 'string') : [];
+    }
+    async function exportAllNotes() {
+      if (!persistCurrentNote()) throw new Error('현재 노트를 저장하지 못해 전체 백업을 중단했습니다.');
+      const meetings = storedMeetingsForBackup();
+      const inkRows = await window.PronoteInk?.exportDocuments?.(meetings.map(item => item.id)) || [];
+      const inkByMeeting = new Map(inkRows.map(row => [row.meetingId, row]));
+      const notes = meetings.filter(item => item.noteOnly || item.standalone || String(item.note || '').trim() || (inkByMeeting.get(item.id)?.strokes?.length || 0) > 0);
+      if (!notes.length) throw new Error('백업할 노트가 없습니다.');
+      if (notes.length > NOTE_BACKUP_MAX_NOTES) throw new Error(`전체 백업은 한 번에 ${NOTE_BACKUP_MAX_NOTES}개 노트까지 지원합니다.`);
+      const exportedAt = new Date().toISOString();
+      const entries = notes.map((note, index) => ({
+        name: `notes/${String(index + 1).padStart(4, '0')}.json`,
+        data: JSON.stringify({ format: 'ai-pronote-note', version: 1, title: String(note.title || '제목 없는 노트').slice(0, 120), html: sanitizeNoteHtml(note.note || ''), text: '', createdAt: note.createdAt || note.date || null, updatedAt: note.updatedAt || null, ink: inkByMeeting.get(note.id) || null })
+      }));
+      entries.unshift({ name: 'manifest.json', data: JSON.stringify({ format: 'ai-pronote-notes-archive', version: 1, exportedAt, noteCount: notes.length, producer: 'AI PRONOTE' }) });
+      const zip = createStoredZip(entries);
+      downloadFile(`AI_PRONOTE_전체노트_${exportedAt.slice(0, 10)}.zip`, zip, 'application/zip');
+      showToast(`노트 ${notes.length}개를 ZIP으로 백업했습니다`);
+    }
     async function exportNotePng(p, base) {
       const width = 1000, pad = 72, bodyWidth = width - pad * 2;
       const probe = document.createElement('canvas').getContext('2d');
@@ -7218,7 +7343,16 @@ if ('serviceWorker' in navigator) {
     });
     const importInput = document.getElementById('mynoteImportInput');
     const importBtn = document.getElementById('mynoteImportBtn');
+    const backupAllBtn = document.getElementById('mynoteBackupAllBtn');
     let noteImportInProgress = false;
+    backupAllBtn?.addEventListener('click', async () => {
+      const originalText = backupAllBtn.textContent;
+      backupAllBtn.disabled = true;
+      backupAllBtn.setAttribute('aria-busy', 'true');
+      backupAllBtn.textContent = '백업 중…';
+      try { await exportAllNotes(); } catch (err) { showToast(err?.message || '전체 백업을 만들지 못했습니다.'); }
+      finally { backupAllBtn.disabled = false; backupAllBtn.removeAttribute('aria-busy'); backupAllBtn.textContent = originalText; }
+    });
     importBtn?.addEventListener('click', () => { if (!noteImportInProgress) importInput?.click(); });
     importInput?.addEventListener('change', async () => {
       const file = importInput.files?.[0];
@@ -7228,45 +7362,63 @@ if ('serviceWorker' in navigator) {
       if (importBtn) { importBtn.disabled = true; importBtn.setAttribute('aria-busy', 'true'); importBtn.textContent = '불러오는 중…'; }
       let importedId = null;
       let importCommitted = false;
+      let importedIds = [];
       try {
-        if (file.size > 8 * 1024 * 1024) throw new Error('노트 백업은 8MB 이하만 불러올 수 있습니다.');
-        const raw = JSON.parse(await file.text());
-        if (raw?.format !== 'ai-pronote-note' || raw?.version !== 1 || typeof raw?.html !== 'string') {
+        if (file.size > NOTE_BACKUP_MAX_BYTES) throw new Error('백업은 16MB 이하만 불러올 수 있습니다.');
+        let rawNotes = [];
+        if (file.name.toLowerCase().endsWith('.zip') || file.type === 'application/zip') {
+          const files = parseStoredZip(await file.arrayBuffer());
+          const manifestBytes = files.get('manifest.json');
+          if (!manifestBytes) throw new Error('프로노트 전체 백업의 manifest.json이 없습니다.');
+          const manifest = JSON.parse(new TextDecoder().decode(manifestBytes));
+          if (manifest?.format !== 'ai-pronote-notes-archive' || manifest?.version !== 1) throw new Error('프로노트에서 만든 전체 백업이 아닙니다.');
+          const noteFiles = [...files.entries()].filter(([name]) => /^notes\/\d{4}\.json$/.test(name)).sort(([a], [b]) => a.localeCompare(b));
+          if (!noteFiles.length || noteFiles.length !== manifest.noteCount) throw new Error('전체 백업의 노트 수가 일치하지 않습니다.');
+          rawNotes = noteFiles.map(([, data]) => JSON.parse(new TextDecoder().decode(data)));
+        } else {
+          if (file.size > 8 * 1024 * 1024) throw new Error('노트 JSON 백업은 8MB 이하만 불러올 수 있습니다.');
+          rawNotes = [JSON.parse(await file.text())];
+        }
+        if (!rawNotes.length || rawNotes.length > NOTE_BACKUP_MAX_NOTES || rawNotes.some(raw => raw?.format !== 'ai-pronote-note' || raw?.version !== 1 || typeof raw?.html !== 'string' || (raw.ink && (raw.ink.schemaVersion !== 1 || !Array.isArray(raw.ink.strokes))))) {
           throw new Error('프로노트에서 내보낸 노트 백업 파일이 아닙니다.');
         }
-        const safeHtml = sanitizeNoteHtml(raw.html);
         const now = new Date();
-        const id = `note_import_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        importedId = id;
         const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
         let meetings = [];
         try { meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]'); } catch {}
-        meetings.unshift({
-          id,
+        if (!Array.isArray(meetings)) meetings = [];
+        const stamp = Date.now();
+        const imported = rawNotes.map((raw, index) => ({
+          id: `note_import_${stamp}_${index}_${Math.random().toString(36).slice(2, 7)}`,
           title: String(raw.title || '복구한 노트').trim().slice(0, 120) || '복구한 노트',
           tag: '노트', date, dateLabel: '오늘', duration: '', attendees: 0,
-          summary: '', summaryPending: false, note: safeHtml, noteOnly: true,
+          summary: '', summaryPending: false, note: sanitizeNoteHtml(raw.html), noteOnly: true,
           createdAt: raw.createdAt || now.toISOString(), updatedAt: now.toISOString()
-        });
-        localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(meetings));
-        const switched = await switchNoteMeeting(id);
+        }));
+        importedId = imported[0].id;
+        importedIds = imported.map(item => item.id);
+        localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify([...imported, ...meetings]));
+        const importedInk = rawNotes.flatMap((raw, index) => raw.ink ? [{ schemaVersion: 1, meetingId: imported[index].id, strokes: raw.ink.strokes }] : []);
+        await window.PronoteInk?.importDocuments?.(importedInk);
+        const switched = await switchNoteMeeting(importedId);
         if (!switched) throw new Error('복구한 노트를 열지 못했습니다. 다시 시도해 주세요.');
         importCommitted = true;
         window.__pronoteRenderMyNotesList?.();
         // 복구 직후에는 다른 화면 렌더 훅이 끼어들어도 새 노트가 즉시 보이게 고정한다.
-        loadedMeetingId = id;
-        if (titleInput) titleInput.value = meetings[0].title;
-        content.innerHTML = safeHtml;
+        loadedMeetingId = importedId;
+        if (titleInput) titleInput.value = imported[0].title;
+        content.innerHTML = imported[0].note;
         noteDirty = false;
         setSaveState('저장됨');
         updateMeta();
-        showToast('백업을 새 노트로 복구했습니다');
+        showToast(rawNotes.length === 1 ? '백업을 새 노트로 복구했습니다' : `노트 ${rawNotes.length}개를 새 노트로 복구했습니다`);
       } catch (err) {
         if (importedId && !importCommitted) {
           try {
             const latest = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
-            localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(latest.filter(item => item.id !== importedId)));
+            localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(Array.isArray(latest) ? latest.filter(item => !importedIds.includes(item.id)) : []));
           } catch {}
+          try { await window.PronoteInk?.deleteDocuments?.(importedIds); } catch {}
         }
         showToast(err?.message || '노트 백업을 불러오지 못했습니다.');
       } finally {
