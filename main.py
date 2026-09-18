@@ -893,7 +893,7 @@ def index():
 
 APP_VERSION = P0_APP_VERSION
 BUILD_DATE = "2026-09-18"
-BUILD_NOTE = "카메라 영상·음성 동시 녹화, 세션별 임시저장·복구, 안전한 버전 전환을 포함한 외부 베타 3"
+BUILD_NOTE = "회의록 빈 상태 정리, 카메라 영상·음성 동시 녹화, 세션별 임시저장·복구를 포함한 외부 베타 4"
 
 
 @app.get("/api/health")
@@ -918,7 +918,7 @@ def version_info():
         "build_note": BUILD_NOTE,
         "drive_master": "Drive/SUNNY_TEAM/AI_PRONOTE/source_v1.3/",
         "github": "https://github.com/nextsunny-ai/ai-pronote",
-        "release": "https://github.com/nextsunny-ai/ai-pronote/releases/tag/v1.5.0-beta3-20260918",
+        "release": "https://github.com/nextsunny-ai/ai-pronote/releases/tag/v1.5.0-beta4-20260918",
     }
 
 

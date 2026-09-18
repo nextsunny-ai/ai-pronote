@@ -230,6 +230,41 @@ test.describe('v1.5 핵심 발견성과 반응형', () => {
     await expect(page.getByTestId('job-center')).toHaveAttribute('aria-hidden', 'true');
   });
 
+  test('회의가 없으면 데모 메타데이터와 실행 불가능한 결과 버튼을 숨긴다', async ({ page }) => {
+    await openApp(page);
+    await openNavView(page, 'result');
+    await expect(page.locator('#view-result')).toHaveClass(/active/);
+    await expect(page.locator('#view-result .notes-box-body')).toContainText('아직 회의록이 없습니다');
+    await expect(page.locator('#meetingResultTabs')).toBeHidden();
+    await expect(page.locator('#view-result .result-actionbar')).toBeHidden();
+    await expect(page.locator('#view-result #info')).toBeHidden();
+    await expect(page.locator('#view-result .result-side')).toBeHidden();
+    await page.locator('#emptyResultStartBtn').click();
+    await expect(page.locator('#meetingTypeModal')).toHaveClass(/open/);
+    await page.locator('#meetingTypeClose').click();
+
+    await page.evaluate(() => {
+      const meeting = {
+        id: 'empty-state-roundtrip', title: '복원 검증 회의', date: '2026-09-18',
+        duration: '00:42', summary: '실제 회의 요약', transcript: '실제 받아쓰기',
+        attendees: 0, location: '', tag: '', scenario: ''
+      };
+      localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify([meeting]));
+      localStorage.setItem('ai_pronote.current_view_meeting.v1', meeting.id);
+    });
+    await openNavView(page, 'home');
+    await openNavView(page, 'result');
+    await expect(page.locator('#meetingResultTabs')).toBeVisible();
+    await expect(page.locator('#view-result .result-actionbar')).toBeVisible();
+    await expect(page.locator('#view-result #info')).toBeVisible();
+    await expect(page.locator('#view-result .result-side')).toBeVisible();
+    await expect(page.locator('#view-result .result-title')).toHaveText('복원 검증 회의');
+    await expect(page.locator('#view-result #info')).toContainText('장소 미입력');
+    await expect(page.locator('#view-result #info')).toContainText('아젠다 미입력');
+    await expect(page.locator('#view-result #info')).toContainText('참석자 미입력');
+    await expect(page.locator('#view-result #info')).not.toContainText('[Speaker 1]');
+  });
+
   test('설치본 데이터 삭제는 범위를 정확히 알리고 브라우저 데이터를 정리한다', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('ai_pronote.trash.v1', '[{"id":"private"}]');

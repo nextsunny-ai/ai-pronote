@@ -6,7 +6,7 @@ from typing import Optional
 import shutil
 import time
 
-APP_VERSION = "v1.5.0-beta3.20260918"
+APP_VERSION = "v1.5.0-beta4.20260918"
 ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".webm", ".ogg", ".flac", ".mp4"}
 MAX_UPLOAD_BYTES = 512 * 1024 * 1024
 

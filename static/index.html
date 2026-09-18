@@ -8771,12 +8771,32 @@ if ('serviceWorker' in navigator) {
       try { return typeof SEED_MEETING_IDS !== 'undefined' && SEED_MEETING_IDS.has(m.id); } catch { return false; }
     }
 
+    function setResultEmptyState(empty) {
+      ['#meetingResultTabs', '#view-result .result-tag-row', '#view-result .result-actionbar',
+       '#view-result .actionbar-note', '#view-result #info', '#view-result .result-side']
+        .forEach(sel => document.querySelectorAll(sel).forEach(el => {
+          if (el.dataset.pronoteDisplay === undefined) {
+            el.dataset.pronoteDisplay = el.style.getPropertyValue('display');
+            el.dataset.pronoteDisplayPriority = el.style.getPropertyPriority('display');
+          }
+          el.hidden = empty;
+          if (empty) {
+            el.style.setProperty('display', 'none', 'important');
+          } else if (el.dataset.pronoteDisplay) {
+            el.style.setProperty('display', el.dataset.pronoteDisplay, el.dataset.pronoteDisplayPriority || '');
+          } else {
+            el.style.removeProperty('display');
+          }
+        }));
+    }
+
     // 진짜 회의 데이터 binding
     function renderRealMeeting() {
       const m = getCurrentMeeting();
       if (!m) {
         // 실사용 = 아직 회의 없음 → 샘플 대신 빈 상태 안내 (데모 모드에서는 샘플 유지)
         if (!isDemoOn()) {
+          setResultEmptyState(true);
           setSampleSectionsVisible(false);
           const t = document.querySelector('#view-result .result-title');
           if (t) t.textContent = '회의록';
@@ -8786,35 +8806,43 @@ if ('serviceWorker' in navigator) {
           const body0 = document.querySelector('#view-result .notes-box-body');
           if (body0) {
             body0.innerHTML = '<div class="meeting-real-summary" style="text-align:center; padding:44px 16px; color:var(--text-secondary); font-size:13.5px; line-height:1.8;">'
-              + '아직 회의록이 없습니다.<br/>좌측 <b>새 회의 시작</b>으로 녹음하거나, 라이브러리에 음성 파일을 올려 정리하면 여기에 표시됩니다.</div>';
+              + '<div style="font-size:17px;font-weight:650;color:var(--text-primary);margin-bottom:8px">아직 회의록이 없습니다</div>'
+              + '<div>새 회의를 녹음하거나 기존 녹음·영상 파일을 가져오면 이곳에 결과가 표시됩니다.</div>'
+              + '<button type="button" id="emptyResultStartBtn" class="action-btn primary" style="margin-top:18px">새 회의 녹음</button></div>';
+            document.getElementById('emptyResultStartBtn')?.addEventListener('click', () => {
+              document.getElementById('newMeetingBtn')?.click();
+            }, { once: true });
           }
         } else {
+          setResultEmptyState(false);
           setSampleSectionsVisible(true);
         }
         try { window.__pronoteNote?.loadCurrent?.(); } catch {}
         return;
       }
+      setResultEmptyState(false);
       // 데모 샘플 회의 = 샘플 섹션 그대로 / 진짜 회의 = 샘플 섹션 숨김 (본문 = AI 회의록 전체)
       setSampleSectionsVisible(isSeedMeeting(m));
       // 메타 갱신
       const tagEl = document.querySelector('#view-result .result-tag-row .tag');
-      if (tagEl && m.tag) tagEl.textContent = m.tag;
+      if (tagEl) tagEl.textContent = m.tag || m.scenario || '회의록';
       const metaEls = document.querySelectorAll('#view-result .result-tag-row .meta');
-      if (metaEls.length >= 1 && m.date) metaEls[0].textContent = `${m.date}${m.dateLabel ? ' · ' + m.dateLabel : ''}`;
-      if (metaEls.length >= 3 && m.duration) metaEls[2].textContent = m.duration;
+      if (metaEls.length >= 1) metaEls[0].textContent = m.date ? `${m.date}${m.dateLabel ? ' · ' + m.dateLabel : ''}` : '날짜 미입력';
+      if (metaEls.length >= 3) metaEls[2].textContent = m.duration || '길이 확인 중';
       const titleEl = document.querySelector('#view-result .result-title');
-      if (titleEl && m.title) titleEl.textContent = m.title;
+      if (titleEl) titleEl.textContent = m.title || '제목 없는 회의';
 
       // 회의 정보 블록 갱신
       const infoBlock = document.getElementById('info');
       if (infoBlock) {
         const infoVals = infoBlock.querySelectorAll('.info-item-value');
-        if (infoVals.length >= 1 && m.date) infoVals[0].textContent = m.date;
-        if (infoVals.length >= 3 && (m.tag || m.scenario)) infoVals[2].textContent = m.tag || m.scenario || '';
-        if (infoVals.length >= 4 && m.attendees) {
-          const att = typeof m.attendees === 'number' ? `${m.attendees}명` : (m.attendeesText || `${m.attendees}명`);
-          infoVals[3].textContent = att;
-        }
+        const attendees = m.attendeesText
+          || (typeof m.attendees === 'number' && m.attendees > 0 ? `${m.attendees}명` : '')
+          || (typeof m.attendees === 'string' ? m.attendees : '');
+        if (infoVals.length >= 1) infoVals[0].textContent = m.date || '날짜 미입력';
+        if (infoVals.length >= 2) infoVals[1].textContent = m.location || '장소 미입력';
+        if (infoVals.length >= 3) infoVals[2].textContent = m.tag || m.scenario || '아젠다 미입력';
+        if (infoVals.length >= 4) infoVals[3].textContent = attendees || '참석자 미입력';
       }
 
       // notes-box-body = 실제 summary 있으면 교체 / 없으면 "생성 중" (데모 mock 표시 X)

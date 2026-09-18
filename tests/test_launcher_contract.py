@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class LauncherContractTests(unittest.TestCase):
-    EXPECTED_VERSION = "v1.5.0-beta3.20260918"
+    EXPECTED_VERSION = "v1.5.0-beta4.20260918"
 
     def test_launcher_is_safe_and_version_aware(self):
         launcher = (ROOT / "start_v15.ps1").read_text(encoding="utf-8")
@@ -43,7 +43,7 @@ class LauncherContractTests(unittest.TestCase):
         for source in (version_source, windows, windows_boot, mac):
             self.assertIn(self.EXPECTED_VERSION, source)
         self.assertIn('BUILD_DATE = "2026-09-18"', metadata)
-        self.assertIn("v1.5.0-beta3-20260918", metadata)
+        self.assertIn("v1.5.0-beta4-20260918", metadata)
         self.assertNotIn("releases/tag/v1.0.0-beta", metadata)
 
 
