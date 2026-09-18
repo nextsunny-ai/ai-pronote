@@ -154,6 +154,26 @@ test.describe('v1.5 핵심 발견성과 반응형', () => {
     expect(await chooser.element().getAttribute('accept')).toContain('.mp4');
   });
 
+  test('회의록 생성 화면에서도 기존 작업을 유지한 채 이어서 녹음을 시작한다', async ({ page }) => {
+    await seedSyntheticMeeting(page);
+    await openApp(page);
+    await page.evaluate(() => window.switchView?.('result'));
+    await expect(page.locator('#resultContinueRecordingBtn')).toBeVisible();
+    await page.evaluate(() => {
+      window.__pronoteResult?.render?.();
+      window.__pronoteResult?.render?.();
+      (window as typeof window & { __continueOpenCount?: number }).__continueOpenCount = 0;
+      document.getElementById('newMeetingBtn')?.addEventListener('click', () => {
+        (window as typeof window & { __continueOpenCount?: number }).__continueOpenCount! += 1;
+      });
+    });
+    await page.locator('#resultContinueRecordingBtn').click();
+    await expect(page.locator('#meetingTypeModal')).toHaveClass(/open/);
+    await expect(page.locator('#newMeetingTitle')).toHaveValue('E2E 합성 주간 회의 · 이어서');
+    await expect(page.locator('#toast')).toContainText('기존 회의록은 계속 생성됩니다');
+    await expect.poll(() => page.evaluate(() => (window as typeof window & { __continueOpenCount?: number }).__continueOpenCount)).toBe(1);
+  });
+
   test('MP4 파일을 고르면 문서 형식과 다음 행동을 명확히 안내한다', async ({ page }) => {
     await openApp(page);
     const chooserPromise = page.waitForEvent('filechooser');

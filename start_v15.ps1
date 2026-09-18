@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$ExpectedVersion = "v1.5.0-p0"
+$ExpectedVersion = "v1.5.0-beta3.20260918"
 $HostAddress = "127.0.0.1"
 $Port = 8795
 $BaseUrl = "http://${HostAddress}:${Port}"

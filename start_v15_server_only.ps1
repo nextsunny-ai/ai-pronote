@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$ExpectedVersion = "v1.5.0-p0"
+$ExpectedVersion = "v1.5.0-beta3.20260918"
 $HostAddress = "127.0.0.1"
 $Port = 8795
 $BaseUrl = "http://${HostAddress}:${Port}"
@@ -34,8 +34,8 @@ $env:PRONOTE_DATA_DIR = $DataDir
 # Public/default runs omit this flag and keep the experimental panel hidden.
 $env:PRONOTE_EXPERIMENTAL_CLI = "true"
 
-$python = (Get-Command pythonw.exe -ErrorAction SilentlyContinue).Source
-if (-not $python) { $python = (Get-Command python.exe -ErrorAction Stop).Source }
+$python = Join-Path $ProjectDir ".venv\Scripts\pythonw.exe"
+if (-not (Test-Path -LiteralPath $python)) { exit 4 }
 Start-Process -FilePath $python -ArgumentList '"main.py"' -WorkingDirectory $ProjectDir -WindowStyle Hidden
 
 $deadline = (Get-Date).AddSeconds(45)

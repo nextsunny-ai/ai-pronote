@@ -109,7 +109,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('PRONOTE_EXPERIMENTAL_CLI="true"', start)
         self.assertIn('python3 -m venv .venv', setup)
         self.assertIn('.venv/bin/python', start)
-        self.assertIn('EXPECTED_VERSION="v1.5.0-p0"', start)
+        self.assertIn('EXPECTED_VERSION="v1.5.0-beta3.20260918"', start)
         self.assertIn('health_version()', start)
         self.assertIn('kill -0 "$owner"', start)
         self.assertIn('trap on_error ERR', setup)
