@@ -88,6 +88,31 @@ UX 점수는 공식 기능 설명과 공개 사용 흐름을 기준으로 한 �
 
 시사점: AI PRONOTE의 펜 필기는 단순 저장을 넘어 타임스탬프가 있는 노트·하이라이트와 녹음 위치를 연결해야 한다.
 
+### iPad 노트 전용 벤치마크
+
+독립 노트의 1차 기준은 Goodnotes, 보조 기준은 Notability와 Apple Notes로 정한다. 회의 기능이 없어도 반복 사용하고 싶은 노트 경험을 먼저 만족해야 한다.
+
+| 영역 | Goodnotes | Notability | Apple Notes | AI PRONOTE 현재 | 다음 기준 |
+|---|---|---|---|---|---|
+| 작성 화면 | 페이지 기반 전체 화면, 텍스트·펜 혼합 | 페이지 기반 전체 화면, 필기·오디오 | 빠른 새 노트, Pencil 도구 | 작은 팝업의 텍스트 중심 | 독립 노트를 전체 화면 편집기로 전환 |
+| 손글씨 | 선택·이동·도형·검색·인식 | 필기와 오디오 동기화 | Scribble·손글씨 보정·검색 | 회의 노트의 벡터 펜만 제공 | 독립 노트에도 동일 펜 엔진·선택·검색 제공 |
+| 저장 | 라이브러리 저장, 클라우드 동기화, 자동 백업 | 노트 원본과 오디오 보존 | iCloud 동기화 | 로컬 자동 저장과 재열기 | 저장 상태·최근 수정·복구본·수동 백업 표시 |
+| 검색 | 제목·본문·손글씨·PDF 전체 검색 | 노트와 녹음 탐색 | 제목·본문·손글씨 검색 | 제목·HTML 텍스트 검색 | 손글씨 인덱스와 노트 내 검색 추가 |
+| 내보내기 | 원본·편집/평면 PDF·이미지, 페이지/문서/폴더 단위 | PDF·Note·JPEG·PNG·NTB, 녹음 포함 ZIP | PDF·Markdown·Pages·인쇄 | 기본 노트 다운로드 | PDF·Markdown·HTML·PNG와 원본 백업 제공 |
+| 공유 | OS 공유·웹 링크·클라우드 저장 | OS 공유·연결 서비스 | OS 공유·협업 | 명시적 공유 흐름 부족 | 파일 생성 후 OS 공유 또는 저장 위치 선택 |
+| 오디오 연결 | 필기 획을 누르면 해당 녹음 시점 재생 | 녹음과 작성 내용을 동기화 | 노트 안 녹음·전사 | 회의 노트와 녹음이 같은 회의에만 존재 | 펜 획·텍스트 블록에 녹음 타임스탬프 연결 |
+
+#### 노트 저장·내보내기 출시 게이트
+
+1. 녹음 없는 독립 노트도 고유 ID로 즉시 생성하고 입력 중 자동 저장한다.
+2. 저장 중·저장 완료·저장 실패를 화면에서 구분하며 실패 시 입력을 유지한다.
+3. 앱 종료·새로고침·노트 전환 뒤 제목·텍스트·펜 획·사진을 그대로 복원한다.
+4. 삭제 전 휴지통과 복원 경로를 제공하고 전체 노트 수동 백업 파일을 만들 수 있게 한다.
+5. 단일 노트를 PDF·Markdown·HTML·PNG로 내보내고 AI PRONOTE 원본 형식으로 다시 가져올 수 있게 한다.
+6. 여러 노트와 폴더를 일괄 ZIP으로 내보내며 구조와 파일명을 보존한다.
+7. 오디오가 연결된 노트는 PDF와 녹음 파일을 함께 묶거나 각각 내보낼 수 있게 한다.
+8. Windows·Mac·iPad 화면에서 저장과 내보내기 결과를 실제로 다시 열어 검증한다.
+
 ## 4. 테이블 스테이크와 차별화
 
 ### 출시 전 반드시 필요한 기본기
@@ -164,5 +189,9 @@ UX 점수는 공식 기능 설명과 공개 사용 흐름을 기준으로 한 �
 - Notion AI Meeting Notes: https://www.notion.com/help/ai-meeting-notes
 - Goodnotes AI for Meetings: https://www.goodnotes.com/features/meeting-notes
 - Goodnotes 오디오 전사: https://support.goodnotes.com/hc/en-us/articles/10234247292303-Audio-Transcription-FAQs-in-Goodnotes
+- Goodnotes 기능·필기 검색: https://www.goodnotes.com/features/ 및 https://support.goodnotes.com/hc/en-us/articles/7353743594127-How-to-Search-Your-Notes
+- Goodnotes 내보내기·자동 백업: https://support.goodnotes.com/hc/en-us/articles/7353742824975-Export-documents-or-pages 및 https://support.goodnotes.com/hc/en-us/articles/7352786555279-How-to-Set-Up-Auto-Backup-in-Goodnotes
+- Notability 공유·오디오 내보내기: https://support.gingerlabs.com/hc/en-us/articles/205228298-Sharing-Notes 및 https://support.gingerlabs.com/hc/en-us/articles/206060617-Recording-and-Playing-Audio
+- Apple Notes 오디오·내보내기: https://support.apple.com/guide/ipad/record-and-transcribe-audio-ipadd0bde806/ipados 및 https://support.apple.com/guide/ipad/export-or-print-notes-ipad50c393a8/ipados
 
 제작: ㈜써니엔터테인먼트
