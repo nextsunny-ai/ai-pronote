@@ -692,6 +692,18 @@ test.describe('필기 저장·복원 계약', () => {
     await expect(page.locator('#toast')).toContainText('화면 이동을 중단했습니다');
     expect(await page.evaluate(() => localStorage.getItem('ai_pronote.current_view_meeting.v1'))).toBe('note-save-a');
     expect(await page.evaluate(() => (window as typeof window & { __inkMeetingSwitches: Array<string | null> }).__inkMeetingSwitches)).toEqual([]);
+    await expect(page.locator('#noteEmergencyRecoveryPanel')).toBeVisible();
+    await expect(page.locator('#mynoteSaveState')).toContainText('복구본 필요');
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('#noteEmergencyRecoveryPanel button').click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toContain('긴급복구.pronote.json');
+    const downloadPath = await download.path();
+    const recovery = JSON.parse(fs.readFileSync(downloadPath!, 'utf8'));
+    expect(recovery.format).toBe('ai-pronote-note');
+    expect(recovery.title).toBe('노트 A');
+    expect(recovery.html).toContain('저장 실패 시 사라지면 안 되는 A 수정본');
+    expect(recovery.recovery.reason).toBe('local_save_failed');
   });
 
   test('필기 로드 중 빠른 중복 선택이 회의 상태를 교차시키지 않는다', async ({ page }) => {

@@ -6929,6 +6929,54 @@ if ('serviceWorker' in navigator) {
       saveState.textContent = label;
       saveState.dataset.state = state;
     }
+    function clearEmergencyNoteRecovery() {
+      document.getElementById('noteEmergencyRecoveryPanel')?.remove();
+      window.__pronoteNoteEmergencyRecovery = null;
+    }
+    function offerEmergencyNoteRecovery({ meetingId, title, html }) {
+      const payload = {
+        format: 'ai-pronote-note', version: 1,
+        title: String(title || '제목 없는 노트').slice(0, 120),
+        html: sanitizeNoteHtml(html),
+        text: (() => { const el = document.createElement('div'); el.innerHTML = sanitizeNoteHtml(html); return el.innerText.trim(); })(),
+        createdAt: null, updatedAt: new Date().toISOString(),
+        recovery: { reason: 'local_save_failed', meetingId: meetingId || null }
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+      const safe = payload.title.replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 80) || '제목 없는 노트';
+      window.__pronoteNoteEmergencyRecovery = { payload, blob, filename: `${safe}_긴급복구.pronote.json` };
+      let panel = document.getElementById('noteEmergencyRecoveryPanel');
+      if (!panel) {
+        panel = document.createElement('section');
+        panel.id = 'noteEmergencyRecoveryPanel';
+        panel.setAttribute('role', 'alert');
+        panel.style.cssText = 'position:fixed;z-index:10050;right:20px;bottom:20px;width:min(430px,calc(100vw - 32px));padding:16px;border:1px solid #b45309;border-radius:14px;background:#fff;color:#111827;box-shadow:0 16px 48px rgba(0,0,0,.25);';
+        document.body.appendChild(panel);
+      }
+      panel.replaceChildren();
+      const heading = document.createElement('strong');
+      heading.textContent = '노트를 저장하지 못했습니다';
+      panel.appendChild(heading);
+      const guide = document.createElement('p');
+      guide.textContent = '입력 내용은 화면에 유지했습니다. 아래 버튼으로 긴급 복구본을 먼저 저장하세요.';
+      guide.style.cssText = 'margin:8px 0 12px;font-size:13px;line-height:1.5;';
+      panel.appendChild(guide);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = '긴급 복구본 다운로드';
+      button.style.cssText = 'width:100%;padding:10px;border:1px solid #b45309;border-radius:9px;background:#fffbeb;color:#78350f;font-weight:700;cursor:pointer;';
+      button.addEventListener('click', () => {
+        const recovery = window.__pronoteNoteEmergencyRecovery;
+        if (!recovery) return;
+        const url = URL.createObjectURL(recovery.blob);
+        const anchor = document.createElement('a');
+        anchor.href = url; anchor.download = recovery.filename;
+        document.body.appendChild(anchor); anchor.click(); anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      });
+      panel.appendChild(button);
+      return payload;
+    }
 
     // ── 회의별 노트 로드·저장 ──
     // 현재 보고 있는 회의(current_view_meeting)의 note 필드를 읽고/쓴다.
@@ -7001,17 +7049,27 @@ if ('serviceWorker' in navigator) {
         try {
           localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(ref.arr));
           noteDirty = false;
+          clearEmergencyNoteRecovery();
           setSaveState(`저장됨 · ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`);
           window.__pronoteRenderMyNotesList?.();
           return true;
-        } catch { setSaveState('저장 실패', 'error'); return false; }
+        } catch {
+          offerEmergencyNoteRecovery({ meetingId, title: titleInput?.value.trim() || ref.m.title, html });
+          setSaveState('저장 실패 · 복구본 필요', 'error');
+          return false;
+        }
       }
       try {
         localStorage.setItem(NOTE_DRAFT_KEY, html);
         noteDirty = false;
+        clearEmergencyNoteRecovery();
         setSaveState('저장됨');
         return true;
-      } catch { setSaveState('저장 실패', 'error'); return false; }
+      } catch {
+        offerEmergencyNoteRecovery({ meetingId: null, title: titleInput?.value.trim(), html });
+        setSaveState('저장 실패 · 복구본 필요', 'error');
+        return false;
+      }
     }
     let noteSwitchInProgress = false;
     async function switchNoteMeeting(nextMeetingId) {
