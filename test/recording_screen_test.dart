@@ -50,7 +50,9 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('회의 녹음'));
+    await tester.tap(find.text('회의 기록'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('meeting-audio-mode')));
     await tester.pumpAndSettle();
     expect(find.text('녹음 시작'), findsOneWidget);
 
@@ -79,7 +81,9 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('회의 녹음'));
+    await tester.tap(find.text('회의 기록'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('meeting-audio-mode')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('녹음 시작'));
     await tester.pump();
@@ -105,7 +109,9 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('회의 녹음'));
+    await tester.tap(find.text('회의 기록'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('meeting-audio-mode')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('녹음 시작'));
     await tester.pump();

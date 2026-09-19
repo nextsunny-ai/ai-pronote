@@ -14,6 +14,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'recording/audio_recorder_gateway.dart';
 import 'recording/device_audio_recorder.dart';
+import 'recording/device_video_recorder.dart';
+import 'recording/video_recorder_gateway.dart';
 import 'update/update_checker.dart';
 
 Future<Directory> _defaultRecordingDirectory() async {
@@ -25,6 +27,13 @@ Future<Directory> _defaultRecordingDirectory() async {
   return recordings;
 }
 
+Future<Directory> _defaultVideoDirectory() async {
+  final documents = await getApplicationDocumentsDirectory();
+  final videos = Directory('${documents.path}${Platform.pathSeparator}videos');
+  await videos.create(recursive: true);
+  return videos;
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final documents = await getApplicationDocumentsDirectory();
@@ -33,6 +42,7 @@ Future<void> main() async {
     PronoteApp(
       repository: FileNoteRepository(documents),
       recorder: DeviceAudioRecorderGateway(),
+      videoRecorderFactory: DeviceVideoRecorderGateway.new,
       currentVersion: packageInfo.version,
       updateChecker: const RemoteUpdateChecker(
         'https://nextsunny-ai.github.io/ai-pronote/mobile-update.json',
@@ -49,6 +59,7 @@ class PronoteApp extends StatelessWidget {
     super.key,
     required this.repository,
     this.recorder = const DisabledAudioRecorderGateway(),
+    this.videoRecorderFactory,
     this.recordingDirectoryProvider,
     this.recordingValidator,
     this.currentVersion = '1.0.0',
@@ -58,6 +69,7 @@ class PronoteApp extends StatelessWidget {
 
   final NoteRepository repository;
   final AudioRecorderGateway recorder;
+  final VideoRecorderGateway Function()? videoRecorderFactory;
   final Future<Directory> Function()? recordingDirectoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
   final String currentVersion;
@@ -83,6 +95,7 @@ class PronoteApp extends StatelessWidget {
       child: HomeScreen(
         repository: repository,
         recorder: recorder,
+        videoRecorderFactory: videoRecorderFactory,
         recordingDirectoryProvider: recordingDirectoryProvider,
         recordingValidator: recordingValidator,
         displayVersion: _displayVersion(currentVersion),
@@ -167,6 +180,7 @@ class HomeScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.recorder,
+    this.videoRecorderFactory,
     this.recordingDirectoryProvider,
     this.recordingValidator,
     required this.displayVersion,
@@ -174,6 +188,7 @@ class HomeScreen extends StatefulWidget {
 
   final NoteRepository repository;
   final AudioRecorderGateway recorder;
+  final VideoRecorderGateway Function()? videoRecorderFactory;
   final Future<Directory> Function()? recordingDirectoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
   final String displayVersion;
@@ -236,6 +251,72 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _chooseMeetingMode() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '회의 기록 방식',
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              const Text('음성만 녹음하거나 카메라 영상과 음성을 함께 남길 수 있습니다.'),
+              const SizedBox(height: 18),
+              ListTile(
+                key: const ValueKey('meeting-audio-mode'),
+                leading: const Icon(Icons.mic_rounded),
+                title: const Text('음성 녹음'),
+                subtitle: const Text('가볍게 녹음하며 회의 노트 필기'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => RecordingScreen(
+                        recorder: widget.recorder,
+                        repository: widget.repository,
+                        directoryProvider: widget.recordingDirectoryProvider,
+                        recordingValidator: widget.recordingValidator,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const Divider(),
+              ListTile(
+                key: const ValueKey('meeting-video-mode'),
+                leading: const Icon(Icons.videocam_rounded),
+                title: const Text('영상 + 음성 녹화'),
+                subtitle: const Text('카메라로 칠판과 현장을 함께 기록'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => VideoRecordingScreen(
+                        recorder:
+                            (widget.videoRecorderFactory ??
+                                    () => const DisabledVideoRecorderGateway())
+                                .call(),
+                        repository: widget.repository,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -294,19 +375,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: _StartCard(
                       key: const ValueKey('start-recording-card'),
                       icon: Icons.mic_none_rounded,
-                      title: '회의 녹음',
-                      description: '음성을 남기며 함께 필기하기',
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => RecordingScreen(
-                            recorder: widget.recorder,
-                            repository: widget.repository,
-                            directoryProvider:
-                                widget.recordingDirectoryProvider,
-                            recordingValidator: widget.recordingValidator,
-                          ),
-                        ),
-                      ),
+                      title: '회의 기록',
+                      description: '음성 또는 영상으로 기록하며 필기',
+                      onTap: _chooseMeetingMode,
                     ),
                   ),
                 ];
@@ -852,6 +923,267 @@ class _RecordingScreenState extends State<RecordingScreen> {
                 ],
               ],
             ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class VideoRecordingScreen extends StatefulWidget {
+  const VideoRecordingScreen({
+    super.key,
+    required this.recorder,
+    required this.repository,
+    this.directoryProvider,
+    this.recordingValidator,
+  });
+
+  final VideoRecorderGateway recorder;
+  final NoteRepository repository;
+  final Future<Directory> Function()? directoryProvider;
+  final Future<bool> Function(String path)? recordingValidator;
+
+  @override
+  State<VideoRecordingScreen> createState() => _VideoRecordingScreenState();
+}
+
+class _VideoRecordingScreenState extends State<VideoRecordingScreen> {
+  bool _ready = false;
+  bool _recording = false;
+  bool _busy = true;
+  String? _message;
+  String? _destinationPath;
+  Timer? _ticker;
+  final Stopwatch _elapsed = Stopwatch();
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    unawaited(widget.recorder.dispose());
+    super.dispose();
+  }
+
+  String get _elapsedLabel {
+    final duration = _elapsed.elapsed;
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return hours > 0 ? '$hours:$minutes:$seconds' : '$minutes:$seconds';
+  }
+
+  Future<void> _initialize() async {
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      await widget.recorder.initialize();
+      if (!mounted) return;
+      setState(() => _ready = true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _ready = false;
+        _message = '카메라와 마이크를 준비하지 못했습니다. 기기 권한을 확인해 주세요.';
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _start() async {
+    if (_busy || !_ready) return;
+    setState(() => _busy = true);
+    try {
+      final directory =
+          await (widget.directoryProvider?.call() ?? _defaultVideoDirectory());
+      final path =
+          '${directory.path}${Platform.pathSeparator}meeting_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      await widget.recorder.start();
+      if (!mounted) return;
+      _elapsed
+        ..reset()
+        ..start();
+      _ticker?.cancel();
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+      setState(() {
+        _destinationPath = path;
+        _recording = true;
+        _message = null;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _message = '영상 녹화를 시작하지 못했습니다. 카메라 설정을 확인해 주세요.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _stop() async {
+    if (_busy || !_recording || _destinationPath == null) return;
+    setState(() => _busy = true);
+    try {
+      final path = await widget.recorder.stop(_destinationPath!);
+      _elapsed.stop();
+      _ticker?.cancel();
+      final saved = widget.recordingValidator != null
+          ? await widget.recordingValidator!(path)
+          : await File(path).exists() && await File(path).length() > 0;
+      if (!mounted) return;
+      setState(() {
+        _recording = false;
+        _destinationPath = null;
+        _message = saved
+            ? '영상과 음성이 기기에 저장되었습니다.\n$path'
+            : '영상 파일을 확인하지 못했습니다. 저장 공간을 확인해 주세요.';
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _message = '영상 녹화를 저장하지 못했습니다. 다시 시도해 주세요.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _openMeetingNote() async {
+    final now = DateTime.now();
+    final note = NoteDocument(
+      id: now.microsecondsSinceEpoch.toString(),
+      title:
+          '영상 회의 노트 ${now.year}.${now.month.toString().padLeft(2, '0')}.${now.day.toString().padLeft(2, '0')}',
+      updatedAt: now,
+    );
+    await widget.repository.save(note);
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            NoteEditor(repository: widget.repository, initialNote: note),
+      ),
+    );
+  }
+
+  Future<bool> _confirmLeave() async {
+    if (!_recording) return true;
+    final stop = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('영상 녹화가 진행 중입니다'),
+        content: const Text('화면을 닫기 전에 녹화를 정지하고 안전하게 저장해 주세요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('계속 녹화'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('정지하고 나가기'),
+          ),
+        ],
+      ),
+    );
+    if (stop != true) return false;
+    await _stop();
+    return !_recording;
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_recording,
+    onPopInvokedWithResult: (didPop, _) async {
+      if (didPop || !_recording) return;
+      if (await _confirmLeave() && context.mounted) {
+        Navigator.of(context).pop();
+      }
+    },
+    child: Scaffold(
+      appBar: AppBar(title: const Text('영상 + 음성 녹화')),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: ColoredBox(
+                    color: Colors.black,
+                    child: Center(
+                      child: _ready
+                          ? AspectRatio(
+                              aspectRatio: widget.recorder.aspectRatio,
+                              child: widget.recorder.buildPreview(),
+                            )
+                          : _busy
+                          ? const CircularProgressIndicator()
+                          : const Icon(
+                              Icons.videocam_off_outlined,
+                              size: 64,
+                              color: Colors.white70,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              if (_recording)
+                Text(
+                  '녹화 중  $_elapsedLabel',
+                  key: const ValueKey('video-recording-elapsed'),
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: Colors.redAccent,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              if (_message != null) ...[
+                const SizedBox(height: 8),
+                Text(_message!, textAlign: TextAlign.center),
+              ],
+              const SizedBox(height: 14),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  FilledButton.icon(
+                    key: const ValueKey('toggle-video-recording'),
+                    onPressed: _busy || !_ready
+                        ? null
+                        : (_recording ? _stop : _start),
+                    icon: Icon(
+                      _recording
+                          ? Icons.stop_rounded
+                          : Icons.fiber_manual_record_rounded,
+                    ),
+                    label: Text(_recording ? '녹화 정지' : '녹화 시작'),
+                  ),
+                  OutlinedButton.icon(
+                    key: const ValueKey('open-video-meeting-note'),
+                    onPressed: _busy ? null : _openMeetingNote,
+                    icon: const Icon(Icons.draw_outlined),
+                    label: Text(_recording ? '녹화하며 필기' : '회의 노트 열기'),
+                  ),
+                  if (!_ready && !_busy)
+                    TextButton.icon(
+                      onPressed: _initialize,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('카메라 다시 연결'),
+                    ),
+                ],
+              ),
+            ],
           ),
         ),
       ),

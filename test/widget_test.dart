@@ -13,7 +13,7 @@ void main() {
     expect(find.text('AI PRONOTE'), findsOneWidget);
     expect(find.text('버전 1.0'), findsOneWidget);
     expect(find.text('새 노트'), findsOneWidget);
-    expect(find.text('회의 녹음'), findsOneWidget);
+    expect(find.text('회의 기록'), findsOneWidget);
     expect(find.text('내 노트'), findsOneWidget);
   });
 
