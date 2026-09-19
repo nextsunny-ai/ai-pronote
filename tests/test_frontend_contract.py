@@ -113,7 +113,7 @@ class FrontendContractTests(unittest.TestCase):
         setup_wrapper = (ROOT / "setup_mac.command").read_text(encoding="utf-8")
         self.assertIn('PRONOTE_HOST="127.0.0.1"', start)
         self.assertIn('PRONOTE_EXPERIMENTAL_CLI="true"', start)
-        self.assertIn('python3 -m venv .venv', setup)
+        self.assertIn('"$PYTHON" -m venv .venv', setup)
         self.assertIn('.venv/bin/python', start)
         self.assertIn('EXPECTED_VERSION="v1.5.0-beta12.20260919"', start)
         self.assertIn('health_version()', start)
@@ -122,6 +122,8 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('mac/1_FIRST_SETUP.command', setup_wrapper)
         for legacy_installer in ("raw.githubusercontent.com/Homebrew", "SUPABASE_URL=", "npm install"):
             self.assertNotIn(legacy_installer, setup_wrapper)
+        self.assertIn("PYTHON_CANDIDATES", setup)
+        self.assertIn('/opt/homebrew/opt/python@3.12/bin/python3.12', setup)
 
     def test_external_beta_uses_an_isolated_python_environment(self):
         installer = (ROOT / "install_external_beta.ps1").read_text(encoding="utf-8")
