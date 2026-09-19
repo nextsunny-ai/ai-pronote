@@ -19,8 +19,8 @@ try { $python = Get-Command python.exe -ErrorAction Stop } catch {
 $versionText = & $python.Source -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"
 if ($LASTEXITCODE -ne 0) { throw 'Python 실행에 실패했습니다.' }
 $parts = $versionText.Split('.')
-if ([int]$parts[0] -ne 3 -or [int]$parts[1] -lt 10 -or [int]$parts[1] -gt 12) {
-    throw "Python 3.10~3.12 64비트가 필요합니다. 현재: $versionText"
+if ([int]$parts[0] -ne 3 -or [int]$parts[1] -ne 12) {
+    throw "Python 3.12 64비트가 필요합니다. 현재: $versionText"
 }
 $is64Bit = & $python.Source -c "import sys; print('true' if sys.maxsize > 2**32 else 'false')"
 if ($is64Bit -ne 'true') { throw '64비트 Python이 필요합니다.' }
@@ -69,7 +69,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $runtimeRoot '.runtime-complete.json
     }
 }
 $venvVersion = & $venvPython -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-if ($LASTEXITCODE -ne 0 -or $venvVersion -notmatch '^3\.(10|11|12)$') {
+if ($LASTEXITCODE -ne 0 -or $venvVersion -ne '3.12') {
     throw "설치된 실행환경이 지원 Python 환경이 아닙니다. 기존 파일은 보존되므로 고객지원에 문의하세요. 현재: $venvVersion"
 }
 $venvArchitecture = & $venvPython -c "import platform,sys; print(f'{platform.machine().lower()}|{64 if sys.maxsize > 2**32 else 32}')"
