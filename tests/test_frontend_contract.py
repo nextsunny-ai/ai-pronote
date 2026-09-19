@@ -167,6 +167,8 @@ class FrontendContractTests(unittest.TestCase):
     def test_permanent_delete_clears_server_and_browser_namespaces(self):
         self.assertIn("fetch('/api/data/purge'", HTML)
         self.assertIn("AI PRONOTE 데이터 영구 삭제", HTML)
+        self.assertIn("function askConfirmation", HTML)
+        self.assertNotIn("if (!confirm(", HTML)
         self.assertIn("k.startsWith('ai_pronote.')", HTML)
         self.assertIn("Object.keys(sessionStorage)", HTML)
         self.assertIn("window.__pronoteRecording?.isActive?.()", HTML)

@@ -276,10 +276,13 @@ test.describe('v1.5 핵심 발견성과 반응형', () => {
     await page.locator('#view-admin .admin-card[data-admin="account"]').click();
     const deleteButton = page.locator('#acctDelete');
     await expect(deleteButton).toHaveText('이 기기의 AI PRONOTE 데이터 영구 삭제');
-    let dialogCount = 0;
-    page.on('dialog', async dialog => { dialogCount += 1; await dialog.accept(); });
     await deleteButton.click();
-    await expect.poll(() => dialogCount).toBe(2);
+    const firstConfirm = page.getByRole('dialog', { name: '이 기기의 데이터 영구 삭제' });
+    await expect(firstConfirm).toBeVisible();
+    await firstConfirm.getByRole('button', { name: '삭제 계속' }).click();
+    const finalConfirm = page.getByRole('dialog', { name: '마지막 확인' });
+    await expect(finalConfirm).toBeVisible();
+    await finalConfirm.getByRole('button', { name: '영구 삭제' }).click();
     await expect.poll(() => page.evaluate(() => localStorage.getItem('ai_pronote.trash.v1'))).toBeNull();
     await expect.poll(() => page.evaluate(() => localStorage.getItem('pronote_claude_override'))).toBeNull();
     await expect(deleteButton).not.toHaveAttribute('aria-busy', 'true');

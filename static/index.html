@@ -4874,6 +4874,14 @@ if ('serviceWorker' in navigator) {
     t.classList.add('show');
     setTimeout(() => t.classList.remove('show'), 1800);
   }
+  function askConfirmation({ title='확인', message='', confirmLabel='확인', danger=false }={}) {
+    return new Promise(resolve => {
+      const overlay=document.createElement('div');overlay.className='modal-overlay open';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-labelledby','pronoteConfirmTitle');
+      overlay.innerHTML='<div class="modal-card" style="max-width:460px"><div class="modal-head"><div><div class="modal-eyebrow">AI PRONOTE</div><h2 class="modal-title" id="pronoteConfirmTitle"></h2></div><button type="button" class="modal-close" aria-label="닫기">×</button></div><div class="modal-body"><p data-confirm-message style="margin:0;white-space:pre-line;line-height:1.65;color:var(--text-secondary)"></p></div><div class="modal-foot"><button type="button" class="modal-btn" data-confirm-cancel>취소</button><button type="button" class="modal-btn primary" data-confirm-ok></button></div></div>';
+      overlay.querySelector('#pronoteConfirmTitle').textContent=title;overlay.querySelector('[data-confirm-message]').textContent=message;const ok=overlay.querySelector('[data-confirm-ok]');ok.textContent=confirmLabel;if(danger){ok.style.background='#b42318';ok.style.borderColor='#b42318';}
+      let settled=false;const finish=value=>{if(settled)return;settled=true;overlay.remove();resolve(value);};overlay.querySelector('.modal-close').onclick=()=>finish(false);overlay.querySelector('[data-confirm-cancel]').onclick=()=>finish(false);ok.onclick=()=>finish(true);overlay.addEventListener('click',event=>{if(event.target===overlay)finish(false);});overlay.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();finish(false);}});document.body.appendChild(overlay);ok.focus();
+    });
+  }
   function applyAssistantSettings() {
     const s = loadSettings();
     const name = (s.assistant.name || '비서').trim();
@@ -5241,7 +5249,7 @@ if ('serviceWorker' in navigator) {
       }
     });
     adminBody.querySelector('#acctLogout')?.addEventListener('click', async () => {
-      if (!confirm('로그아웃 하시겠습니까?')) return;
+      if (!await askConfirmation({title:'로그아웃',message:'이 기기에서 AI PRONOTE 계정 연결을 종료할까요?',confirmLabel:'로그아웃'})) return;
       try {
         const result = await window.__pronoteAuth?.signOut?.();
         if (result?.error) throw result.error;
@@ -5264,8 +5272,8 @@ if ('serviceWorker' in navigator) {
         showToast('파일 가져오기가 끝난 뒤 삭제하세요');
         return;
       }
-      if (!confirm('★ 이 설치본의 데이터를 영구 삭제하시겠습니까?\n\n회의록·노트·녹음·작업 파일과 공식 API 키가 삭제됩니다.\n복구할 수 없습니다.')) return;
-      if (!confirm('정말 삭제할까요? (마지막 확인)')) return;
+      if (!await askConfirmation({title:'이 기기의 데이터 영구 삭제',message:'회의록·노트·녹음·작업 파일과 공식 API 키가 삭제됩니다.\n복구할 수 없습니다.',confirmLabel:'삭제 계속',danger:true})) return;
+      if (!await askConfirmation({title:'마지막 확인',message:'정말로 이 기기의 AI PRONOTE 데이터를 영구 삭제할까요?',confirmLabel:'영구 삭제',danger:true})) return;
       window.__pronoteDeletionInProgress = true;
       accountDeleteButton.disabled = true;
       accountDeleteButton.setAttribute('aria-busy', 'true');
@@ -8388,7 +8396,7 @@ if ('serviceWorker' in navigator) {
       else if (act === 'delete-meeting') deleteMeeting(id);
     }
     async function deleteMeeting(id) {
-      if (!confirm('이 항목을 휴지통으로 보낼까요? (녹음 원본은 보존되어 복구 가능합니다)')) return;
+      if (!await askConfirmation({title:'휴지통으로 이동',message:'이 항목을 휴지통으로 보낼까요? 녹음 원본은 보존되어 복구할 수 있습니다.',confirmLabel:'휴지통으로 이동'})) return;
       try {
         let arr = [];
         try { arr = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]'); } catch {}
@@ -8543,7 +8551,7 @@ if ('serviceWorker' in navigator) {
       } catch (e) { window.showToast?.('다운로드 실패: ' + e.message); }
     }
     async function deleteRecording(id) {
-      if (!confirm('이 녹음 파일을 삭제할까요? 되돌릴 수 없습니다.')) return;
+      if (!await askConfirmation({title:'녹음 파일 영구 삭제',message:'이 녹음 파일을 삭제할까요? 이 작업은 되돌릴 수 없습니다.',confirmLabel:'영구 삭제',danger:true})) return;
       try {
         await dbDelete(id);
         window.showToast?.('삭제됨');
