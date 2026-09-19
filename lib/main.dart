@@ -618,6 +618,12 @@ class _NoteEditorState extends State<NoteEditor> {
   final List<List<InkStroke>> _redoHistory = [];
   bool _fingerDrawingEnabled = false;
   int _currentPageIndex = 0;
+  Rect? _selectionRect;
+  Set<String> _selectedStrokeIds = {};
+  Offset? _lassoStart;
+  Offset? _dragStart;
+  Rect? _dragOriginRect;
+  List<InkStroke>? _dragOriginalStrokes;
 
   @override
   void initState() {
@@ -643,6 +649,22 @@ class _NoteEditorState extends State<NoteEditor> {
 
   void _begin(PointerDownEvent event) {
     if (!_canDraw(event)) return;
+    if (_tool == InkTool.lasso) {
+      final position = event.localPosition;
+      if (_selectionRect?.contains(position) == true &&
+          _selectedStrokeIds.isNotEmpty) {
+        _dragStart = position;
+        _dragOriginRect = _selectionRect;
+        _dragOriginalStrokes = List<InkStroke>.of(_currentStrokes);
+      } else {
+        setState(() {
+          _lassoStart = position;
+          _selectionRect = Rect.fromPoints(position, position);
+          _selectedStrokeIds = {};
+        });
+      }
+      return;
+    }
     if (_tool == InkTool.eraser) {
       _eraseAt(event.localPosition);
       return;
@@ -661,6 +683,44 @@ class _NoteEditorState extends State<NoteEditor> {
 
   void _move(PointerMoveEvent event) {
     if (!_canDraw(event)) return;
+    if (_tool == InkTool.lasso) {
+      if (_dragStart != null && _dragOriginalStrokes != null) {
+        final delta = event.localPosition - _dragStart!;
+        final moved = _dragOriginalStrokes!
+            .map(
+              (stroke) => _selectedStrokeIds.contains(stroke.id)
+                  ? InkStroke(
+                      id: stroke.id,
+                      tool: stroke.tool,
+                      color: stroke.color,
+                      width: stroke.width,
+                      points: stroke.points
+                          .map(
+                            (point) => InkPoint(
+                              x: point.x + delta.dx,
+                              y: point.y + delta.dy,
+                              pressure: point.pressure,
+                            ),
+                          )
+                          .toList(growable: false),
+                    )
+                  : stroke,
+            )
+            .toList(growable: false);
+        setState(() {
+          _note = _withCurrentStrokes(moved);
+          _selectionRect = _dragOriginRect?.shift(delta);
+        });
+      } else if (_lassoStart != null) {
+        setState(
+          () => _selectionRect = Rect.fromPoints(
+            _lassoStart!,
+            event.localPosition,
+          ),
+        );
+      }
+      return;
+    }
     final active = _active;
     if (active == null) return;
     setState(() {
@@ -676,6 +736,31 @@ class _NoteEditorState extends State<NoteEditor> {
 
   void _finish(PointerEvent event) {
     if (!_canDraw(event)) return;
+    if (_tool == InkTool.lasso) {
+      if (_dragStart != null && _dragOriginalStrokes != null) {
+        _undoHistory.add(_dragOriginalStrokes!);
+        _redoHistory.clear();
+        _dragStart = null;
+        _dragOriginRect = null;
+        _dragOriginalStrokes = null;
+        _scheduleSave();
+      } else if (_selectionRect != null) {
+        final area = _selectionRect!;
+        setState(() {
+          _selectedStrokeIds = _currentStrokes
+              .where(
+                (stroke) => stroke.points.any(
+                  (point) => area.contains(Offset(point.x, point.y)),
+                ),
+              )
+              .map((stroke) => stroke.id)
+              .toSet();
+          _lassoStart = null;
+          if (_selectedStrokeIds.isEmpty) _selectionRect = null;
+        });
+      }
+      return;
+    }
     final active = _active;
     if (active == null) return;
     _active = null;
@@ -744,6 +829,49 @@ class _NoteEditorState extends State<NoteEditor> {
       _redoHistory.clear();
     });
     _scheduleSave();
+  }
+
+  void _deleteSelection() {
+    if (_selectedStrokeIds.isEmpty) return;
+    _commitStrokes(
+      _currentStrokes
+          .where((stroke) => !_selectedStrokeIds.contains(stroke.id))
+          .toList(growable: false),
+    );
+    setState(() {
+      _selectionRect = null;
+      _selectedStrokeIds = {};
+    });
+  }
+
+  void _duplicateSelection() {
+    if (_selectedStrokeIds.isEmpty) return;
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final copies = _currentStrokes
+        .where((stroke) => _selectedStrokeIds.contains(stroke.id))
+        .map(
+          (stroke) => InkStroke(
+            id: '${stroke.id}-copy-$now',
+            tool: stroke.tool,
+            color: stroke.color,
+            width: stroke.width,
+            points: stroke.points
+                .map(
+                  (point) => InkPoint(
+                    x: point.x + 24,
+                    y: point.y + 24,
+                    pressure: point.pressure,
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        )
+        .toList(growable: false);
+    _commitStrokes([..._currentStrokes, ...copies]);
+    setState(() {
+      _selectedStrokeIds = copies.map((stroke) => stroke.id).toSet();
+      _selectionRect = _selectionRect?.shift(const Offset(24, 24));
+    });
   }
 
   InkPoint _point(Offset offset, double pressure) => InkPoint(
@@ -853,10 +981,30 @@ class _NoteEditorState extends State<NoteEditor> {
                     label: Text('지우개'),
                     icon: Icon(Icons.auto_fix_normal_outlined),
                   ),
+                  ButtonSegment(
+                    value: InkTool.lasso,
+                    label: Text('올가미'),
+                    icon: Icon(Icons.gesture_rounded),
+                  ),
                 ],
                 selected: {_tool},
                 onSelectionChanged: (tools) =>
                     setState(() => _tool = tools.first),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                key: const ValueKey('duplicate-selection'),
+                tooltip: '선택 복제',
+                onPressed: _selectedStrokeIds.isEmpty
+                    ? null
+                    : _duplicateSelection,
+                icon: const Icon(Icons.copy_rounded),
+              ),
+              IconButton.filledTonal(
+                key: const ValueKey('delete-selection'),
+                tooltip: '선택 삭제',
+                onPressed: _selectedStrokeIds.isEmpty ? null : _deleteSelection,
+                icon: const Icon(Icons.delete_outline_rounded),
               ),
               const SizedBox(width: 8),
               IconButton.filledTonal(
@@ -942,8 +1090,8 @@ class _NoteEditorState extends State<NoteEditor> {
             child: InteractiveViewer(
               minScale: .6,
               maxScale: 4,
-              panEnabled: !_fingerDrawingEnabled,
-              scaleEnabled: !_fingerDrawingEnabled,
+              panEnabled: !_fingerDrawingEnabled && _tool != InkTool.lasso,
+              scaleEnabled: !_fingerDrawingEnabled && _tool != InkTool.lasso,
               boundaryMargin: const EdgeInsets.all(160),
               child: Container(
                 decoration: BoxDecoration(
@@ -970,6 +1118,7 @@ class _NoteEditorState extends State<NoteEditor> {
                     painter: InkPainter(
                       strokes: _currentStrokes,
                       active: _active,
+                      selectionRect: _selectionRect,
                     ),
                     size: Size.infinite,
                   ),
@@ -984,10 +1133,11 @@ class _NoteEditorState extends State<NoteEditor> {
 }
 
 class InkPainter extends CustomPainter {
-  const InkPainter({required this.strokes, this.active});
+  const InkPainter({required this.strokes, this.active, this.selectionRect});
 
   final List<InkStroke> strokes;
   final InkStroke? active;
+  final Rect? selectionRect;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1015,9 +1165,27 @@ class InkPainter extends CustomPainter {
         );
       }
     }
+    final selection = selectionRect;
+    if (selection != null) {
+      canvas.drawRect(
+        selection,
+        Paint()
+          ..color = const Color(0x181f6feb)
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawRect(
+        selection,
+        Paint()
+          ..color = const Color(0xff1f6feb)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+    }
   }
 
   @override
   bool shouldRepaint(covariant InkPainter oldDelegate) =>
-      oldDelegate.strokes != strokes || oldDelegate.active != active;
+      oldDelegate.strokes != strokes ||
+      oldDelegate.active != active ||
+      oldDelegate.selectionRect != selectionRect;
 }

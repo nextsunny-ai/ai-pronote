@@ -142,6 +142,9 @@ void main() {
     await tester.pumpWidget(PronoteApp(repository: repository));
     await tester.tap(find.text('새 노트'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('finger-drawing-toggle')),
+    );
     await tester.tap(find.byKey(const ValueKey('finger-drawing-toggle')));
     await tester.pump();
     final canvas = find.byKey(const ValueKey('ink-canvas'));
@@ -238,5 +241,55 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     expect((await repository.list()).single.title, '신제품 회의');
+  });
+
+  testWidgets('올가미로 필기 획을 선택해 복제하고 삭제한다', (tester) async {
+    final repository = MemoryNoteRepository();
+    await tester.pumpWidget(PronoteApp(repository: repository));
+    await tester.tap(find.text('새 노트'));
+    await tester.pumpAndSettle();
+    final canvas = find.byKey(const ValueKey('ink-canvas'));
+    final center = tester.getCenter(canvas);
+    final pencil = await tester.createGesture(
+      pointer: 14,
+      kind: PointerDeviceKind.stylus,
+    );
+    await pencil.down(center - const Offset(15, 0));
+    await pencil.moveTo(center + const Offset(15, 0));
+    await pencil.up();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    await tester.tap(find.text('올가미'));
+    await tester.pump();
+    final lasso = await tester.createGesture(
+      pointer: 15,
+      kind: PointerDeviceKind.stylus,
+    );
+    await lasso.down(center - const Offset(40, 40));
+    await lasso.moveTo(center + const Offset(40, 40));
+    await lasso.up();
+    await tester.pump();
+
+    final beforeMove =
+        (await repository.list()).single.strokes.single.points.first.x;
+    final move = await tester.createGesture(
+      pointer: 16,
+      kind: PointerDeviceKind.stylus,
+    );
+    await move.down(center);
+    await move.moveTo(center + const Offset(30, 10));
+    await move.up();
+    await tester.pump(const Duration(milliseconds: 400));
+    final afterMove =
+        (await repository.list()).single.strokes.single.points.first.x;
+    expect(afterMove, greaterThan(beforeMove));
+
+    await tester.tap(find.byKey(const ValueKey('duplicate-selection')));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect((await repository.list()).single.strokes, hasLength(2));
+
+    await tester.tap(find.byKey(const ValueKey('delete-selection')));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect((await repository.list()).single.strokes, hasLength(1));
   });
 }

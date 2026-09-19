@@ -1,4 +1,4 @@
-enum InkTool { pen, highlighter, eraser }
+enum InkTool { pen, highlighter, eraser, lasso }
 
 class InkPoint {
   const InkPoint({required this.x, required this.y, required this.pressure});
