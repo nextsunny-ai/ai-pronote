@@ -99,20 +99,29 @@ class FrontendContractTests(unittest.TestCase):
         for name in ("1_FIRST_SETUP.command", "2_AI_LOGIN.command", "3_START_AI_PRONOTE.command", "STOP_AI_PRONOTE.command"):
             self.assertTrue((mac / name).exists())
         login = (mac / "2_AI_LOGIN.command").read_text(encoding="utf-8")
-        for marker in ("claude", "@openai/codex"):
+        for marker in ("claude", "codex"):
             self.assertIn(marker, login)
-        self.assertNotIn("@google/gemini-cli", login)
-        self.assertIn("공식 API(BYOK)", login)
+        for unsafe_installer in ("curl -fsSL", "npm install", "@google/gemini-cli"):
+            self.assertNotIn(unsafe_installer, login)
+        self.assertIn("Gemini 연결은 준비 중", login)
+        windows_login = (ROOT / "2_AI_LOGIN.cmd").read_text(encoding="utf-8")
+        for unsafe_installer in ("irm https://", "npm install", "@google/gemini-cli"):
+            self.assertNotIn(unsafe_installer, windows_login)
+        self.assertIn("Gemini 연결은 준비 중", windows_login)
         start = (mac / "3_START_AI_PRONOTE.command").read_text(encoding="utf-8")
         setup = (mac / "1_FIRST_SETUP.command").read_text(encoding="utf-8")
+        setup_wrapper = (ROOT / "setup_mac.command").read_text(encoding="utf-8")
         self.assertIn('PRONOTE_HOST="127.0.0.1"', start)
         self.assertIn('PRONOTE_EXPERIMENTAL_CLI="true"', start)
         self.assertIn('python3 -m venv .venv', setup)
         self.assertIn('.venv/bin/python', start)
-        self.assertIn('EXPECTED_VERSION="v1.5.0-beta11.20260919"', start)
+        self.assertIn('EXPECTED_VERSION="v1.5.0-beta12.20260919"', start)
         self.assertIn('health_version()', start)
         self.assertIn('kill -0 "$owner"', start)
         self.assertIn('trap on_error ERR', setup)
+        self.assertIn('mac/1_FIRST_SETUP.command', setup_wrapper)
+        for legacy_installer in ("raw.githubusercontent.com/Homebrew", "SUPABASE_URL=", "npm install"):
+            self.assertNotIn(legacy_installer, setup_wrapper)
 
     def test_external_beta_uses_an_isolated_python_environment(self):
         installer = (ROOT / "install_external_beta.ps1").read_text(encoding="utf-8")

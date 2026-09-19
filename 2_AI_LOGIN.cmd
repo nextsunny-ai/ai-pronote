@@ -7,14 +7,13 @@ cd /d "%~dp0"
 cls
 echo AI PRONOTE에서 사용할 AI를 선택하세요.
 echo.
-echo   AI 연결 없이 바로 시작할 수 있습니다.
-echo   녹음, 영상, 받아쓰기, 필기는 그대로 사용할 수 있습니다.
-echo   AI 회의록, 받아쓰기 정확도 향상, 에이전트 기능이 필요할 때 연결하세요.
+echo   AI 연결 없이도 녹음, 영상, 기본 받아쓰기와 필기를 사용할 수 있습니다.
+echo   AI 회의록과 에이전트 기능이 필요할 때 연결하세요.
 echo.
 echo   1. Claude
 echo   2. ChatGPT / Codex
-echo   Gemini는 앱 설정의 공식 API (BYOK)로만 연결합니다.
 echo   0. 종료
+echo   Gemini 연결은 준비 중입니다.
 echo.
 set /p choice=번호 입력: 
 if "%choice%"=="1" goto claude
@@ -25,33 +24,26 @@ goto menu
 :claude
 where claude >nul 2>nul
 if errorlevel 1 (
-  echo Claude Code가 없어 Anthropic 공식 설치 스크립트를 실행합니다.
-  pause
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm https://claude.ai/install.ps1 | iex"
-  if errorlevel 1 goto failed
+  echo Claude Code가 설치되어 있지 않습니다.
+  echo Anthropic 공식 안내에서 설치한 뒤 다시 실행하세요.
+  start "" "https://docs.anthropic.com/en/docs/claude-code/setup"
+  goto pause_end
 )
-echo Claude 로그인 화면을 엽니다. 로그인 뒤 /exit를 입력하세요.
+echo Claude 로그인 화면을 엽니다. 완료 후 종료하세요.
 claude
 goto done
 
 :codex
-where node >nul 2>nul
-if errorlevel 1 goto node_missing
 where codex >nul 2>nul
-if errorlevel 1 call npm install -g @openai/codex
-if errorlevel 1 goto failed
-echo ChatGPT / Codex 로그인 화면을 엽니다. 로그인 뒤 /exit를 입력하세요.
+if errorlevel 1 (
+  echo Codex CLI가 설치되어 있지 않습니다.
+  echo OpenAI 공식 안내에서 설치한 뒤 다시 실행하세요.
+  start "" "https://developers.openai.com/codex/cli"
+  goto pause_end
+)
+echo ChatGPT / Codex 로그인 화면을 엽니다. 완료 후 종료하세요.
 call codex
 goto done
-
-:node_missing
-echo Codex 설치에는 Node.js가 필요합니다.
-echo https://nodejs.org/ 에서 LTS 버전을 설치한 뒤 다시 실행하세요.
-goto pause_end
-
-:failed
-echo 설치 또는 로그인 실행에 실패했습니다. 인터넷 연결을 확인하세요.
-goto pause_end
 
 :done
 echo.
