@@ -226,6 +226,17 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("deviceId: { exact: opts.micDeviceId }", HTML)
         self.assertIn("deviceId: { exact: opts.cameraDeviceId }", HTML)
 
+    def test_note_folders_are_filterable_and_backed_up(self):
+        for control_id in (
+            'mynotesFolderFilter', 'mynotesNewFolderInput', 'mynotesAddFolderBtn',
+            'mynotesBackupFolderBtn', 'mynoteFolderSelect',
+        ):
+            self.assertIn(f'id="{control_id}"', HTML)
+        self.assertIn("ai_pronote.note_folders.v1", HTML)
+        self.assertIn("async function exportAllNotes(folderId = '')", HTML)
+        self.assertIn("folder: folders.find", HTML)
+        self.assertIn("folderId: importedFolderIds.get", HTML)
+
 
 if __name__ == "__main__":
     unittest.main()

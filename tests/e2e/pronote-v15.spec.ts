@@ -630,7 +630,7 @@ test.describe('필기 저장·복원 계약', () => {
     await page.locator('#mynoteImportInput').setInputFiles({
       name: '프로젝트_폴더.zip', mimeType: 'application/zip', buffer: zipBuffer
     });
-    await expect(page.locator('#toast')).toContainText('노트 1개를 새 노트로 복구했습니다');
+    await expect(page.locator('#toast')).toContainText('백업을 새 노트로 복구했습니다');
     const restored = await page.evaluate(() => ({
       folders: JSON.parse(localStorage.getItem('ai_pronote.note_folders.v1') || '[]'),
       notes: JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]')
