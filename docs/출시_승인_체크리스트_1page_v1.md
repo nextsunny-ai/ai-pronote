@@ -12,7 +12,8 @@
 - [x] unsigned 외부 베타 RC17 Mac·Windows ZIP 해시·내용 목록 기록
 - [x] Python/JavaScript/보안 리뷰의 CRITICAL/HIGH 0
 - [x] RC18 Windows 새 설치본에서 60분·109.9MB WAV 업로드→받아쓰기→원본 해시 일치→서버 재시작 후 재열기
-- [ ] 제거·롤백 실제 경로 확인
+- [x] 납품 ZIP을 별도 폴더에 신규 설치하고 버전 포인터 활성화→이전 버전 롤백 실제 경로 확인 (`AI_PRONOTE_ISOLATED_AUDIT_1e5902b`)
+- [ ] 설치본 제거·데이터 보존·바로가기 원복 수동 확인
 
 ## 2. 대표님 실사용 — 순서와 합격 기준
 
