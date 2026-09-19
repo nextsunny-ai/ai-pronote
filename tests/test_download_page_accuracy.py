@@ -10,7 +10,8 @@ class DownloadPageAccuracyTests(unittest.TestCase):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
         self.assertIn("Claude 또는 ChatGPT/Codex", html)
-        self.assertIn("Gemini는 공식 API 키", html)
+        self.assertIn("Gemini 연결은 공식 실행 경로를 준비 중", html)
+        self.assertNotIn("Gemini는 공식 API 키 방식으로 지원합니다", html)
         self.assertNotIn("Claude, ChatGPT/Codex 또는 Gemini 연결", html)
 
     def test_ipad_copy_scopes_companion_mode_to_current_beta(self):

@@ -16,7 +16,7 @@
 - 음성만 녹음 / 카메라 영상+음성 녹화 / 필기만 사용
 - 영상 모드에서도 별도 음성 트랙으로 받아쓰기와 AI 회의록 생성
 - Claude 또는 ChatGPT/Codex 로그인 선택
-- OpenAI·Gemini·Anthropic 공식 API(BYOK) 연결
+- OpenAI·Gemini·Anthropic 공식 API(BYOK) 연결은 후속 베타에서 제공 예정
 - 서버 권위 작업함: 대기·받아쓰기·AI 정리·완료·실패·재시도
 - 회의 결과: AI 회의록·전체 원문·내 노트·녹음
 - DOCX/PDF/TXT/MD/오디오 내보내기(기존 기능 포함)
