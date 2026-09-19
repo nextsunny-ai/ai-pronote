@@ -291,6 +291,31 @@ void main() {
     expect((await repository.list()).single.title, '신제품 회의');
   });
 
+  testWidgets('노트의 텍스트 본문을 열고 수정해 자동 저장한다', (tester) async {
+    final repository = MemoryNoteRepository();
+    await repository.save(
+      NoteDocument(
+        id: 'text-note',
+        title: '받아쓰기 노트',
+        body: '기존 받아쓰기 본문',
+        updatedAt: DateTime(2026, 9, 19),
+      ),
+    );
+    await tester.pumpWidget(PronoteApp(repository: repository));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('받아쓰기 노트'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('note-body-field')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('note-body-field')),
+      '수정한 회의 본문',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect((await repository.list()).single.body, '수정한 회의 본문');
+  });
+
   testWidgets('올가미로 필기 획을 선택해 복제하고 삭제한다', (tester) async {
     final repository = MemoryNoteRepository();
     await tester.pumpWidget(PronoteApp(repository: repository));
