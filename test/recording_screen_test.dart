@@ -144,9 +144,10 @@ void main() {
     final recorder = FakeAudioRecorderGateway();
     final processing = FakeMeetingProcessingGateway();
     final jobs = FakeProcessingJobRepository();
+    final notes = MemoryNoteRepository();
     await tester.pumpWidget(
       PronoteApp(
-        repository: MemoryNoteRepository(),
+        repository: notes,
         recorder: recorder,
         processingGateway: processing,
         processingJobRepository: jobs,
@@ -173,6 +174,10 @@ void main() {
     expect(find.text('테스트 받아쓰기'), findsOneWidget);
     expect(jobs.records.single.jobId, 'job-123');
     expect(jobs.records.single.recordingPath, recorder.savedPath);
+    expect(find.text('노트로 저장'), findsOneWidget);
+    await tester.tap(find.text('노트로 저장'));
+    await tester.pumpAndSettle();
+    expect((await notes.list()).single.body, '테스트 받아쓰기');
   });
 
   testWidgets('녹음 중 회의 노트를 열어 필기를 계속할 수 있다', (tester) async {
