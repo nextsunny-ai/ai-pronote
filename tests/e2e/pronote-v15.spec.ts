@@ -472,6 +472,21 @@ test.describe('필기 저장·복원 계약', () => {
     expect(firstNote.note).toContain('자동저장 1초 전에도 보존되어야 하는 수정 본문입니다.');
   });
 
+  test('노트 검색은 첨부 이미지 파일명도 찾는다', async ({ page }) => {
+    await openApp(page);
+    await page.evaluate(() => {
+      localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify([{
+        id: 'attachment-search-note', title: '현장 스케치', tag: '단독 메모',
+        date: '2026-09-20', standalone: true,
+        note: '<p>도면 참고</p><img src="data:image/png;base64,AA==" alt="meeting-whiteboard-final.png">'
+      }]));
+    });
+    await page.evaluate(() => (window as typeof window & { switchView: (view: string) => void }).switchView('mynotes'));
+    await page.locator('#mynotesSearchInput').fill('meeting-whiteboard-final');
+    await expect(page.locator('#mynotesGrid .mynote-card')).toHaveCount(1);
+    await expect(page.locator('#mynotesGrid')).toContainText('현장 스케치');
+  });
+
   test('독립 노트를 주요 문서 형식으로 내보내고 기기 공유 대체 동작을 제공한다', async ({ page }) => {
     await openApp(page);
     await page.locator('#homeNoteOnlyCard').click();
