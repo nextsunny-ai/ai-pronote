@@ -908,6 +908,33 @@ test.describe('필기 저장·복원 계약', () => {
     await expect(page.locator('#inkCanvas')).toBeVisible();
   });
 
+  test('회의 중 필기를 녹음 시간에 연결하고 시간 버튼으로 해당 구간을 재생한다', async ({ page }) => {
+    await openApp(page);
+    await openNavView(page, 'result-mynote');
+    await page.locator('#noteModeInk').click();
+    await page.evaluate(() => {
+      const audio = document.getElementById('sideAudioPlayerAudio') as HTMLAudioElement;
+      Object.defineProperty(audio, 'currentSrc', { configurable: true, get: () => 'blob:e2e-audio' });
+      Object.defineProperty(audio, 'currentTime', { configurable: true, writable: true, value: 42 });
+      audio.play = async () => {};
+    });
+    const canvas = page.locator('#inkCanvas');
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+    await page.mouse.move(box!.x + 40, box!.y + 50);
+    await page.mouse.down();
+    await page.mouse.move(box!.x + 130, box!.y + 90, { steps: 6 });
+    await page.mouse.up();
+    const anchor = page.locator('#inkTimeAnchors .ink-anchor').last();
+    await expect(anchor).toContainText('0:42');
+    await page.evaluate(() => {
+      const audio = document.getElementById('sideAudioPlayerAudio') as HTMLAudioElement;
+      audio.currentTime = 0;
+    });
+    await anchor.click();
+    await expect.poll(() => page.evaluate(() => (document.getElementById('sideAudioPlayerAudio') as HTMLAudioElement).currentTime)).toBe(42);
+  });
+
   test('포스트잇은 브라우저 prompt 없이 앱 안에서 작성하고 저장한다', async ({ page }) => {
     await openApp(page);
     await openNavView(page, 'result-mynote');
