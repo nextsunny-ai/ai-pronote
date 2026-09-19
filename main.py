@@ -1802,6 +1802,10 @@ def summarize_redo(job_id: str, scenario: Optional[str] = None,
     try:
         if not external_consent:
             raise HTTPException(403, "외부 AI 전송 동의가 필요합니다")
+        if provider is not None:
+            provider = provider.strip().lower()
+            if provider not in {"claude", "claude_cli", "codex", "codex_cli"}:
+                raise HTTPException(400, "지원하지 않는 AI 연결 방식입니다")
         job = _job_read(job_id)
         if not job:
             if not (RESULT_DIR / f"{job_id}.json").exists():
