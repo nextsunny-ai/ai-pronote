@@ -21,4 +21,26 @@ test.describe('WCAG 2.1 AA 출시 스모크', () => {
       expect(blockers, JSON.stringify(blockers, null, 2)).toEqual([]);
     });
   }
+
+  test('확인창은 키보드 초점을 가두고 닫힌 뒤 시작 위치로 돌려준다', async ({ page }) => {
+    await page.goto('/');
+    const trigger = page.locator('#jobCenterToggle');
+    await trigger.focus();
+    await page.evaluate(() => {
+      const api = window as typeof window & {
+        __pronoteAskConfirmation: (options: Record<string, unknown>) => Promise<boolean>;
+      };
+      void api.__pronoteAskConfirmation({ title: '키보드 확인', message: '초점 검사', confirmLabel: '확인' });
+    });
+    const dialog = page.getByRole('dialog', { name: '키보드 확인' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: '확인' })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByRole('button', { name: '닫기' })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(dialog.getByRole('button', { name: '확인' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+  });
 });
