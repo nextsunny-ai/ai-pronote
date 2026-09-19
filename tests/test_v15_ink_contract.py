@@ -64,7 +64,7 @@ class InkContractTests(unittest.TestCase):
         self.assertIn("function openStickyEditor", self.js)
         self.assertIn("data-sticky-save", self.js)
         self.assertNotIn("prompt('포스트잇", self.js)
-        self.assertIn('/static/v15-ink.js?v=beta13-hotfix1', self.html)
+        self.assertIn('/static/v15-ink.js?v=beta13-hotfix2', self.html)
 
     def test_multi_page_notes_preserve_legacy_strokes(self):
         for token in (

@@ -857,6 +857,35 @@ test.describe('필기 저장·복원 계약', () => {
       });
     })).toBe('출시 점검 포스트잇');
   });
+
+  test('필기 전체 삭제는 앱 안에서 확인하고 취소 시 원본을 보존한다', async ({ page }) => {
+    await openApp(page);
+    await openNavView(page, 'result-mynote');
+    await page.locator('#noteModeInk').click();
+    const canvas = page.locator('#inkCanvas');
+    await canvas.click({ position: { x: 120, y: 100 } });
+    await expect.poll(() => page.evaluate(() => (window as typeof window & { PronoteInk: { document: { strokes: unknown[] } } }).PronoteInk.document.strokes.length)).toBeGreaterThan(0);
+
+    await page.locator('#inkClear').click();
+    const dialog = page.getByRole('dialog', { name: '필기 전체 지우기' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: '취소' }).click();
+    expect(await page.evaluate(() => (window as typeof window & { PronoteInk: { document: { strokes: unknown[] } } }).PronoteInk.document.strokes.length)).toBeGreaterThan(0);
+
+    await page.locator('#inkClear').click();
+    await page.getByRole('dialog', { name: '필기 전체 지우기' }).getByRole('button', { name: '전체 지우기' }).click();
+    await expect.poll(() => page.evaluate(() => (window as typeof window & { PronoteInk: { document: { strokes: unknown[] } } }).PronoteInk.document.strokes.length)).toBe(0);
+  });
+
+  test('지원하지 않는 용지 템플릿은 브라우저 alert 대신 앱 알림을 보인다', async ({ page }) => {
+    await openApp(page);
+    await openNavView(page, 'result-mynote');
+    await page.locator('#noteModeInk').click();
+    await page.locator('#inkTemplateInput').setInputFiles({
+      name: 'template.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image')
+    });
+    await expect(page.locator('#toast')).toContainText('PNG, JPG, WEBP 이미지를 5MB 이하로');
+  });
 });
 
 test.describe('AI 연결 구분', () => {

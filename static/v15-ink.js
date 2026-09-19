@@ -18,6 +18,15 @@
   let loadedMeetingId = '', loadGeneration = 0;
   let saveQueue = Promise.resolve(), switchQueue = Promise.resolve(), switchGeneration = 0, clearing = false;
 
+  function askConfirmation(options) {
+    const ask = window.__pronoteAskConfirmation;
+    return typeof ask === 'function' ? ask(options) : Promise.resolve(false);
+  }
+  function notify(message) {
+    const show = window.__pronoteNotify;
+    if (typeof show === 'function') show(message);
+  }
+
   function meetingId() {
     return localStorage.getItem('ai_pronote.current_view_meeting.v1') || 'draft';
   }
@@ -154,17 +163,17 @@
   function redo(){const item=redoStack.pop();if(item)doc.strokes.push(item);render();scheduleSave();}
   document.getElementById('inkUndo').onclick=undo;
   document.getElementById('inkRedo').onclick=redo;
-  document.getElementById('inkClear').onclick=()=>{if(doc.strokes.length&&confirm('Delete all handwriting for this meeting?')){redoStack=doc.strokes.splice(0);render();scheduleSave();}};
+  document.getElementById('inkClear').onclick=async()=>{if(!doc.strokes.length)return;if(!await askConfirmation({title:'필기 전체 지우기',message:'이 노트의 모든 페이지에 있는 필기를 지울까요? 실행 취소로 한 번 복원할 수 있습니다.',confirmLabel:'전체 지우기',danger:true}))return;redoStack=doc.strokes.splice(0);selectedIds.clear();render();scheduleSave();};
   document.getElementById('inkDuplicateSelection').onclick=()=>{const source=doc.strokes.filter(item=>selectedIds.has(item.id));const copies=source.map(item=>({...structuredClone(item),id:crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,points:item.points.map(p=>({...p,x:p.x+24,y:p.y+24}))}));doc.strokes.push(...copies);selectedIds=new Set(copies.map(item=>item.id));redoStack=[];render();scheduleSave();};
   document.getElementById('inkDeleteSelection').onclick=()=>{if(!selectedIds.size)return;const removed=doc.strokes.filter(item=>selectedIds.has(item.id));doc.strokes=doc.strokes.filter(item=>!selectedIds.has(item.id));redoStack.push(...removed);selectedIds.clear();render();scheduleSave();};
   function goPage(index){currentPage=Math.max(0,Math.min(doc.pageCount-1,index));active=null;activePointerId=null;selectedIds.clear();lassoRect=null;redoStack=[];render();}
   document.getElementById('inkPrevPage').onclick=()=>goPage(currentPage-1);
   document.getElementById('inkNextPage').onclick=()=>goPage(currentPage+1);
   document.getElementById('inkAddPage').onclick=()=>{doc.pageCount=Math.min(100,doc.pageCount+1);doc.pageBackgrounds[doc.pageCount-1]='blank';doc.pageColors[doc.pageCount-1]='#ffffff';doc.pageTemplates[doc.pageCount-1]='';goPage(doc.pageCount-1);scheduleSave();};
-  document.getElementById('inkDeletePage').onclick=()=>{if(doc.pageCount<=1){doc.strokes=doc.strokes.filter(s=>(s.pageIndex||0)!==0);doc.pageBackgrounds=['blank'];doc.pageColors=['#ffffff'];doc.pageTemplates=[''];render();scheduleSave();return;}if(!confirm('현재 페이지와 필기를 삭제할까요?'))return;doc.strokes=doc.strokes.filter(s=>(s.pageIndex||0)!==currentPage).map(s=>({...s,pageIndex:(s.pageIndex||0)>currentPage?(s.pageIndex||0)-1:(s.pageIndex||0)}));doc.pageBackgrounds.splice(currentPage,1);doc.pageColors.splice(currentPage,1);doc.pageTemplates.splice(currentPage,1);doc.pageCount--;goPage(Math.min(currentPage,doc.pageCount-1));scheduleSave();};
+  document.getElementById('inkDeletePage').onclick=async()=>{if(!await askConfirmation({title:'현재 페이지 삭제',message:doc.pageCount<=1?'마지막 페이지의 필기와 용지 설정을 비울까요?':'현재 페이지와 이 페이지의 필기를 삭제할까요?',confirmLabel:doc.pageCount<=1?'페이지 비우기':'페이지 삭제',danger:true}))return;if(doc.pageCount<=1){doc.strokes=doc.strokes.filter(s=>(s.pageIndex||0)!==0);doc.pageBackgrounds=['blank'];doc.pageColors=['#ffffff'];doc.pageTemplates=[''];redoStack=[];selectedIds.clear();render();scheduleSave();return;}doc.strokes=doc.strokes.filter(s=>(s.pageIndex||0)!==currentPage).map(s=>({...s,pageIndex:(s.pageIndex||0)>currentPage?(s.pageIndex||0)-1:(s.pageIndex||0)}));doc.pageBackgrounds.splice(currentPage,1);doc.pageColors.splice(currentPage,1);doc.pageTemplates.splice(currentPage,1);doc.pageCount--;goPage(Math.min(currentPage,doc.pageCount-1));scheduleSave();};
   document.getElementById('inkPaper').onchange=event=>{doc.pageBackgrounds[currentPage]=event.target.value;render();scheduleSave();};
   document.getElementById('inkPaperColor').oninput=event=>{doc.pageColors[currentPage]=event.target.value;render();scheduleSave();};
-  const templateInput=document.getElementById('inkTemplateInput');document.getElementById('inkTemplateOpen').onclick=()=>templateInput.click();templateInput.onchange=()=>{const file=templateInput.files?.[0];if(!file)return;if(!/^image\/(png|jpeg|webp)$/.test(file.type)||file.size>5*1024*1024){alert('PNG, JPG, WEBP 이미지를 5MB 이하로 선택해 주세요.');templateInput.value='';return;}const reader=new FileReader();reader.onload=()=>{doc.pageTemplates[currentPage]=String(reader.result||'');render();scheduleSave();};reader.readAsDataURL(file);};document.getElementById('inkTemplateClear').onclick=()=>{doc.pageTemplates[currentPage]='';render();scheduleSave();};
+  const templateInput=document.getElementById('inkTemplateInput');document.getElementById('inkTemplateOpen').onclick=()=>templateInput.click();templateInput.onchange=()=>{const file=templateInput.files?.[0];if(!file)return;if(!/^image\/(png|jpeg|webp)$/.test(file.type)||file.size>5*1024*1024){notify('PNG, JPG, WEBP 이미지를 5MB 이하로 선택해 주세요.');templateInput.value='';return;}const reader=new FileReader();reader.onload=()=>{doc.pageTemplates[currentPage]=String(reader.result||'');render();scheduleSave();};reader.readAsDataURL(file);};document.getElementById('inkTemplateClear').onclick=()=>{doc.pageTemplates[currentPage]='';render();scheduleSave();};
   const workspace=document.getElementById('inkWorkspace'),sourceInput=document.getElementById('inkSourceInput'),sourceImage=document.getElementById('inkSourceImage'),sourcePdf=document.getElementById('inkSourcePdf'),sourceEmpty=document.getElementById('inkSourceEmpty'),sourceToggle=document.getElementById('inkSourceToggle');let sourceUrl='';
   function setSplit(enabled){workspace?.classList.toggle('split',enabled);sourceToggle?.setAttribute('aria-pressed',String(enabled));requestAnimationFrame(render);}
   sourceToggle.onclick=()=>setSplit(!workspace.classList.contains('split'));

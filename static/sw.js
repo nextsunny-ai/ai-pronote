@@ -1,12 +1,12 @@
 // AI PRONOTE service worker = 정적 자산 캐시 (offline 일부 지원)
-const CACHE_NAME = 'ai-pronote-v15-pro-note-6';
+const CACHE_NAME = 'ai-pronote-v15-pro-note-7';
 const PRECACHE = [
   '/',
   '/static/manifest.webmanifest',
   '/static/icons/v15-pro-note/full-192.png',
   '/static/icons/v15-pro-note/full-512.png',
   '/static/icons/v15-pro-note/full-152.png',
-  '/static/v15-ink.js?v=beta13-hotfix1',
+  '/static/v15-ink.js?v=beta13-hotfix2',
 ];
 
 self.addEventListener('install', e => {
