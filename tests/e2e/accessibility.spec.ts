@@ -43,4 +43,23 @@ test.describe('WCAG 2.1 AA 출시 스모크', () => {
     await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();
   });
+
+  for (const size of [
+    { name: '휴대폰 세로', width: 390, height: 844 },
+    { name: '아이패드 세로', width: 768, height: 1024 },
+    { name: '노트북 200% 확대 대응', width: 640, height: 450 },
+  ]) {
+    test(`${size.name}에서 메뉴와 노트가 화면 밖으로 밀리지 않는다`, async ({ page }) => {
+      await page.setViewportSize({ width: size.width, height: size.height });
+      await page.goto('/');
+      const menu = page.locator('#mobileMenuBtn');
+      await expect(menu).toBeVisible();
+      await menu.click();
+      await expect(page.locator('.sidebar')).toBeInViewport();
+      await page.locator('.nav-item[data-demo="result-mynote"]').click();
+      await expect(page.locator('#mynoteBlock')).toBeVisible();
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow).toBeLessThanOrEqual(1);
+    });
+  }
 });
