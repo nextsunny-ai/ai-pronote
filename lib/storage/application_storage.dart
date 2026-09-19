@@ -25,16 +25,6 @@ class ApplicationStorage {
     await _copyRecognizedJson('processing_jobs.json', listKey: 'jobs');
     await _copyRecognizedJson('processing_jobs.json.bak', listKey: 'jobs');
     await _copyLegacyDirectory(
-      Directory('${documentsRoot.path}${Platform.pathSeparator}recordings'),
-      recordings,
-      (name) => RegExp(r'^meeting_\d{10,}\.m4a$').hasMatch(name),
-    );
-    await _copyLegacyDirectory(
-      Directory('${documentsRoot.path}${Platform.pathSeparator}videos'),
-      videos,
-      (name) => RegExp(r'^meeting_\d{10,}\.mp4$').hasMatch(name),
-    );
-    await _copyLegacyDirectory(
       Directory(
         '${documentsRoot.path}${Platform.pathSeparator}AI_PRONOTE_exports',
       ),
