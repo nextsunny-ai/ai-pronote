@@ -2,6 +2,26 @@ import 'package:ai_pronote_app/notes/note_document.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('텍스트 본문이 JSON 왕복 뒤에도 보존되고 구형 노트는 빈 본문으로 열린다', () {
+    final note = NoteDocument(
+      id: 'text-note',
+      title: '받아쓰기 노트',
+      body: '회의에서 확정한 텍스트 본문',
+      updatedAt: DateTime.utc(2026, 9, 19),
+    );
+
+    final restored = NoteDocument.fromJson(note.toJson());
+    final legacy = NoteDocument.fromJson({
+      'id': 'legacy-note',
+      'title': '구형 노트',
+      'updatedAt': DateTime.utc(2026, 9, 18).toIso8601String(),
+      'strokes': <Object?>[],
+    });
+
+    expect(restored.body, '회의에서 확정한 텍스트 본문');
+    expect(legacy.body, isEmpty);
+  });
+
   test('필기 좌표와 압력값이 JSON 왕복 뒤에도 보존된다', () {
     final note = NoteDocument(
       id: 'note-1',
