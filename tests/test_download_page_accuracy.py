@@ -18,13 +18,15 @@ class DownloadPageAccuracyTests(unittest.TestCase):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
         self.assertIn("iPad·휴대폰 사용", html)
-        self.assertIn("v1.5.0-beta11-20260919", html)
+        self.assertIn("BETA 13 최종 확인 중", html)
         self.assertIn("1_FIRST_SETUP.cmd", html)
         self.assertIn("setup_mac.command", html)
         self.assertIn("현재는 독립 설치 앱이 아닙니다", html)
         self.assertIn("MACOS · 최신 후보 검증 중", html)
-        self.assertIn("aria-disabled=\"true\"", html)
+        self.assertGreaterEqual(html.count("aria-disabled=\"true\""), 2)
         self.assertNotIn("Mac용 내려받기", html)
+        self.assertNotIn("v1.5.0-beta11-20260919", html)
+        self.assertNotIn("현재 공개 베타 내려받기", html)
         self.assertNotIn("휴대폰·iPad 사용</strong> · 별도 앱을 내려받는 방식이 아닙니다", html)
 
     def test_login_free_transcription_is_scoped_to_desktop_beta(self):
