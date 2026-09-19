@@ -28,6 +28,24 @@ class ReleasePackagingContractTests(unittest.TestCase):
         self.assertIn("Required release file is missing", source)
         self.assertIn("Required release directory is missing", source)
 
+    def test_packager_rejects_private_paths_addresses_and_private_keys(self):
+        source = SCRIPT.read_text(encoding="utf-8")
+        for forbidden in (
+            r"C:\Users\nexts",
+            r"G:\내 드라이브",
+            "/Users/sunny_sever",
+            "100.79.",
+            "100.89.",
+            "100.123.",
+            "-----BEGIN PRIVATE KEY-----",
+            "-----BEGIN OPENSSH PRIVATE KEY-----",
+        ):
+            self.assertIn(f"'{forbidden}'", source)
+        self.assertIn("Forbidden private release content found", source)
+        self.assertIn("Probable secret found in release file", source)
+        self.assertIn("'sk-ant-[A-Za-z0-9_-]{20,}'", source)
+        self.assertIn("'AIza[0-9A-Za-z_-]{30,}'", source)
+
 
 if __name__ == "__main__":
     unittest.main()

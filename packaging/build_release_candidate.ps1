@@ -64,6 +64,37 @@ try {
         Copy-Item -LiteralPath $Source -Destination $DocsTarget
     }
     New-Item -ItemType Directory -Path (Join-Path $PackageRoot 'data_v15') | Out-Null
+
+    $TextExtensions = @('.py', '.ps1', '.vbs', '.cmd', '.md', '.txt', '.html', '.js', '.css', '.json', '.yml', '.yaml', '.toml', '.command')
+    $ForbiddenReleaseContent = @(
+        'C:\Users\nexts', 'G:\내 드라이브', '/Users/sunny_sever',
+        '100.79.', '100.89.', '100.123.',
+        '-----BEGIN PRIVATE KEY-----', '-----BEGIN RSA PRIVATE KEY-----',
+        '-----BEGIN EC PRIVATE KEY-----', '-----BEGIN OPENSSH PRIVATE KEY-----'
+    )
+    $ForbiddenReleasePatterns = @(
+        'sk-ant-[A-Za-z0-9_-]{20,}', 'sk-[A-Za-z0-9_-]{20,}',
+        'AIza[0-9A-Za-z_-]{30,}', 'gh[pousr]_[A-Za-z0-9]{20,}'
+    )
+    foreach ($File in Get-ChildItem -LiteralPath $PackageRoot -Recurse -File) {
+        if ($File.Extension.ToLowerInvariant() -notin $TextExtensions) {
+            continue
+        }
+        $Contents = Get-Content -LiteralPath $File.FullName -Raw -Encoding UTF8
+        foreach ($Forbidden in $ForbiddenReleaseContent) {
+            if ($Contents.Contains($Forbidden, [StringComparison]::OrdinalIgnoreCase)) {
+                $RelativePath = [IO.Path]::GetRelativePath($PackageRoot, $File.FullName)
+                throw "Forbidden private release content found in ${RelativePath}: ${Forbidden}"
+            }
+        }
+        foreach ($Pattern in $ForbiddenReleasePatterns) {
+            if ([regex]::IsMatch($Contents, $Pattern)) {
+                $RelativePath = [IO.Path]::GetRelativePath($PackageRoot, $File.FullName)
+                throw "Probable secret found in release file: ${RelativePath}"
+            }
+        }
+    }
+
     Compress-Archive -LiteralPath $PackageRoot -DestinationPath $ZipPath -CompressionLevel Optimal
     $Hash = Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256
     [pscustomobject]@{

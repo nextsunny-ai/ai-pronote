@@ -22,15 +22,6 @@
 - DOCX/PDF/TXT/MD/오디오 내보내기(기존 기능 포함)
 - localhost 전용 실행, 경로·Host 검증, 원자 상태 저장과 재시작 복구
 
-## 테스트 명령
-
-```powershell
-cd C:\Users\nexts\SUNNY_WORK\AI_PRONOTE_v1.5_P0
-python -B -m unittest discover -s tests -v
-```
-
-현재 기준 자동화 UI 36개와 변경 계약 테스트 21개가 통과했습니다.
-
 ## 알려진 제한
 
 - 이 배포본은 코드 서명 전 지정 사용자용 비공개 베타입니다.
