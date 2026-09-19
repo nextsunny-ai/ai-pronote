@@ -31,6 +31,10 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("await ensureBlob(rec)", HTML)
         self.assertIn("aria-pressed=\"true\"", HTML)
 
+    def test_background_result_refresh_does_not_steal_standalone_note_selection(self):
+        self.assertIn("const resultViewActive = document.getElementById('view-result')?.classList.contains('active')", HTML)
+        self.assertIn("if (!resultViewActive) return;", HTML)
+
     def test_v15_accessibility_and_responsive_tokens_exist(self):
         self.assertIn('id="v15-design-system"', HTML)
         self.assertIn(":focus-visible", HTML)

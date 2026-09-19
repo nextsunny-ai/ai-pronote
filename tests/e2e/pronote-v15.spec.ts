@@ -830,10 +830,10 @@ test.describe('AI 연결 구분', () => {
     await mockBackend(page);
     await openApp(page);
     await openNavView(page, 'admin');
-    await expect(page.getByRole('heading', { name: '공식 API · BYOK' })).toBeVisible();
-    await expect(page.locator('#officialProviderSelect')).toContainText('OpenAI API (BYOK)');
-    await expect(page.locator('#officialProviderSelect')).toContainText('Gemini API (BYOK)');
-    await expect(page.locator('#officialProviderSelect')).toContainText('Anthropic API (BYOK)');
+    await expect(page.getByRole('heading', { name: 'AI 연결 · 개인 API 키' })).toBeVisible();
+    await expect(page.locator('#officialProviderSelect')).toContainText('OpenAI (ChatGPT API)');
+    await expect(page.locator('#officialProviderSelect')).toContainText('Google Gemini API');
+    await expect(page.locator('#officialProviderSelect')).toContainText('Anthropic (Claude API)');
     await expect(page.locator('#providerConsent')).not.toBeChecked();
     await expect(page.locator('#experimentalCliPanel')).toBeVisible();
     await expect(page.locator('#experimentalCliStatuses')).toContainText('Codex CLI (실험)');

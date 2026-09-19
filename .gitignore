@@ -15,6 +15,12 @@ __pycache__/
 *.pyc
 .venv/
 
+# 브라우저 E2E 산출물
+node_modules/
+playwright-report/
+test-results/
+tests/e2e/artifacts/
+
 # 작업 백업
 _backup_*/
 *.bak

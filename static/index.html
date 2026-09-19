@@ -9524,6 +9524,12 @@ if ('serviceWorker' in navigator) {
     function renderRealMeeting() {
       let m = getCurrentMeeting();
       if (m?.standalone) {
+        // 백그라운드 받아쓰기·회의록 진행 갱신은 결과 화면이 보이지 않을 때도
+        // render()를 호출한다. 이때 사용자가 편집 중인 독립 노트 선택을
+        // 첫 회의로 바꾸면 안 된다. 실제 회의록 화면에 진입했을 때만
+        // 표시할 첫 회의를 선택한다.
+        const resultViewActive = document.getElementById('view-result')?.classList.contains('active');
+        if (!resultViewActive) return;
         try {
           const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
           m = meetings.find(item => item && !item.standalone) || null;
