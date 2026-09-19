@@ -108,6 +108,52 @@ void main() {
     expect(result.summary, contains('결정 사항'));
   });
 
+  test('명시적 동의와 선택한 제공자로 AI 회의록을 요청한다', () async {
+    final requestSeen = Completer<void>();
+    unawaited(() async {
+      final request = await server.first;
+      expect(request.method, 'POST');
+      expect(request.uri.path, '/api/summarize/redo/job-123');
+      expect(request.uri.queryParameters['provider'], 'claude_cli');
+      expect(request.uri.queryParameters['external_consent'], 'true');
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(
+          jsonEncode({
+            'job_id': 'job-123',
+            'status': 'done',
+            'summary_status': 'pending',
+          }),
+        );
+      await request.response.close();
+      requestSeen.complete();
+    }());
+
+    final gateway = LocalMeetingProcessingGateway(baseUri: baseUri);
+    final job = await gateway.requestSummary(
+      'job-123',
+      provider: 'claude_cli',
+    );
+
+    expect(job.summaryStatus, 'pending');
+    await requestSeen.future;
+  });
+
+  test('알 수 없는 AI 제공자는 외부 전송 전에 거절한다', () async {
+    final gateway = LocalMeetingProcessingGateway(baseUri: baseUri);
+
+    await expectLater(
+      gateway.requestSummary('job-123', provider: 'unknown'),
+      throwsA(
+        isA<MeetingProcessingException>().having(
+          (error) => error.message,
+          'message',
+          contains('지원하지 않는'),
+        ),
+      ),
+    );
+  });
+
   test('서버 오류는 사용자 데이터가 남는 명확한 예외로 바꾼다', () async {
     unawaited(() async {
       final request = await server.first;

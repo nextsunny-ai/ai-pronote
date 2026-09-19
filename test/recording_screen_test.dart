@@ -245,6 +245,7 @@ void main() {
     expect(find.text('ChatGPT/Codex 연결'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('summary-consent')));
+    await tester.pump();
     await tester.tap(find.text('회의록 생성'));
     await tester.pumpAndSettle();
 

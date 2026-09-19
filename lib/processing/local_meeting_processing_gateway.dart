@@ -87,6 +87,11 @@ abstract interface class MeetingProcessingGateway {
   Future<MeetingProcessingJob> readJob(String jobId);
 
   Future<MeetingProcessingResult> readResult(String jobId);
+
+  Future<MeetingProcessingJob> requestSummary(
+    String jobId, {
+    required String provider,
+  });
 }
 
 class LocalMeetingProcessingGateway implements MeetingProcessingGateway {
@@ -182,6 +187,38 @@ class LocalMeetingProcessingGateway implements MeetingProcessingGateway {
       );
     } on http.ClientException {
       throw const MeetingProcessingException('받아쓰기 결과를 불러오지 못했습니다.');
+    }
+  }
+
+  @override
+  Future<MeetingProcessingJob> requestSummary(
+    String jobId, {
+    required String provider,
+  }) async {
+    if (provider != 'claude_cli' && provider != 'codex_cli') {
+      throw const MeetingProcessingException('지원하지 않는 AI 연결 방식입니다.');
+    }
+    final safeId = Uri.encodeComponent(jobId);
+    final uri = baseUri
+        .resolve('/api/summarize/redo/$safeId')
+        .replace(
+          queryParameters: {'provider': provider, 'external_consent': 'true'},
+        );
+    try {
+      final response = await _client.post(uri).timeout(timeout);
+      return MeetingProcessingJob.fromJson(_decodeResponse(response));
+    } on MeetingProcessingException {
+      rethrow;
+    } on TimeoutException {
+      throw const MeetingProcessingException(
+        'AI 회의록 요청 시간이 초과되었습니다. 받아쓰기 결과는 그대로 보존됩니다.',
+      );
+    } on SocketException {
+      throw const MeetingProcessingException(
+        'AI 회의록 엔진에 연결할 수 없습니다. 받아쓰기 결과는 그대로 보존됩니다.',
+      );
+    } on http.ClientException {
+      throw const MeetingProcessingException('AI 회의록 요청을 보내지 못했습니다.');
     }
   }
 

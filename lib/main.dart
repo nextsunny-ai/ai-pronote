@@ -802,6 +802,7 @@ class _TranscriptionResultScreenState extends State<TranscriptionResultScreen> {
   bool _savedAsNote = false;
   bool _exporting = false;
   String? _exportedPath;
+  bool _creatingSummary = false;
 
   @override
   void initState() {
@@ -918,6 +919,113 @@ class _TranscriptionResultScreenState extends State<TranscriptionResultScreen> {
     }
   }
 
+  Future<void> _showSummaryDialog() async {
+    var provider = 'claude_cli';
+    var consent = false;
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('AI 회의록 만들기'),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('사용할 연결을 선택하세요.'),
+                const SizedBox(height: 12),
+                RadioGroup<String>(
+                  groupValue: provider,
+                  onChanged: (value) => setDialogState(() => provider = value!),
+                  child: const Column(
+                    children: [
+                      RadioListTile<String>(
+                        value: 'claude_cli',
+                        title: Text('Claude 연결'),
+                        subtitle: Text('이 PC의 Claude 로그인을 사용합니다.'),
+                      ),
+                      RadioListTile<String>(
+                        value: 'codex_cli',
+                        title: Text('ChatGPT/Codex 연결'),
+                        subtitle: Text('이 PC의 Codex 로그인을 사용합니다.'),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 24),
+                CheckboxListTile(
+                  key: const ValueKey('summary-consent'),
+                  value: consent,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  onChanged: (value) =>
+                      setDialogState(() => consent = value ?? false),
+                  title: const Text('받아쓰기 본문을 선택한 AI에 보내기'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: consent
+                  ? () => Navigator.pop(dialogContext, provider)
+                  : null,
+              child: const Text('회의록 생성'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected != null) await _createSummary(selected);
+  }
+
+  Future<void> _createSummary(String provider) async {
+    if (_creatingSummary) return;
+    setState(() => _creatingSummary = true);
+    try {
+      var job = await widget.gateway.requestSummary(
+        widget.jobId,
+        provider: provider,
+      );
+      for (
+        var attempt = 0;
+        attempt < 60 && job.summaryStatus != 'done';
+        attempt++
+      ) {
+        if (job.summaryStatus == 'failed') {
+          throw const MeetingProcessingException('AI 회의록 생성에 실패했습니다.');
+        }
+        await Future<void>.delayed(const Duration(seconds: 2));
+        job = await widget.gateway.readJob(widget.jobId);
+      }
+      if (job.summaryStatus != 'done') {
+        throw const MeetingProcessingException(
+          'AI 회의록을 계속 만들고 있습니다. 잠시 후 다시 열어 확인하세요.',
+        );
+      }
+      final result = await widget.gateway.readResult(widget.jobId);
+      if (!mounted) return;
+      setState(() {
+        _job = job;
+        _result = result;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      final message = error is MeetingProcessingException
+          ? error.message
+          : 'AI 회의록을 만들지 못했습니다.';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    } finally {
+      if (mounted) setState(() => _creatingSummary = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final job = _job;
@@ -994,6 +1102,20 @@ class _TranscriptionResultScreenState extends State<TranscriptionResultScreen> {
                 ),
                 label: Text(_savedAsNote ? '노트에 저장됨' : '노트로 저장'),
               ),
+              if (result.summary.isEmpty) ...[
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  key: const ValueKey('create-ai-summary'),
+                  onPressed: _creatingSummary ? null : _showSummaryDialog,
+                  icon: _creatingSummary
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.auto_awesome_outlined),
+                  label: Text(_creatingSummary ? 'AI 회의록 생성 중' : 'AI 회의록 만들기'),
+                ),
+              ],
               if (widget.transcriptExporter != null) ...[
                 const SizedBox(height: 10),
                 OutlinedButton.icon(
