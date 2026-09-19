@@ -22,7 +22,9 @@ void main() {
   });
 
   test('로그인 없이 녹음 파일을 받아쓰기 작업으로 제출한다', () async {
-    final audio = File('${tempDirectory.path}${Platform.pathSeparator}meeting.m4a');
+    final audio = File(
+      '${tempDirectory.path}${Platform.pathSeparator}meeting.m4a',
+    );
     await audio.writeAsBytes(utf8.encode('recording-bytes'));
 
     final requestSeen = Completer<void>();
