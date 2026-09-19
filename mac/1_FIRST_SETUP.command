@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
-cd "$(dirname "$0")/.."
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+DATA_DIR="$HOME/Library/Application Support/AI_PRONOTE/v1.5/data"
 on_error() {
   code=$?
   echo
@@ -40,6 +42,10 @@ fi
 ".venv/bin/python" -m pip install --disable-pip-version-check 'pip==26.2.1'
 ".venv/bin/python" -m pip install --disable-pip-version-check -r requirements-lock.txt
 ".venv/bin/python" -c 'import fastapi, uvicorn, multipart, faster_whisper, requests; print("핵심 구성요소 확인 완료")'
-mkdir -p data_v15
+mkdir -p "$DATA_DIR"
+if [[ -d "$ROOT/data_v15" ]] && [[ -z "$(find "$DATA_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
+  cp -R "$ROOT/data_v15/." "$DATA_DIR/"
+  echo "기존 AI PRONOTE 데이터를 사용자 데이터 폴더로 옮겼습니다."
+fi
 echo "설치 완료. 다음으로 mac/2_AI_LOGIN.command를 실행하세요."
 read -r -p "Enter를 누르면 닫힙니다."

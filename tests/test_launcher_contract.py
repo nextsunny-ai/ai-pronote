@@ -52,6 +52,17 @@ class LauncherContractTests(unittest.TestCase):
             self.assertIn('AI_PRONOTE\\v1.5\\data', launcher)
             self.assertNotIn('Join-Path $ProjectDir "data_v15"', launcher)
 
+    def test_mac_launchers_keep_user_data_outside_versioned_package(self):
+        setup = (ROOT / "mac" / "1_FIRST_SETUP.command").read_text(encoding="utf-8")
+        start = (ROOT / "mac" / "3_START_AI_PRONOTE.command").read_text(encoding="utf-8")
+        stop = (ROOT / "mac" / "STOP_AI_PRONOTE.command").read_text(encoding="utf-8")
+        shared = "Library/Application Support/AI_PRONOTE/v1.5/data"
+        for script in (setup, start, stop):
+            self.assertIn(shared, script)
+        self.assertIn('PRONOTE_DATA_DIR="$DATA_DIR"', start)
+        self.assertIn('cp -R "$ROOT/data_v15/." "$DATA_DIR/"', setup)
+        self.assertNotIn('PRONOTE_DATA_DIR="$ROOT/data_v15"', start)
+
     def test_all_launchers_match_application_build_identity(self):
         version_source = (ROOT / "pronote_p0.py").read_text(encoding="utf-8")
         windows = (ROOT / "start_v15.ps1").read_text(encoding="utf-8")

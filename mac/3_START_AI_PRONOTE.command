@@ -2,6 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 URL="http://127.0.0.1:8795"; EXPECTED_VERSION="v1.5.0-beta13.20260919"; LOCK="/tmp/ai_pronote_v15_${UID}.lock"
+DATA_DIR="$HOME/Library/Application Support/AI_PRONOTE/v1.5/data"
 PYTHON="$ROOT/.venv/bin/python"
 if [[ ! -x "$PYTHON" ]]; then
   echo "처음 설치가 필요합니다. mac/1_FIRST_SETUP.command를 먼저 실행하세요."
@@ -32,14 +33,14 @@ if ! mkdir "$LOCK" 2>/dev/null; then
 fi
 echo "$$" >"$LOCK/pid"
 trap 'rm -f "$LOCK/pid"; rmdir "$LOCK" 2>/dev/null || true' EXIT
-mkdir -p data_v15/logs
-export PRONOTE_HOST="127.0.0.1" PRONOTE_PORT="8795" PRONOTE_DATA_DIR="$ROOT/data_v15" PRONOTE_EXPERIMENTAL_CLI="true"
-nohup "$PYTHON" main.py >>data_v15/logs/server.log 2>&1 &
-echo $! >data_v15/server.pid
+mkdir -p "$DATA_DIR/logs"
+export PRONOTE_HOST="127.0.0.1" PRONOTE_PORT="8795" PRONOTE_DATA_DIR="$DATA_DIR" PRONOTE_EXPERIMENTAL_CLI="true"
+nohup "$PYTHON" main.py >>"$DATA_DIR/logs/server.log" 2>&1 &
+echo $! >"$DATA_DIR/server.pid"
 for _ in {1..90}; do
   current_version="$(health_version)"
   if [[ "$current_version" == "$EXPECTED_VERSION" ]]; then open "$URL"; exit 0; fi
   if [[ -n "$current_version" ]]; then echo "포트 8795에서 다른 버전($current_version)이 실행 중입니다. 종료하지 않았습니다."; exit 2; fi
   sleep 0.5
 done
-echo "서버가 시작되지 않았습니다."; open -a TextEdit data_v15/logs/server.log; exit 1
+echo "서버가 시작되지 않았습니다."; open -a TextEdit "$DATA_DIR/logs/server.log"; exit 1

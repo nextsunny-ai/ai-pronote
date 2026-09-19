@@ -8,7 +8,7 @@
 2. 준비 화면 뒤 `http://127.0.0.1:8795` 앱 창이 열립니다.
 3. 다시 실행하면 기존 v1.5 서버와 창을 재사용하며 다른 프로세스를 강제 종료하지 않습니다.
 
-Windows 데이터는 `%LOCALAPPDATA%\AI_PRONOTE\v1.5\data`, Mac 데이터는 프로그램 폴더의 `data_v15`에 저장됩니다. 프로그램을 새 폴더에 설치해도 Windows의 녹음·받아쓰기·회의록 작업 파일은 이어집니다.
+Windows 데이터는 `%LOCALAPPDATA%\AI_PRONOTE\v1.5\data`, Mac 데이터는 `~/Library/Application Support/AI_PRONOTE/v1.5/data`에 저장됩니다. 프로그램을 새 폴더에 설치해도 녹음·받아쓰기·회의록 작업 파일은 이어집니다.
 
 ## 현재 지원
 
