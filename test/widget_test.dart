@@ -30,7 +30,10 @@ void main() {
 
     final canvas = find.byKey(const ValueKey('ink-canvas'));
     final center = tester.getCenter(canvas);
-    final gesture = await tester.createGesture(pointer: 7, kind: PointerDeviceKind.stylus);
+    final gesture = await tester.createGesture(
+      pointer: 7,
+      kind: PointerDeviceKind.stylus,
+    );
     await gesture.down(center - const Offset(80, 40));
     await gesture.moveTo(center + const Offset(90, 60));
     await gesture.up();
@@ -44,11 +47,13 @@ void main() {
 
   testWidgets('최근 노트를 눌러 저장된 노트를 다시 연다', (tester) async {
     final repository = MemoryNoteRepository();
-    await repository.save(NoteDocument(
-      id: 'saved-note',
-      title: '제품 회의 노트',
-      updatedAt: DateTime(2026, 9, 19),
-    ));
+    await repository.save(
+      NoteDocument(
+        id: 'saved-note',
+        title: '제품 회의 노트',
+        updatedAt: DateTime(2026, 9, 19),
+      ),
+    );
 
     await tester.pumpWidget(PronoteApp(repository: repository));
     await tester.pumpAndSettle();
@@ -66,7 +71,10 @@ void main() {
     await tester.pumpAndSettle();
     final canvas = find.byKey(const ValueKey('ink-canvas'));
     final center = tester.getCenter(canvas);
-    final gesture = await tester.createGesture(pointer: 8, kind: PointerDeviceKind.stylus);
+    final gesture = await tester.createGesture(
+      pointer: 8,
+      kind: PointerDeviceKind.stylus,
+    );
     await gesture.down(center - const Offset(30, 10));
     await gesture.moveTo(center + const Offset(30, 10));
     await gesture.up();
@@ -88,17 +96,67 @@ void main() {
     await tester.pumpAndSettle();
     final canvas = find.byKey(const ValueKey('ink-canvas'));
     final center = tester.getCenter(canvas);
-    final pen = await tester.createGesture(pointer: 9, kind: PointerDeviceKind.stylus);
+    final pen = await tester.createGesture(
+      pointer: 9,
+      kind: PointerDeviceKind.stylus,
+    );
     await pen.down(center - const Offset(20, 0));
     await pen.moveTo(center + const Offset(20, 0));
     await pen.up();
     await tester.tap(find.text('지우개'));
     await tester.pump();
-    final eraser = await tester.createGesture(pointer: 10, kind: PointerDeviceKind.stylus);
+    final eraser = await tester.createGesture(
+      pointer: 10,
+      kind: PointerDeviceKind.stylus,
+    );
     await eraser.down(center);
     await eraser.up();
     await tester.pump(const Duration(milliseconds: 400));
 
     expect((await repository.list()).single.strokes, isEmpty);
+  });
+
+  testWidgets('손가락 필기가 꺼져 있으면 터치가 필기 획으로 저장되지 않는다', (tester) async {
+    final repository = MemoryNoteRepository();
+    await tester.pumpWidget(PronoteApp(repository: repository));
+    await tester.tap(find.text('새 노트'));
+    await tester.pumpAndSettle();
+    final canvas = find.byKey(const ValueKey('ink-canvas'));
+    final center = tester.getCenter(canvas);
+    final touch = await tester.createGesture(
+      pointer: 11,
+      kind: PointerDeviceKind.touch,
+    );
+
+    await touch.down(center - const Offset(20, 0));
+    await touch.moveTo(center + const Offset(20, 0));
+    await touch.up();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect((await repository.list()).single.strokes, isEmpty);
+    expect(find.text('손가락 이동'), findsOneWidget);
+  });
+
+  testWidgets('손가락 필기를 켜면 터치로 필기할 수 있다', (tester) async {
+    final repository = MemoryNoteRepository();
+    await tester.pumpWidget(PronoteApp(repository: repository));
+    await tester.tap(find.text('새 노트'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('finger-drawing-toggle')));
+    await tester.pump();
+    final canvas = find.byKey(const ValueKey('ink-canvas'));
+    final center = tester.getCenter(canvas);
+    final touch = await tester.createGesture(
+      pointer: 12,
+      kind: PointerDeviceKind.touch,
+    );
+
+    await touch.down(center - const Offset(20, 0));
+    await touch.moveTo(center + const Offset(20, 0));
+    await touch.up();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect((await repository.list()).single.strokes, hasLength(1));
+    expect(find.text('손가락 필기'), findsOneWidget);
   });
 }

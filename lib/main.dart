@@ -1,13 +1,17 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:flutter/material.dart';
 
 import 'notes/note_document.dart';
 import 'notes/file_note_repository.dart';
 import 'notes/note_repository.dart';
+
 import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import 'recording/audio_recorder_gateway.dart';
 import 'recording/device_audio_recorder.dart';
 import 'update/update_checker.dart';
@@ -25,20 +29,19 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final documents = await getApplicationDocumentsDirectory();
   final packageInfo = await PackageInfo.fromPlatform();
-  runApp(PronoteApp(
-    repository: FileNoteRepository(documents),
-    recorder: DeviceAudioRecorderGateway(),
-    currentVersion: packageInfo.version,
-    updateChecker: const RemoteUpdateChecker(
-      'https://nextsunny-ai.github.io/ai-pronote/mobile-update.json',
+  runApp(
+    PronoteApp(
+      repository: FileNoteRepository(documents),
+      recorder: DeviceAudioRecorderGateway(),
+      currentVersion: packageInfo.version,
+      updateChecker: const RemoteUpdateChecker(
+        'https://nextsunny-ai.github.io/ai-pronote/mobile-update.json',
+      ),
+      openExternalUrl: (url) async {
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      },
     ),
-    openExternalUrl: (url) async {
-      await launchUrl(
-        Uri.parse(url),
-        mode: LaunchMode.externalApplication,
-      );
-    },
-  ));
+  );
 }
 
 class PronoteApp extends StatelessWidget {
@@ -61,28 +64,28 @@ class PronoteApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'AI PRONOTE',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xff20211f),
-            surface: const Color(0xfffbfaf7),
-          ),
-          scaffoldBackgroundColor: const Color(0xfff4f2ec),
-          useMaterial3: true,
-        ),
-        home: UpdatePromptHost(
-          currentVersion: currentVersion,
-          updateChecker: updateChecker,
-          openExternalUrl: openExternalUrl,
-          child: HomeScreen(
-            repository: repository,
-            recorder: recorder,
-            recordingDirectoryProvider: recordingDirectoryProvider,
-            displayVersion: _displayVersion(currentVersion),
-          ),
-        ),
-      );
+    debugShowCheckedModeBanner: false,
+    title: 'AI PRONOTE',
+    theme: ThemeData(
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xff20211f),
+        surface: const Color(0xfffbfaf7),
+      ),
+      scaffoldBackgroundColor: const Color(0xfff4f2ec),
+      useMaterial3: true,
+    ),
+    home: UpdatePromptHost(
+      currentVersion: currentVersion,
+      updateChecker: updateChecker,
+      openExternalUrl: openExternalUrl,
+      child: HomeScreen(
+        repository: repository,
+        recorder: recorder,
+        recordingDirectoryProvider: recordingDirectoryProvider,
+        displayVersion: _displayVersion(currentVersion),
+      ),
+    ),
+  );
 }
 
 String _displayVersion(String version) {
@@ -187,7 +190,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => NoteEditor(repository: widget.repository, initialNote: note),
+        builder: (_) =>
+            NoteEditor(repository: widget.repository, initialNote: note),
       ),
     );
     if (mounted) setState(() => _notes = widget.repository.list());
@@ -196,10 +200,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openNote(NoteDocument note) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => NoteEditor(
-          repository: widget.repository,
-          initialNote: note,
-        ),
+        builder: (_) =>
+            NoteEditor(repository: widget.repository, initialNote: note),
       ),
     );
     if (mounted) setState(() => _notes = widget.repository.list());
@@ -207,109 +209,128 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('AI PRONOTE', style: TextStyle(fontWeight: FontWeight.w800)),
-              Text('버전 ${widget.displayVersion}', style: const TextStyle(fontSize: 12)),
-            ],
+    appBar: AppBar(
+      backgroundColor: Colors.transparent,
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'AI PRONOTE',
+            style: TextStyle(fontWeight: FontWeight.w800),
           ),
-        ),
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  '무엇을 기록할까요?',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -1,
-                      ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '노트를 쓰거나 회의 녹음을 시작하세요.',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: const Color(0xff6b6a65),
-                      ),
-                ),
-                const SizedBox(height: 20),
-                LayoutBuilder(builder: (context, constraints) {
-                  final wide = constraints.maxWidth >= 620;
-                  final cards = [
-                    Expanded(
-                      child: _StartCard(
-                        key: const ValueKey('start-note-card'),
-                        icon: Icons.draw_outlined,
-                        title: '새 노트',
-                        description: 'Apple Pencil로 쓰고 그리기',
-                        primary: true,
-                        onTap: _newNote,
-                      ),
-                    ),
-                    if (wide) const SizedBox(width: 14) else const SizedBox(height: 12),
-                    Expanded(
-                      child: _StartCard(
-                        key: const ValueKey('start-recording-card'),
-                        icon: Icons.mic_none_rounded,
-                        title: '회의 녹음',
-                        description: '음성을 남기며 함께 필기하기',
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => RecordingScreen(
-                              recorder: widget.recorder,
-                              directoryProvider: widget.recordingDirectoryProvider,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ];
-                  return SizedBox(
-                    height: wide ? 180 : 308,
-                    child: wide
-                        ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: cards)
-                        : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: cards),
-                  );
-                }),
-                const SizedBox(height: 28),
-                Text('최근 노트', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: FutureBuilder<List<NoteDocument>>(
-                    future: _notes,
-                    builder: (context, snapshot) {
-                      final notes = snapshot.data ?? const [];
-                      if (notes.isEmpty) {
-                        return const Align(
-                          alignment: Alignment.topLeft,
-                          child: Text('아직 저장된 노트가 없습니다.'),
-                        );
-                      }
-                      return ListView.separated(
-                        itemCount: notes.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) => Card(
-                          child: ListTile(
-                            onTap: () => _openNote(notes[index]),
-                            leading: const Icon(Icons.description_outlined),
-                            title: Text(notes[index].title),
-                            subtitle: Text('${notes[index].strokes.length}개 필기 획'),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
+          Text(
+            '버전 ${widget.displayVersion}',
+            style: const TextStyle(fontSize: 12),
+          ),
+        ],
+      ),
+    ),
+    body: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '무엇을 기록할까요?',
+              style: Theme.of(context).textTheme.headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1),
             ),
-          ),
+            const SizedBox(height: 6),
+            Text(
+              '노트를 쓰거나 회의 녹음을 시작하세요.',
+              style: Theme.of(context).textTheme.bodyLarge
+                  ?.copyWith(color: const Color(0xff6b6a65)),
+            ),
+            const SizedBox(height: 20),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 620;
+                final cards = [
+                  Expanded(
+                    child: _StartCard(
+                      key: const ValueKey('start-note-card'),
+                      icon: Icons.draw_outlined,
+                      title: '새 노트',
+                      description: 'Apple Pencil로 쓰고 그리기',
+                      primary: true,
+                      onTap: _newNote,
+                    ),
+                  ),
+                  if (wide)
+                    const SizedBox(width: 14)
+                  else
+                    const SizedBox(height: 12),
+                  Expanded(
+                    child: _StartCard(
+                      key: const ValueKey('start-recording-card'),
+                      icon: Icons.mic_none_rounded,
+                      title: '회의 녹음',
+                      description: '음성을 남기며 함께 필기하기',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => RecordingScreen(
+                            recorder: widget.recorder,
+                            directoryProvider:
+                                widget.recordingDirectoryProvider,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ];
+                return SizedBox(
+                  height: wide ? 180 : 308,
+                  child: wide
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: cards,
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: cards,
+                        ),
+                );
+              },
+            ),
+            const SizedBox(height: 28),
+            Text(
+              '최근 노트',
+              style: Theme.of(context).textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: FutureBuilder<List<NoteDocument>>(
+                future: _notes,
+                builder: (context, snapshot) {
+                  final notes = snapshot.data ?? const [];
+                  if (notes.isEmpty) {
+                    return const Align(
+                      alignment: Alignment.topLeft,
+                      child: Text('아직 저장된 노트가 없습니다.'),
+                    );
+                  }
+                  return ListView.separated(
+                    itemCount: notes.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) => Card(
+                      child: ListTile(
+                        onTap: () => _openNote(notes[index]),
+                        leading: const Icon(Icons.description_outlined),
+                        title: Text(notes[index].title),
+                        subtitle: Text('${notes[index].strokes.length}개 필기 획'),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _StartCard extends StatelessWidget {
@@ -356,9 +377,21 @@ class _StartCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: TextStyle(color: foreground, fontSize: 22, fontWeight: FontWeight.w800)),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(description, style: TextStyle(color: primary ? Colors.white70 : const Color(0xff6b6a65))),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      color: primary ? Colors.white70 : const Color(0xff6b6a65),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -398,11 +431,12 @@ class _RecordingScreenState extends State<RecordingScreen> {
         setState(() => _message = '마이크 권한을 허용한 뒤 다시 시도해 주세요.');
         return;
       }
-      final recordings = await (
-        widget.directoryProvider?.call() ?? _defaultRecordingDirectory()
-      );
+      final recordings =
+          await (widget.directoryProvider?.call() ??
+              _defaultRecordingDirectory());
       if (!mounted) return;
-      final path = '${recordings.path}${Platform.pathSeparator}meeting_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final path =
+          '${recordings.path}${Platform.pathSeparator}meeting_${DateTime.now().millisecondsSinceEpoch}.m4a';
       await widget.recorder.start(path);
       if (!mounted) return;
       setState(() {
@@ -435,44 +469,49 @@ class _RecordingScreenState extends State<RecordingScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('회의 녹음')),
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _recording ? Icons.graphic_eq_rounded : Icons.mic_none_rounded,
-                    size: 72,
-                    color: _recording ? Colors.redAccent : null,
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    _recording ? '녹음 중' : '새 회의 녹음',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: _busy ? null : (_recording ? _stop : _start),
-                    icon: Icon(_recording ? Icons.stop_rounded : Icons.mic_rounded),
-                    label: Text(_recording ? '녹음 정지' : '녹음 시작'),
-                  ),
-                  if (_message != null) ...[
-                    const SizedBox(height: 20),
-                    Text(_message!, textAlign: TextAlign.center),
-                  ],
-                ],
+    appBar: AppBar(title: const Text('회의 녹음')),
+    body: SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _recording ? Icons.graphic_eq_rounded : Icons.mic_none_rounded,
+                size: 72,
+                color: _recording ? Colors.redAccent : null,
               ),
-            ),
+              const SizedBox(height: 20),
+              Text(
+                _recording ? '녹음 중' : '새 회의 녹음',
+                style: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: _busy ? null : (_recording ? _stop : _start),
+                icon: Icon(_recording ? Icons.stop_rounded : Icons.mic_rounded),
+                label: Text(_recording ? '녹음 정지' : '녹음 시작'),
+              ),
+              if (_message != null) ...[
+                const SizedBox(height: 20),
+                Text(_message!, textAlign: TextAlign.center),
+              ],
+            ],
           ),
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class NoteEditor extends StatefulWidget {
-  const NoteEditor({super.key, required this.repository, required this.initialNote});
+  const NoteEditor({
+    super.key,
+    required this.repository,
+    required this.initialNote,
+  });
 
   final NoteRepository repository;
   final NoteDocument initialNote;
@@ -490,8 +529,16 @@ class _NoteEditorState extends State<NoteEditor> {
   Timer? _saveTimer;
   final List<List<InkStroke>> _undoHistory = [];
   final List<List<InkStroke>> _redoHistory = [];
+  bool _fingerDrawingEnabled = false;
+
+  bool _canDraw(PointerEvent event) =>
+      event.kind == PointerDeviceKind.stylus ||
+      event.kind == PointerDeviceKind.invertedStylus ||
+      event.kind == PointerDeviceKind.mouse ||
+      _fingerDrawingEnabled;
 
   void _begin(PointerDownEvent event) {
+    if (!_canDraw(event)) return;
     if (_tool == InkTool.eraser) {
       _eraseAt(event.localPosition);
       return;
@@ -509,6 +556,7 @@ class _NoteEditorState extends State<NoteEditor> {
   }
 
   void _move(PointerMoveEvent event) {
+    if (!_canDraw(event)) return;
     final active = _active;
     if (active == null) return;
     setState(() {
@@ -523,6 +571,7 @@ class _NoteEditorState extends State<NoteEditor> {
   }
 
   void _finish(PointerEvent event) {
+    if (!_canDraw(event)) return;
     final active = _active;
     if (active == null) return;
     _active = null;
@@ -543,10 +592,10 @@ class _NoteEditorState extends State<NoteEditor> {
     if (_undoHistory.isEmpty) return;
     final previous = _undoHistory.removeLast();
     _redoHistory.add(List<InkStroke>.of(_note.strokes));
-    setState(() => _note = _note.copyWith(
-          updatedAt: DateTime.now(),
-          strokes: previous,
-        ));
+    setState(
+      () =>
+          _note = _note.copyWith(updatedAt: DateTime.now(), strokes: previous),
+    );
     _scheduleSave();
   }
 
@@ -554,32 +603,37 @@ class _NoteEditorState extends State<NoteEditor> {
     if (_redoHistory.isEmpty) return;
     final next = _redoHistory.removeLast();
     _undoHistory.add(List<InkStroke>.of(_note.strokes));
-    setState(() => _note = _note.copyWith(
-          updatedAt: DateTime.now(),
-          strokes: next,
-        ));
+    setState(
+      () => _note = _note.copyWith(updatedAt: DateTime.now(), strokes: next),
+    );
     _scheduleSave();
   }
 
   void _eraseAt(Offset offset) {
-    final hit = _note.strokes.lastIndexWhere((stroke) => stroke.points.any(
-          (point) => (Offset(point.x, point.y) - offset).distance <=
-              (stroke.width / 2 + 18),
-        ));
+    final hit = _note.strokes.lastIndexWhere(
+      (stroke) => stroke.points.any(
+        (point) =>
+            (Offset(point.x, point.y) - offset).distance <=
+            (stroke.width / 2 + 18),
+      ),
+    );
     if (hit < 0) return;
     final strokes = List<InkStroke>.of(_note.strokes)..removeAt(hit);
     _commitStrokes(strokes);
   }
 
   InkPoint _point(Offset offset, double pressure) => InkPoint(
-        x: offset.dx,
-        y: offset.dy,
-        pressure: pressure > 0 ? pressure.clamp(0.0, 1.0) : .5,
-      );
+    x: offset.dx,
+    y: offset.dy,
+    pressure: pressure > 0 ? pressure.clamp(0.0, 1.0) : .5,
+  );
 
   void _scheduleSave() {
     _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 250), () => widget.repository.save(_note));
+    _saveTimer = Timer(
+      const Duration(milliseconds: 250),
+      () => widget.repository.save(_note),
+    );
   }
 
   @override
@@ -591,96 +645,152 @@ class _NoteEditorState extends State<NoteEditor> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(_note.title),
-              const Text('1페이지', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400)),
-            ],
+    appBar: AppBar(
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(_note.title),
+          const Text(
+            '1페이지',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
           ),
-          actions: const [
-            Padding(
-              padding: EdgeInsets.only(right: 16),
-              child: Center(child: Text('자동 저장', style: TextStyle(fontSize: 12))),
-            ),
-          ],
+        ],
+      ),
+      actions: const [
+        Padding(
+          padding: EdgeInsets.only(right: 16),
+          child: Center(child: Text('자동 저장', style: TextStyle(fontSize: 12))),
         ),
-        body: Column(
-          children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                children: [
-                  SegmentedButton<InkTool>(
-                    segments: const [
-                      ButtonSegment(value: InkTool.pen, label: Text('펜'), icon: Icon(Icons.edit_outlined)),
-                      ButtonSegment(value: InkTool.highlighter, label: Text('형광펜'), icon: Icon(Icons.border_color_outlined)),
-                      ButtonSegment(value: InkTool.eraser, label: Text('지우개'), icon: Icon(Icons.auto_fix_normal_outlined)),
-                    ],
-                    selected: {_tool},
-                    onSelectionChanged: (tools) => setState(() => _tool = tools.first),
+      ],
+    ),
+    body: Column(
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              SegmentedButton<InkTool>(
+                segments: const [
+                  ButtonSegment(
+                    value: InkTool.pen,
+                    label: Text('펜'),
+                    icon: Icon(Icons.edit_outlined),
                   ),
-                  const SizedBox(width: 8),
-                  IconButton.filledTonal(
-                    key: const ValueKey('undo-ink'),
-                    tooltip: '실행 취소',
-                    onPressed: _undoHistory.isEmpty ? null : _undo,
-                    icon: const Icon(Icons.undo_rounded),
+                  ButtonSegment(
+                    value: InkTool.highlighter,
+                    label: Text('형광펜'),
+                    icon: Icon(Icons.border_color_outlined),
                   ),
-                  IconButton.filledTonal(
-                    key: const ValueKey('redo-ink'),
-                    tooltip: '다시 실행',
-                    onPressed: _redoHistory.isEmpty ? null : _redo,
-                    icon: const Icon(Icons.redo_rounded),
-                  ),
-                  const SizedBox(width: 8),
-                  for (final color in const [0xff1c1d1a, 0xff315f83, 0xffa8433e])
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: InkWell(
-                        key: ValueKey('ink-color-$color'),
-                        onTap: () => setState(() => _inkColor = color),
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: Color(color),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: _inkColor == color ? Colors.white : Colors.transparent,
-                              width: 3,
-                            ),
-                            boxShadow: _inkColor == color
-                                ? const [BoxShadow(color: Colors.black26, blurRadius: 0, spreadRadius: 2)]
-                                : null,
-                          ),
-                        ),
-                      ),
-                    ),
-                  PopupMenuButton<double>(
-                    tooltip: '펜 굵기',
-                    initialValue: _inkWidth,
-                    onSelected: (value) => setState(() => _inkWidth = value),
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 2, child: Text('얇게')),
-                      PopupMenuItem(value: 4, child: Text('보통')),
-                      PopupMenuItem(value: 8, child: Text('굵게')),
-                    ],
-                    icon: const Icon(Icons.line_weight_rounded),
+                  ButtonSegment(
+                    value: InkTool.eraser,
+                    label: Text('지우개'),
+                    icon: Icon(Icons.auto_fix_normal_outlined),
                   ),
                 ],
+                selected: {_tool},
+                onSelectionChanged: (tools) =>
+                    setState(() => _tool = tools.first),
               ),
-            ),
-            Expanded(
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                key: const ValueKey('undo-ink'),
+                tooltip: '실행 취소',
+                onPressed: _undoHistory.isEmpty ? null : _undo,
+                icon: const Icon(Icons.undo_rounded),
+              ),
+              IconButton.filledTonal(
+                key: const ValueKey('redo-ink'),
+                tooltip: '다시 실행',
+                onPressed: _redoHistory.isEmpty ? null : _redo,
+                icon: const Icon(Icons.redo_rounded),
+              ),
+              const SizedBox(width: 8),
+              for (final color in const [0xff1c1d1a, 0xff315f83, 0xffa8433e])
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: InkWell(
+                    key: ValueKey('ink-color-$color'),
+                    onTap: () => setState(() => _inkColor = color),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: Color(color),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _inkColor == color
+                              ? Colors.white
+                              : Colors.transparent,
+                          width: 3,
+                        ),
+                        boxShadow: _inkColor == color
+                            ? const [
+                                BoxShadow(
+                                  color: Colors.black26,
+                                  blurRadius: 0,
+                                  spreadRadius: 2,
+                                ),
+                              ]
+                            : null,
+                      ),
+                    ),
+                  ),
+                ),
+              PopupMenuButton<double>(
+                tooltip: '펜 굵기',
+                initialValue: _inkWidth,
+                onSelected: (value) => setState(() => _inkWidth = value),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 2, child: Text('얇게')),
+                  PopupMenuItem(value: 4, child: Text('보통')),
+                  PopupMenuItem(value: 8, child: Text('굵게')),
+                ],
+                icon: const Icon(Icons.line_weight_rounded),
+              ),
+              const SizedBox(width: 4),
+              IconButton.filledTonal(
+                key: const ValueKey('finger-drawing-toggle'),
+                tooltip: _fingerDrawingEnabled ? '손가락 필기 끄기' : '손가락 필기 켜기',
+                onPressed: () => setState(
+                  () => _fingerDrawingEnabled = !_fingerDrawingEnabled,
+                ),
+                icon: Icon(
+                  _fingerDrawingEnabled
+                      ? Icons.touch_app_rounded
+                      : Icons.pan_tool_alt_outlined,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _fingerDrawingEnabled ? '손가락 필기' : '손가락 이동',
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: InteractiveViewer(
+              minScale: .6,
+              maxScale: 4,
+              panEnabled: !_fingerDrawingEnabled,
+              scaleEnabled: !_fingerDrawingEnabled,
+              boundaryMargin: const EdgeInsets.all(160),
               child: Container(
-                margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: const Color(0xffddd9cf)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x14000000),
+                      blurRadius: 18,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Listener(
@@ -691,15 +801,20 @@ class _NoteEditorState extends State<NoteEditor> {
                   onPointerUp: _finish,
                   onPointerCancel: (_) => setState(() => _active = null),
                   child: CustomPaint(
-                    painter: InkPainter(strokes: _note.strokes, active: _active),
+                    painter: InkPainter(
+                      strokes: _note.strokes,
+                      active: _active,
+                    ),
                     size: Size.infinite,
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class InkPainter extends CustomPainter {
@@ -712,7 +827,8 @@ class InkPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     for (final stroke in [...strokes, ?active]) {
       if (stroke.points.isEmpty) continue;
-      final color = Color(stroke.color).withValues(alpha: stroke.tool == InkTool.highlighter ? .28 : 1);
+      final color = Color(stroke.color)
+          .withValues(alpha: stroke.tool == InkTool.highlighter ? .28 : 1);
       final paint = Paint()
         ..color = color
         ..style = PaintingStyle.stroke
@@ -726,7 +842,11 @@ class InkPainter extends CustomPainter {
       paint.strokeWidth = stroke.width * (.55 + pressure * .65);
       canvas.drawPath(path, paint);
       if (stroke.points.length == 1) {
-        canvas.drawCircle(Offset(stroke.points.first.x, stroke.points.first.y), paint.strokeWidth / 2, paint..style = PaintingStyle.fill);
+        canvas.drawCircle(
+          Offset(stroke.points.first.x, stroke.points.first.y),
+          paint.strokeWidth / 2,
+          paint..style = PaintingStyle.fill,
+        );
       }
     }
   }
