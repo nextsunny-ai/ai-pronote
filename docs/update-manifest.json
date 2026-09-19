@@ -6,14 +6,14 @@
   "release_notes_url": "https://github.com/nextsunny-ai/ai-pronote/releases/tag/v1.5.0-beta10-20260919",
   "artifacts": {
     "windows": {
-      "url": "https://github.com/nextsunny-ai/ai-pronote/releases/download/v1.5.0-beta10-20260919/AI_PRONOTE_v1.5_windows_beta10_candidate23_2026-09-19.zip",
-      "sha256": "a8521542c39f5c518ff59931e7cbff8984ddeb4a86c0c9023145cb630382ccad",
-      "size": 716899
+      "url": "https://github.com/nextsunny-ai/ai-pronote/releases/download/v1.5.0-beta10-20260919/AI_PRONOTE_v1.5_windows_beta10_candidate25_2026-09-19.zip",
+      "sha256": "a28edca536df5db03fe777b8bdd8757a478994d095280aefd3e64e832a804f56",
+      "size": 717942
     },
     "mac": {
-      "url": "https://github.com/nextsunny-ai/ai-pronote/releases/download/v1.5.0-beta10-20260919/AI_PRONOTE_v1.5_mac_beta10_candidate22_2026-09-19.zip",
-      "sha256": "a96db7cfcb5eb4618fb73422a307de6de16fafebc456d43a094b2150314d3530",
-      "size": 851035
+      "url": "https://github.com/nextsunny-ai/ai-pronote/releases/download/v1.5.0-beta10-20260919/AI_PRONOTE_v1.5_mac_beta10_candidate24_2026-09-19.zip",
+      "sha256": "a3c7e970497deb5cce74aa6a15c7613cc16a37192decb9e9cf212b030f3b259e",
+      "size": 852084
     }
   }
 }
