@@ -31,6 +31,8 @@ Future<void> _openNewNote(WidgetTester tester) async {
 }
 
 Future<void> _openExistingNote(WidgetTester tester, String title) async {
+  await tester.tap(find.byKey(const ValueKey('open-navigation')));
+  await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('top-note-navigation')));
   await tester.pumpAndSettle();
   await tester.tap(find.text(title).last);
@@ -66,9 +68,37 @@ void main() {
     expect(find.text('버전 1.0'), findsOneWidget);
     expect(find.byKey(const ValueKey('start-note-card')), findsOneWidget);
     expect(find.byKey(const ValueKey('start-recording-card')), findsOneWidget);
-    expect(find.text('노트'), findsAtLeastNWidgets(2));
-    expect(find.text('회의'), findsAtLeastNWidgets(2));
-    expect(find.text('내 노트'), findsOneWidget);
+    expect(find.text('노트'), findsOneWidget);
+    expect(find.text('회의'), findsOneWidget);
+    expect(find.byKey(const ValueKey('open-navigation')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('open-navigation')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('top-home-navigation')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('top-meeting-navigation')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('top-transcription-navigation')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('top-minutes-navigation')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('top-note-navigation')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('top-assistant-navigation')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('top-library-navigation')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('top-settings-navigation')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('새 노트에서 스타일러스 획을 그리고 자동 저장한다', (tester) async {

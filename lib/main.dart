@@ -105,6 +105,7 @@ class PronoteApp extends StatelessWidget {
     this.transcriptExporter,
     this.importRecordingPicker,
     this.recordingDirectoryProvider,
+    this.videoDirectoryProvider,
     this.recordingValidator,
     this.currentVersion = '1.0.1',
     this.updateChecker,
@@ -120,6 +121,7 @@ class PronoteApp extends StatelessWidget {
   final TranscriptExporter? transcriptExporter;
   final Future<String?> Function()? importRecordingPicker;
   final Future<Directory> Function()? recordingDirectoryProvider;
+  final Future<Directory> Function()? videoDirectoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
   final String currentVersion;
   final UpdateChecker? updateChecker;
@@ -151,6 +153,7 @@ class PronoteApp extends StatelessWidget {
         transcriptExporter: transcriptExporter,
         importRecordingPicker: importRecordingPicker,
         recordingDirectoryProvider: recordingDirectoryProvider,
+        videoDirectoryProvider: videoDirectoryProvider,
         recordingValidator: recordingValidator,
         displayVersion: _displayVersion(currentVersion),
       ),
@@ -241,6 +244,7 @@ class HomeScreen extends StatefulWidget {
     this.transcriptExporter,
     this.importRecordingPicker,
     this.recordingDirectoryProvider,
+    this.videoDirectoryProvider,
     this.recordingValidator,
     required this.displayVersion,
   });
@@ -254,6 +258,7 @@ class HomeScreen extends StatefulWidget {
   final TranscriptExporter? transcriptExporter;
   final Future<String?> Function()? importRecordingPicker;
   final Future<Directory> Function()? recordingDirectoryProvider;
+  final Future<Directory> Function()? videoDirectoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
   final String displayVersion;
 
@@ -272,6 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _favoritesOnly = false;
   _NoteSort _sort = _NoteSort.updated;
   bool _importingMedia = false;
+  final ScrollController _homeScrollController = ScrollController();
 
   Future<void> _newNote() async {
     final note = NoteDocument(
@@ -371,6 +377,176 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  void _openHome() {
+    if (!_homeScrollController.hasClients) return;
+    _homeScrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+    );
+  }
+
+  Future<List<File>> _meetingMediaFiles() async {
+    final audioDirectory =
+        await (widget.recordingDirectoryProvider?.call() ??
+            _defaultRecordingDirectory());
+    final videoDirectory =
+        await (widget.videoDirectoryProvider?.call() ??
+            _defaultVideoDirectory());
+    final files = <File>[];
+    for (final directory in [audioDirectory, videoDirectory]) {
+      if (!await directory.exists()) continue;
+      await for (final entity in directory.list()) {
+        if (entity is File) files.add(entity);
+      }
+    }
+    files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+    return files;
+  }
+
+  Future<void> _openProcessingJob(ProcessingJobRecord job) async {
+    final gateway = widget.processingGateway;
+    if (gateway == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('이 기기에서는 회의 원본과 노트를 먼저 확인할 수 있습니다.')),
+      );
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TranscriptionResultScreen(
+          gateway: gateway,
+          jobId: job.jobId,
+          noteRepository: widget.repository,
+          transcriptExporter: widget.transcriptExporter,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openLibrary({
+    LibraryFilter initialFilter = LibraryFilter.all,
+  }) async {
+    final notes = await widget.repository.list();
+    final jobs =
+        await (widget.processingJobRepository?.list() ??
+            Future.value(const <ProcessingJobRecord>[]));
+    final media = await _meetingMediaFiles();
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => UnifiedLibraryScreen(
+          notes: notes,
+          jobs: jobs,
+          mediaFiles: media,
+          initialFilter: initialFilter,
+          onOpenNote: _openNote,
+          onOpenJob: _openProcessingJob,
+          onProcessMedia: widget.processingGateway == null
+              ? null
+              : _processMediaFile,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openAssistant() async {
+    final jobs =
+        await (widget.processingJobRepository?.list() ??
+            Future.value(const <ProcessingJobRecord>[]));
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+          children: [
+            Text(
+              'AI 비서',
+              style: Theme.of(sheetContext).textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              widget.processingGateway == null
+                  ? 'AI 연결 후 회의록 정리와 후속 작업을 사용할 수 있습니다.'
+                  : '회의를 선택해 AI 회의록과 후속 작업을 이어가세요.',
+            ),
+            const SizedBox(height: 12),
+            if (jobs.isEmpty)
+              const ListTile(
+                leading: Icon(Icons.info_outline_rounded),
+                title: Text('아직 연결할 회의가 없습니다.'),
+                subtitle: Text('회의를 녹음하거나 기존 파일을 가져오세요.'),
+              )
+            else
+              for (final job in jobs)
+                ListTile(
+                  leading: const Icon(Icons.auto_awesome_outlined),
+                  title: Text(_fileName(job.recordingPath)),
+                  subtitle: Text('상태 ${job.status}'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _openProcessingJob(job);
+                  },
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _fileName(String path) => path.replaceAll('\\', '/').split('/').last;
+
+  Future<void> _openSettings() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+          children: [
+            Text(
+              '설정',
+              style: Theme.of(sheetContext).textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              leading: const Icon(Icons.auto_awesome_outlined),
+              title: const Text('AI 연결'),
+              subtitle: Text(
+                widget.processingGateway == null
+                    ? '녹음·영상·필기는 로그인 없이 사용 가능'
+                    : '받아쓰기와 AI 회의록 연결 사용 가능',
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.folder_outlined),
+              title: const Text('보관함'),
+              subtitle: const Text('노트·회의록·녹음·영상을 한곳에서 검색'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _openLibrary();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.info_outline_rounded),
+              title: const Text('AI PRONOTE'),
+              subtitle: Text('버전 ${widget.displayVersion} · (주)써니엔터테인먼트'),
+            ),
+          ],
         ),
       ),
     );
@@ -494,53 +670,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _importMeetingMedia() async {
-    final gateway = widget.processingGateway;
     final picker = widget.importRecordingPicker;
     if (_importingMedia || picker == null) return;
-    if (gateway == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('받아쓰기 연결을 설정한 후 파일을 가져올 수 있습니다.')),
-      );
-      return;
-    }
     setState(() => _importingMedia = true);
     try {
       final path = await picker();
       if (path == null) return;
-      final file = File(path);
-      final valid = widget.recordingValidator != null
-          ? await widget.recordingValidator!(path)
-          : await file.exists() && await file.length() > 0;
-      if (!valid) {
-        throw const MeetingProcessingException('선택한 파일을 읽을 수 없습니다.');
-      }
-      final job = await gateway.submitTranscription(path);
-      await widget.processingJobRepository?.save(
-        ProcessingJobRecord(
-          jobId: job.id,
-          recordingPath: path,
-          createdAt: DateTime.now(),
-          status: job.status,
-        ),
-      );
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => TranscriptionResultScreen(
-            gateway: gateway,
-            jobId: job.id,
-            noteRepository: widget.repository,
-            transcriptExporter: widget.transcriptExporter,
-          ),
-        ),
-      );
-      if (mounted) {
-        setState(() {
-          _processingJobs =
-              widget.processingJobRepository?.list() ??
-              Future.value(const <ProcessingJobRecord>[]);
-        });
-      }
+      await _processMediaFile(path);
     } on MeetingProcessingException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -557,10 +693,174 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _processMediaFile(String path) async {
+    final gateway = widget.processingGateway;
+    if (gateway == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('받아쓰기 연결을 설정한 후 사용할 수 있습니다.')),
+        );
+      }
+      return;
+    }
+    final file = File(path);
+    final valid = widget.recordingValidator != null
+        ? await widget.recordingValidator!(path)
+        : await file.exists() && await file.length() > 0;
+    if (!valid) {
+      throw const MeetingProcessingException('선택한 파일을 읽을 수 없습니다.');
+    }
+    final job = await gateway.submitTranscription(path);
+    final record = ProcessingJobRecord(
+      jobId: job.id,
+      recordingPath: path,
+      createdAt: DateTime.now(),
+      status: job.status,
+    );
+    await widget.processingJobRepository?.save(record);
+    if (!mounted) return;
+    setState(() {
+      _processingJobs =
+          widget.processingJobRepository?.list() ??
+          Future.value(const <ProcessingJobRecord>[]);
+    });
+    await _openProcessingJob(record);
+  }
+
+  @override
+  void dispose() {
+    _homeScrollController.dispose();
+    super.dispose();
+  }
+
+  Widget _navigationDrawer(BuildContext context) => NavigationDrawer(
+    selectedIndex: 0,
+    onDestinationSelected: (index) {
+      Navigator.pop(context);
+      switch (index) {
+        case 0:
+          _openHome();
+          return;
+        case 1:
+          _chooseMeetingMode();
+          return;
+        case 2:
+          _importMeetingMedia();
+          return;
+        case 3:
+          _openLibrary(initialFilter: LibraryFilter.meetings);
+          return;
+        case 4:
+          _chooseNote();
+          return;
+        case 5:
+          _openAssistant();
+          return;
+        case 6:
+          _openLibrary();
+          return;
+        case 7:
+          _openSettings();
+          return;
+      }
+    },
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(24, 22, 20, 18),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(9),
+              child: Image.asset(
+                'assets/branding/ai_pronote_mark.png',
+                width: 34,
+                height: 34,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'AI PRONOTE',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  Text('회의와 노트를 한곳에', style: TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      const Divider(indent: 20, endIndent: 20),
+      const NavigationDrawerDestination(
+        key: ValueKey('top-home-navigation'),
+        icon: Icon(Icons.home_outlined),
+        selectedIcon: Icon(Icons.home_rounded),
+        label: Text('홈'),
+      ),
+      const NavigationDrawerDestination(
+        key: ValueKey('top-meeting-navigation'),
+        icon: Icon(Icons.mic_none_rounded),
+        selectedIcon: Icon(Icons.mic_rounded),
+        label: Text('새 회의'),
+      ),
+      const NavigationDrawerDestination(
+        key: ValueKey('top-transcription-navigation'),
+        icon: Icon(Icons.graphic_eq_rounded),
+        label: Text('받아쓰기'),
+      ),
+      const NavigationDrawerDestination(
+        key: ValueKey('top-minutes-navigation'),
+        icon: Icon(Icons.description_outlined),
+        label: Text('회의록'),
+      ),
+      const NavigationDrawerDestination(
+        key: ValueKey('top-note-navigation'),
+        icon: Icon(Icons.edit_note_rounded),
+        label: Text('내 노트'),
+      ),
+      const NavigationDrawerDestination(
+        key: ValueKey('top-assistant-navigation'),
+        icon: Icon(Icons.auto_awesome_outlined),
+        label: Text('AI 비서'),
+      ),
+      const NavigationDrawerDestination(
+        key: ValueKey('top-library-navigation'),
+        icon: Icon(Icons.manage_search_rounded),
+        label: Text('통합 찾기'),
+      ),
+      const NavigationDrawerDestination(
+        key: ValueKey('top-settings-navigation'),
+        icon: Icon(Icons.settings_outlined),
+        label: Text('설정'),
+      ),
+      const Padding(
+        padding: EdgeInsets.fromLTRB(28, 18, 28, 12),
+        child: Text(
+          'SUNNY ENTERTAINMENT',
+          style: TextStyle(fontSize: 11, letterSpacing: 1.1),
+        ),
+      ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) => Scaffold(
+    drawer: _navigationDrawer(context),
     appBar: AppBar(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xfff7f5ef),
+      surfaceTintColor: Colors.transparent,
+      titleSpacing: 0,
+      leading: Builder(
+        builder: (context) => IconButton(
+          key: const ValueKey('open-navigation'),
+          tooltip: '메뉴',
+          onPressed: () => Scaffold.of(context).openDrawer(),
+          icon: const Icon(Icons.menu_rounded),
+        ),
+      ),
       title: Row(
         children: [
           ClipRRect(
@@ -584,54 +884,43 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               Text(
                 '버전 ${widget.displayVersion}',
-                style: const TextStyle(fontSize: 12),
+                style: const TextStyle(fontSize: 11, color: Color(0xff77746d)),
               ),
             ],
           ),
         ],
       ),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(56),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: FilledButton.tonalIcon(
-                  key: const ValueKey('top-note-navigation'),
-                  onPressed: _chooseNote,
-                  icon: const Icon(Icons.description_outlined),
-                  label: const Text('노트'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.tonalIcon(
-                  key: const ValueKey('top-meeting-navigation'),
-                  onPressed: _chooseMeetingMode,
-                  icon: const Icon(Icons.mic_none_rounded),
-                  label: const Text('회의'),
-                ),
-              ),
-            ],
+      actions: [
+        IconButton(
+          tooltip: '내 노트',
+          onPressed: _chooseNote,
+          icon: const Icon(Icons.edit_note_rounded),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: FilledButton.icon(
+            onPressed: _chooseMeetingMode,
+            icon: const Icon(Icons.mic_none_rounded, size: 18),
+            label: const Text('회의 시작'),
           ),
         ),
-      ),
+      ],
     ),
     body: SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: ListView(
+          controller: _homeScrollController,
           children: [
             Text(
-              '무엇을 기록할까요?',
-              style: Theme.of(context).textTheme.headlineMedium
-                  ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1),
+              '오늘의 기록',
+              style: Theme.of(context).textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.6),
             ),
             const SizedBox(height: 6),
             Text(
-              '노트를 쓰거나 회의 녹음을 시작하세요.',
-              style: Theme.of(context).textTheme.bodyLarge
+              '노트를 쓰거나 회의를 기록하세요.',
+              style: Theme.of(context).textTheme.bodyMedium
                   ?.copyWith(color: const Color(0xff6b6a65)),
             ),
             const SizedBox(height: 20),
@@ -829,6 +1118,201 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+    ),
+  );
+}
+
+enum LibraryFilter { all, meetings, notes, media }
+
+class UnifiedLibraryScreen extends StatefulWidget {
+  const UnifiedLibraryScreen({
+    super.key,
+    required this.notes,
+    required this.jobs,
+    required this.mediaFiles,
+    required this.onOpenNote,
+    required this.onOpenJob,
+    this.onProcessMedia,
+    this.initialFilter = LibraryFilter.all,
+  });
+
+  final List<NoteDocument> notes;
+  final List<ProcessingJobRecord> jobs;
+  final List<File> mediaFiles;
+  final Future<void> Function(NoteDocument note) onOpenNote;
+  final Future<void> Function(ProcessingJobRecord job) onOpenJob;
+  final Future<void> Function(String path)? onProcessMedia;
+  final LibraryFilter initialFilter;
+
+  @override
+  State<UnifiedLibraryScreen> createState() => _UnifiedLibraryScreenState();
+}
+
+class _UnifiedLibraryScreenState extends State<UnifiedLibraryScreen> {
+  late LibraryFilter _filter = widget.initialFilter;
+  String _query = '';
+
+  String _fileName(String path) => path.replaceAll('\\', '/').split('/').last;
+
+  String _date(DateTime value) =>
+      '${value.year}.${value.month.toString().padLeft(2, '0')}.${value.day.toString().padLeft(2, '0')}';
+
+  String _fileSize(File file) {
+    try {
+      final bytes = file.lengthSync();
+      if (bytes >= 1024 * 1024) {
+        return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+      }
+      return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    } catch (_) {
+      return '크기 확인 불가';
+    }
+  }
+
+  bool _matches(String value) =>
+      _query.isEmpty || value.toLowerCase().contains(_query.toLowerCase());
+
+  @override
+  Widget build(BuildContext context) {
+    final notes = widget.notes
+        .where((note) => _matches('${note.title} ${note.body}'))
+        .toList(growable: false);
+    final jobs = widget.jobs
+        .where(
+          (job) => _matches(
+            '${_fileName(job.recordingPath)} ${job.jobId} ${job.status}',
+          ),
+        )
+        .toList(growable: false);
+    final media = widget.mediaFiles
+        .where((file) => _matches(_fileName(file.path)))
+        .toList(growable: false);
+    final showNotes =
+        _filter == LibraryFilter.all || _filter == LibraryFilter.notes;
+    final showMeetings =
+        _filter == LibraryFilter.all || _filter == LibraryFilter.meetings;
+    final showMedia =
+        _filter == LibraryFilter.all || _filter == LibraryFilter.media;
+    final empty =
+        (!showNotes || notes.isEmpty) &&
+        (!showMeetings || jobs.isEmpty) &&
+        (!showMedia || media.isEmpty);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('통합 찾기')),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          children: [
+            SearchBar(
+              key: const ValueKey('library-search'),
+              hintText: '노트·회의록·녹음·영상 검색',
+              leading: const Icon(Icons.search_rounded),
+              elevation: const WidgetStatePropertyAll(0),
+              onChanged: (value) => setState(() => _query = value.trim()),
+            ),
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<LibraryFilter>(
+                segments: const [
+                  ButtonSegment(value: LibraryFilter.all, label: Text('전체')),
+                  ButtonSegment(
+                    value: LibraryFilter.meetings,
+                    label: Text('회의록'),
+                  ),
+                  ButtonSegment(value: LibraryFilter.notes, label: Text('노트')),
+                  ButtonSegment(
+                    value: LibraryFilter.media,
+                    label: Text('녹음·영상'),
+                  ),
+                ],
+                selected: {_filter},
+                onSelectionChanged: (value) =>
+                    setState(() => _filter = value.first),
+              ),
+            ),
+            if (empty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 48),
+                child: Center(child: Text('찾은 기록이 없습니다.')),
+              ),
+            if (showMeetings && jobs.isNotEmpty) ...[
+              const _LibrarySectionTitle('회의록'),
+              for (final job in jobs)
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: const Icon(Icons.description_outlined),
+                    title: Text(_fileName(job.recordingPath)),
+                    subtitle: Text('${_date(job.createdAt)} · ${job.status}'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => widget.onOpenJob(job),
+                  ),
+                ),
+            ],
+            if (showNotes && notes.isNotEmpty) ...[
+              const _LibrarySectionTitle('내 노트'),
+              for (final note in notes)
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: const Icon(Icons.edit_note_rounded),
+                    title: Text(note.title),
+                    subtitle: Text(_date(note.updatedAt)),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => widget.onOpenNote(note),
+                  ),
+                ),
+            ],
+            if (showMedia && media.isNotEmpty) ...[
+              const _LibrarySectionTitle('녹음·영상'),
+              for (final file in media)
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: Icon(
+                      file.path.toLowerCase().endsWith('.mp4')
+                          ? Icons.videocam_outlined
+                          : Icons.graphic_eq_rounded,
+                    ),
+                    title: Text(_fileName(file.path)),
+                    subtitle: Text(
+                      '${_date(file.lastModifiedSync())} · ${_fileSize(file)}',
+                    ),
+                    trailing: widget.onProcessMedia == null
+                        ? const Icon(Icons.lock_outline_rounded)
+                        : TextButton(
+                            onPressed: () => widget.onProcessMedia!(file.path),
+                            child: const Text('받아쓰기'),
+                          ),
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('보관 위치: ${file.path}')),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LibrarySectionTitle extends StatelessWidget {
+  const _LibrarySectionTitle(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(4, 24, 4, 8),
+    child: Text(
+      label,
+      style: Theme.of(context).textTheme.titleMedium
+          ?.copyWith(fontWeight: FontWeight.w800),
     ),
   );
 }
