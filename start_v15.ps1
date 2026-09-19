@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $ExpectedVersion = "v1.5.0-beta13.20260920"
 $HostAddress = "127.0.0.1"

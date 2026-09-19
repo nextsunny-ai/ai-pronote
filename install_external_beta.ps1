@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$SkipShortcut,
     [string]$ShortcutDirectory = [Environment]::GetFolderPath('Desktop'),
     [string]$Version = 'v1.5.0-beta13.20260920',

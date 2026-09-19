@@ -1,4 +1,5 @@
 import unittest
+import subprocess
 from pathlib import Path
 
 
@@ -7,6 +8,34 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class LauncherContractTests(unittest.TestCase):
     EXPECTED_VERSION = "v1.5.0-beta13.20260920"
+
+    def test_windows_powershell_entrypoints_are_utf8_bom_and_parse_in_legacy_host(self):
+        scripts = (
+            "install_external_beta.ps1",
+            "launch_managed_windows.ps1",
+            "start_v15.ps1",
+            "start_v15_server_only.ps1",
+            "uninstall_windows.ps1",
+        )
+        powershell = Path(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe")
+        for relative in scripts:
+            path = ROOT / relative
+            self.assertTrue(path.read_bytes().startswith(b"\xef\xbb\xbf"), relative)
+            if powershell.is_file():
+                completed = subprocess.run(
+                    [
+                        str(powershell),
+                        "-NoProfile",
+                        "-NonInteractive",
+                        "-Command",
+                        f"[scriptblock]::Create((Get-Content -Raw -LiteralPath '{path}')) | Out-Null",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                    check=False,
+                )
+                self.assertEqual(completed.returncode, 0, f"{relative}: {completed.stderr}")
 
     def test_launcher_is_safe_and_version_aware(self):
         launcher = (ROOT / "start_v15.ps1").read_text(encoding="utf-8")
