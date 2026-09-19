@@ -16,7 +16,7 @@ void main() {
     app.main();
     await tester.pump(const Duration(seconds: 2));
 
-    await tester.tap(find.text('회의 기록'));
+    await tester.tap(find.byKey(const ValueKey('start-recording-card')));
     await tester.pump(const Duration(seconds: 1));
     await tester.tap(find.byKey(const ValueKey('meeting-video-mode')));
 
@@ -34,8 +34,20 @@ void main() {
     expect(startButton.onPressed, isNotNull, reason: '카메라 초기화에 실패했습니다.');
 
     await tester.tap(find.byKey(const ValueKey('toggle-video-recording')));
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.text('녹화 정지'), findsOneWidget);
+    for (var attempt = 0; attempt < 20; attempt++) {
+      await tester.pump(const Duration(milliseconds: 500));
+      if (find.text('녹화 정지').evaluate().isNotEmpty) break;
+    }
+    final visibleText = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((widget) => widget.data)
+        .whereType<String>()
+        .join(' | ');
+    expect(
+      find.text('녹화 정지'),
+      findsOneWidget,
+      reason: '영상 녹화가 시작되지 않았습니다. 화면 메시지: $visibleText',
+    );
     for (var elapsed = 0; elapsed < recordingSeconds; elapsed++) {
       await tester.pump(const Duration(seconds: 1));
       expect(
