@@ -239,6 +239,9 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("folderId: importedFolderIds.get", HTML)
 
     def test_transcription_glossary_and_speaker_names_are_editable(self):
+        self.assertIn('<option value="auto">한국어+영어 혼용 (자동 감지)</option>', HTML)
+        self.assertIn('id="scenarioLanguage"', HTML)
+        self.assertIn("r.language = languageInput?.value || 'ko'", HTML)
         self.assertIn('id="transcribeGlossary"', HTML)
         self.assertIn("fd.append('glossary', glossary)", HTML)
         self.assertIn("function applySpeakerNames", HTML)

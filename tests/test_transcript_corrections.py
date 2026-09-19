@@ -4,6 +4,30 @@ import main
 
 
 class TranscriptCorrectionTests(unittest.TestCase):
+    def test_auto_language_maps_to_whisper_detection(self):
+        self.assertIsNone(main.whisper_language("auto"))
+        self.assertIsNone(main.whisper_language(""))
+        self.assertEqual(main.whisper_language("ko"), "ko")
+        self.assertEqual(main.whisper_language("en"), "en")
+        with self.assertRaises(ValueError):
+            main.whisper_language("../../invalid")
+
+    def test_mixed_language_merge_keeps_each_script_in_timestamp_order(self):
+        korean = [
+            {"start": 0.0, "end": 2.0, "text": "오늘 회의를 시작합니다."},
+            {"start": 3.0, "end": 5.0, "text": "영어처럼 들린 가짜 번역"},
+        ]
+        english = [
+            {"start": 2.1, "end": 3.0, "text": "Release candidate passed."},
+            {"start": 5.1, "end": 6.0, "text": "다음 회의"},
+        ]
+        merged = main.merge_mixed_language_segments(korean, english)
+        self.assertEqual(
+            [segment["text"] for segment in merged],
+            ["오늘 회의를 시작합니다.", "Release candidate passed.", "영어처럼 들린 가짜 번역"],
+        )
+        self.assertEqual([segment["id"] for segment in merged], [1, 2, 3])
+
     def test_parse_glossary_accepts_arrow_and_equals_and_ignores_comments(self):
         pairs = main.parse_glossary("# 팀 용어\n프로 노트 = AI PRONOTE\n클로 드 -> Claude\n")
         self.assertEqual(pairs, [("프로 노트", "AI PRONOTE"), ("클로 드", "Claude")])

@@ -791,6 +791,50 @@ MAX_GLOSSARY_PAIRS = 100
 MAX_GLOSSARY_TERM_LENGTH = 80
 
 
+def whisper_language(value: str) -> Optional[str]:
+    """Map the UI's automatic mode to Whisper language detection safely."""
+    language = (value or "").strip().lower()
+    if language in {"", "auto"}:
+        return None
+    if not re.fullmatch(r"[a-z]{2,3}", language):
+        raise ValueError("받아쓰기 언어 설정이 올바르지 않습니다")
+    return language
+
+
+def _mixed_language_segment_matches(text: str, language: str) -> bool:
+    """Keep the script that belongs to each pass in Korean/English mixed mode."""
+    value = text or ""
+    hangul = len(re.findall(r"[가-힣]", value))
+    latin = len(re.findall(r"[A-Za-z]", value))
+    if language == "ko":
+        return hangul > 0
+    if language == "en":
+        return latin >= 2 and hangul == 0
+    return bool(value.strip())
+
+
+def merge_mixed_language_segments(korean: list[dict], english: list[dict]) -> list[dict]:
+    """Merge language-specific passes by timestamp while dropping exact repeats."""
+    candidates = [
+        *({**segment, "_language": "ko"} for segment in korean
+          if _mixed_language_segment_matches(segment.get("text", ""), "ko")),
+        *({**segment, "_language": "en"} for segment in english
+          if _mixed_language_segment_matches(segment.get("text", ""), "en")),
+    ]
+    candidates.sort(key=lambda item: (float(item.get("start", 0)), 0 if item["_language"] == "ko" else 1))
+    merged: list[dict] = []
+    seen: set[str] = set()
+    for item in candidates:
+        normalized = re.sub(r"[^0-9A-Za-z가-힣]+", "", item.get("text", "")).lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        clean = {key: value for key, value in item.items() if key != "_language"}
+        clean["id"] = len(merged) + 1
+        merged.append(clean)
+    return merged
+
+
 def parse_glossary(value: str) -> list[tuple[str, str]]:
     """Parse user-owned transcription replacements without executing patterns.
 
@@ -2399,6 +2443,10 @@ async def transcribe_partial(
     _begin_data_operation()
     tmp_path = None
     try:
+        try:
+            selected_language = whisper_language(language)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
         partial_limit = 25 * 1024 * 1024
         contents = await file.read(partial_limit + 1)
         if not contents:
@@ -2408,19 +2456,19 @@ async def transcribe_partial(
         tmp_path = UPLOAD_DIR / f"_partial_{uuid.uuid4().hex[:8]}.webm"
         tmp_path.write_bytes(contents)
         m = get_model(model)
-        kwargs = dict(language=language, beam_size=1, batch_size=8,
+        kwargs = dict(language=selected_language, beam_size=1, batch_size=8,
                       vad_filter=True, vad_parameters=dict(min_silence_duration_ms=500),
                       no_repeat_ngram_size=3, repetition_penalty=1.15,
                       compression_ratio_threshold=2.4, log_prob_threshold=-1.0,
                       no_speech_threshold=0.6)
-        if language == "ko":
+        if selected_language == "ko":
             kwargs["initial_prompt"] = KOREAN_INITIAL_PROMPT
             if KOREAN_HOTWORDS:
                 kwargs["hotwords"] = KOREAN_HOTWORDS
         try:
             segments_iter, info = m.transcribe(str(tmp_path), **kwargs)
         except TypeError:
-            segments_iter, info = m.transcribe(str(tmp_path), language=language, beam_size=1, batch_size=8)
+            segments_iter, info = m.transcribe(str(tmp_path), language=selected_language, beam_size=1, batch_size=8)
         segs = []
         for seg in segments_iter:
             st = _clean_text(seg.text)
@@ -2476,6 +2524,7 @@ async def transcribe(
         raise HTTPException(403, "회의록 생성을 위한 외부 AI 전송 동의가 필요합니다")
     try:
         parse_glossary(glossary)
+        whisper_language(language)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -2553,8 +2602,8 @@ def _run_transcription(upload_path: Path, filename: str, job_id: str,
         # 한국어 정확도 개선 + 환각·반복 억제 (2026-07-14 실측 반영).
         #   no_repeat_ngram_size/repetition_penalty = "한 번에 한 번에…" 루프 차단
         #   compression/log_prob/no_speech_threshold = 무음 구간 환각 세그먼트 폐기
+        selected_language = whisper_language(language)
         tx_kwargs = dict(
-            language=language,
             beam_size=max(1, min(int(beam_size), 5)),
             batch_size=8,
             vad_filter=True,
@@ -2565,46 +2614,58 @@ def _run_transcription(upload_path: Path, filename: str, job_id: str,
             log_prob_threshold=-1.0,
             no_speech_threshold=0.6,
         )
-        if language == "ko":
-            tx_kwargs["initial_prompt"] = KOREAN_INITIAL_PROMPT
-            if KOREAN_HOTWORDS:
-                # 고유명사 힌트 — initial_prompt 와 달리 본문에 새어 나오지 않는다
-                tx_kwargs["hotwords"] = KOREAN_HOTWORDS
-        try:
-            segments_iter, info = m.transcribe(str(upload_path), **tx_kwargs)
-        except TypeError:
-            # 설치된 faster-whisper 버전이 일부 인자 미지원 = 핵심 인자만 재시도
-            segments_iter, info = m.transcribe(
-                str(upload_path), language=language,
-                beam_size=tx_kwargs["beam_size"], batch_size=8,
-            )
-        segments = []
-        full_text_parts = []
-        prev_text = None
-        total_sec = float(getattr(info, "duration", 0) or 0)
-        last_pct, last_report_at = -1, 0.0
-        for seg in segments_iter:
-            # 진행률 = 음성에서 어디까지 왔는지 (초 단위라 정확하다)
-            if total_sec > 0:
-                pct = min(96, 3 + int(seg.end / total_sec * 93))
-                now_ts = time.time()
-                if pct != last_pct and (now_ts - last_report_at) >= 1.0:
-                    report(pct, f"받아쓰기 중 {pct}%")
-                    last_pct, last_report_at = pct, now_ts
-            st = _clean_text(seg.text)
-            if not st:
-                continue
-            # ★ v1.4 — 직전 세그먼트와 완전히 동일 = 반복 환각 → 1회만 남김
-            if prev_text is not None and st == prev_text:
-                continue
-            prev_text = st
-            segments.append({
-                "id": seg.id,
-                "start": round(seg.start, 2),
-                "end": round(seg.end, 2),
-                "text": st,
-            })
-            full_text_parts.append(st)
+        def run_pass(pass_language: Optional[str], progress_start: int, progress_end: int):
+            pass_kwargs = {**tx_kwargs, "language": pass_language}
+            if pass_language == "ko":
+                pass_kwargs["initial_prompt"] = KOREAN_INITIAL_PROMPT
+                if KOREAN_HOTWORDS:
+                    pass_kwargs["hotwords"] = KOREAN_HOTWORDS
+            try:
+                iterator, pass_info = m.transcribe(str(upload_path), **pass_kwargs)
+            except TypeError:
+                iterator, pass_info = m.transcribe(
+                    str(upload_path), language=pass_language,
+                    beam_size=tx_kwargs["beam_size"], batch_size=8,
+                )
+            pass_segments = []
+            previous = None
+            duration = float(getattr(pass_info, "duration", 0) or 0)
+            last_report_at = 0.0
+            for seg in iterator:
+                if duration > 0:
+                    pct = min(progress_end, progress_start + int(seg.end / duration * (progress_end - progress_start)))
+                    now_ts = time.time()
+                    if (now_ts - last_report_at) >= 1.0:
+                        report(pct, f"받아쓰기 중 {pct}%")
+                        last_report_at = now_ts
+                text = _clean_text(seg.text)
+                if not text or text == previous:
+                    continue
+                previous = text
+                pass_segments.append({
+                    "id": len(pass_segments) + 1,
+                    "start": round(seg.start, 2),
+                    "end": round(seg.end, 2),
+                    "text": text,
+                })
+            return pass_segments, pass_info
+
+        if selected_language is None:
+            report(3, "한국어 구간 분석 중")
+            korean_segments, info = run_pass("ko", 3, 49)
+            report(50, "영어 구간 분석 중")
+            english_segments, _ = run_pass("en", 50, 96)
+            segments = merge_mixed_language_segments(korean_segments, english_segments)
+            if not segments:
+                # Extremely quiet or non Korean/English input: retain Whisper's
+                # detected-language pass instead of returning an empty result.
+                detected_segments, info = run_pass(None, 50, 96)
+                segments = detected_segments
+            result_language = "ko+en"
+        else:
+            segments, info = run_pass(selected_language, 3, 96)
+            result_language = getattr(info, "language", None) or selected_language
+        full_text_parts = [segment["text"] for segment in segments]
         elapsed = round(time.time() - t_start, 1)
 
         # ★ V1.3 — 화자 분리 (옵션). pyannote·HF_TOKEN 없으면 자동 skip.
@@ -2631,7 +2692,7 @@ def _run_transcription(upload_path: Path, filename: str, job_id: str,
             "job_id": job_id,
             "filename": filename,
             "size_mb": size_mb,
-            "language": info.language,
+            "language": result_language,
             "duration": round(info.duration, 1),
             "elapsed_sec": elapsed,
             "model": model,

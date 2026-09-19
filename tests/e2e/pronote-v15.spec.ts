@@ -187,9 +187,32 @@ test.describe('v1.5 핵심 발견성과 반응형', () => {
     await expect(page.locator('#scenarioConfirm')).toHaveText('받아쓰기·회의록 만들기');
     await expect(page.locator('#scenarioGrid')).toContainText('회의록');
     await expect(page.locator('#scenarioGrid')).toContainText('강의 노트');
+    await expect(page.locator('#scenarioLanguage')).toHaveValue('ko');
     await page.locator('#scenarioCancel').click();
     await expect(page.locator('#libraryUploadBtn')).toBeVisible();
     await expect(page.locator('#libraryUploadBtn')).toHaveText('파일로 회의록 만들기');
+  });
+
+  test('가져온 해외 회의 파일은 혼용언어 선택을 저장하고 받아쓰기에 전달한다', async ({ page }) => {
+    await openApp(page);
+    const chooserPromise = page.waitForEvent('filechooser');
+    await page.locator('#homeUploadCard').click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles({ name: 'global_meeting.mp3', mimeType: 'audio/mpeg', buffer: Buffer.from('e2e synthetic media') });
+    await expect(page.locator('#scenarioModal')).toHaveClass(/open/);
+    await page.locator('#scenarioLanguage').selectOption('auto');
+    const transcriptionRequest = page.waitForRequest(request =>
+      new URL(request.url()).pathname === '/api/transcribe' && request.method() === 'POST'
+    );
+    await page.locator('#scenarioConfirm').click();
+    const request = await transcriptionRequest;
+    expect(request.postData() || '').toContain('name="language"');
+    expect(request.postData() || '').toContain('auto');
+    const stored = await page.evaluate(async () => {
+      const records = await window.__pronoteDB.getAll();
+      return records.find(record => record.filename === 'global_meeting.mp3');
+    });
+    expect(stored?.language).toBe('auto');
   });
 
   test('드래그앤드롭도 같은 검증·라이브러리·문서형식 흐름을 사용한다', async ({ page }) => {
