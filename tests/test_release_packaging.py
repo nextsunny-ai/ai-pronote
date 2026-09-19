@@ -34,7 +34,12 @@ class ReleasePackagingContractTests(unittest.TestCase):
         source = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("'requirements-lock-windows.txt'", source)
         self.assertIn("'requirements-lock-mac.txt'", source)
-        self.assertGreaterEqual(source.count("$SharedLock"), 3)
+        self.assertNotIn("$SharedLock", source)
+        windows_lock = (ROOT / "requirements-lock-windows.txt").read_text(encoding="utf-8")
+        mac_lock = (ROOT / "requirements-lock-mac.txt").read_text(encoding="utf-8")
+        self.assertIn("ctranslate2==4.8.2", windows_lock)
+        self.assertIn("uvicorn[standard]==0.53.0", windows_lock)
+        self.assertIn("faster-whisper==1.2.1", mac_lock)
 
     def test_packager_rejects_private_paths_addresses_and_private_keys(self):
         source = SCRIPT.read_text(encoding="utf-8")

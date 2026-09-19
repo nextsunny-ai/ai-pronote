@@ -145,6 +145,8 @@ class FrontendContractTests(unittest.TestCase):
     def test_external_beta_uses_an_isolated_python_environment(self):
         installer = (ROOT / "install_external_beta.ps1").read_text(encoding="utf-8")
         launcher = (ROOT / "start_v15.ps1").read_text(encoding="utf-8")
+        windows_lock = (ROOT / "requirements-lock-windows.txt").read_text(encoding="utf-8")
+        mac_lock = (ROOT / "requirements-lock-mac.txt").read_text(encoding="utf-8")
         self.assertIn("prepare_version_runtime", installer)
         self.assertIn("requirements-lock-windows.txt", installer)
         self.assertIn("설치 버전 이름이 올바르지 않습니다", installer)
@@ -165,6 +167,9 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("-WindowStyle Hidden", installer)
         self.assertIn("launch_managed_windows.ps1", installer)
         self.assertNotIn("$shortcut.TargetPath = Join-Path $Root '3_START_AI_PRONOTE.vbs'", installer)
+        self.assertIn("onnxruntime==1.30.0", windows_lock)
+        self.assertIn("tokenizers==0.23.2", windows_lock)
+        self.assertIn("Python 3.12", mac_lock)
 
     def test_windows_uninstaller_preserves_data_and_quarantines_owned_files(self):
         uninstaller = (ROOT / "uninstall_windows.ps1").read_text(encoding="utf-8")
