@@ -314,6 +314,41 @@ void main() {
     expect(saved.pages.last.paperColor, 0xfff1f7f3);
   });
 
+  testWidgets('포스트잇을 추가하고 수정한 뒤 페이지에 저장한다', (tester) async {
+    final repository = MemoryNoteRepository();
+    await tester.pumpWidget(PronoteApp(repository: repository));
+    await _openNewNote(tester);
+
+    final addSticky = find.byKey(const ValueKey('add-sticky'));
+    await tester.ensureVisible(addSticky);
+    await tester.tap(addSticky);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('sticky-text-field')),
+      '아이디어 정리',
+    );
+    await tester.tap(find.text('저장'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    var saved = (await repository.list()).single;
+    expect(saved.pages.single.stickies.single.text, '아이디어 정리');
+    expect(find.text('아이디어 정리'), findsOneWidget);
+
+    await tester.tap(find.text('아이디어 정리'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('sticky-text-field')),
+      '확정된 아이디어',
+    );
+    await tester.tap(find.text('저장'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    saved = (await repository.list()).single;
+    expect(saved.pages.single.stickies.single.text, '확정된 아이디어');
+  });
+
   testWidgets('보관함에서 제목으로 노트를 검색한다', (tester) async {
     final repository = MemoryNoteRepository();
     await repository.save(

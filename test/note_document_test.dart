@@ -114,6 +114,15 @@ void main() {
           id: 'page-2',
           paperStyle: PaperStyle.manuscript,
           paperColor: 0xfffff7ed,
+          stickies: [
+            NoteSticky(
+              id: 'sticky-1',
+              text: '결정 사항',
+              x: 42,
+              y: 68,
+              color: 0xffffe9a8,
+            ),
+          ],
         ),
       ],
     );
@@ -132,6 +141,7 @@ void main() {
     expect(restored, note);
     expect(restored.pages[0].paperStyle, PaperStyle.grid);
     expect(restored.pages[1].paperColor, 0xfffff7ed);
+    expect(restored.pages[1].stickies.single.text, '결정 사항');
     expect(legacy.pages.single.paperStyle, PaperStyle.blank);
     expect(legacy.pages.single.paperColor, 0xfffffdf8);
   });

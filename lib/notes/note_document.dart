@@ -65,30 +65,82 @@ class InkStroke {
       Object.hash(id, tool, color, width, Object.hashAll(points));
 }
 
+class NoteSticky {
+  const NoteSticky({
+    required this.id,
+    required this.text,
+    required this.x,
+    required this.y,
+    this.color = 0xffffe9a8,
+  });
+  final String id;
+  final String text;
+  final double x;
+  final double y;
+  final int color;
+  NoteSticky copyWith({String? text, double? x, double? y, int? color}) =>
+      NoteSticky(
+        id: id,
+        text: text ?? this.text,
+        x: x ?? this.x,
+        y: y ?? this.y,
+        color: color ?? this.color,
+      );
+  Map<String, Object> toJson() => {
+    'id': id,
+    'text': text,
+    'x': x,
+    'y': y,
+    'color': color,
+  };
+  factory NoteSticky.fromJson(Map<String, Object?> json) => NoteSticky(
+    id: json['id'] as String,
+    text: json['text'] as String,
+    x: (json['x'] as num).toDouble(),
+    y: (json['y'] as num).toDouble(),
+    color: json['color'] as int? ?? 0xffffe9a8,
+  );
+  @override
+  bool operator ==(Object other) =>
+      other is NoteSticky &&
+      id == other.id &&
+      text == other.text &&
+      x == other.x &&
+      y == other.y &&
+      color == other.color;
+  @override
+  int get hashCode => Object.hash(id, text, x, y, color);
+}
+
 class NotePage {
   const NotePage({
     required this.id,
     this.strokes = const [],
+    this.stickies = const [],
     this.paperStyle = PaperStyle.blank,
     this.paperColor = 0xfffffdf8,
   });
   final String id;
   final List<InkStroke> strokes;
+  final List<NoteSticky> stickies;
   final PaperStyle paperStyle;
   final int paperColor;
   NotePage copyWith({
     List<InkStroke>? strokes,
+    List<NoteSticky>? stickies,
     PaperStyle? paperStyle,
     int? paperColor,
   }) => NotePage(
     id: id,
     strokes: strokes ?? this.strokes,
+    stickies: stickies ?? this.stickies,
     paperStyle: paperStyle ?? this.paperStyle,
     paperColor: paperColor ?? this.paperColor,
   );
   Map<String, Object> toJson() => {
     'id': id,
     'strokes': strokes.map((stroke) => stroke.toJson()).toList(),
+    'stickies': stickies.map((sticky) => sticky.toJson()).toList(),
     'paperStyle': paperStyle.name,
     'paperColor': paperColor,
   };
@@ -96,6 +148,9 @@ class NotePage {
     id: json['id'] as String,
     strokes: (json['strokes'] as List<Object?>)
         .map((stroke) => InkStroke.fromJson(stroke as Map<String, Object?>))
+        .toList(growable: false),
+    stickies: (json['stickies'] as List<Object?>? ?? const [])
+        .map((sticky) => NoteSticky.fromJson(sticky as Map<String, Object?>))
         .toList(growable: false),
     paperStyle: PaperStyle.values.byName(
       json['paperStyle'] as String? ?? PaperStyle.blank.name,
@@ -108,10 +163,16 @@ class NotePage {
       id == other.id &&
       paperStyle == other.paperStyle &&
       paperColor == other.paperColor &&
+      _listEquals(stickies, other.stickies) &&
       _listEquals(strokes, other.strokes);
   @override
-  int get hashCode =>
-      Object.hash(id, paperStyle, paperColor, Object.hashAll(strokes));
+  int get hashCode => Object.hash(
+    id,
+    paperStyle,
+    paperColor,
+    Object.hashAll(stickies),
+    Object.hashAll(strokes),
+  );
 }
 
 class NoteDocument {
@@ -159,7 +220,7 @@ class NoteDocument {
   }
 
   Map<String, Object> toJson() => {
-    'schemaVersion': 3,
+    'schemaVersion': 4,
     'id': id,
     'title': title,
     'body': body,

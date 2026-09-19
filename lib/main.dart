@@ -2770,6 +2770,17 @@ class _NoteEditorState extends State<NoteEditor> {
       id: 'page-$now',
       paperStyle: source.paperStyle,
       paperColor: source.paperColor,
+      stickies: source.stickies
+          .map(
+            (sticky) => NoteSticky(
+              id: '${sticky.id}-page-copy-$now',
+              text: sticky.text,
+              x: sticky.x,
+              y: sticky.y,
+              color: sticky.color,
+            ),
+          )
+          .toList(growable: false),
       strokes: source.strokes
           .map(
             (stroke) => InkStroke(
@@ -2844,6 +2855,115 @@ class _NoteEditorState extends State<NoteEditor> {
       () => _note = _note.copyWith(updatedAt: DateTime.now(), pages: pages),
     );
     _scheduleSave();
+  }
+
+  Future<void> _addSticky() async {
+    final text = await _askStickyText(title: '포스트잇 추가');
+    if (text == null || text.trim().isEmpty) return;
+    final page = _note.pages[_currentPageIndex];
+    final offset = (page.stickies.length % 5) * 18.0;
+    final sticky = NoteSticky(
+      id: 'sticky-${DateTime.now().microsecondsSinceEpoch}',
+      text: text.trim(),
+      x: 36 + offset,
+      y: 40 + offset,
+    );
+    _replaceCurrentPage(page.copyWith(stickies: [...page.stickies, sticky]));
+  }
+
+  Future<void> _editSticky(NoteSticky sticky) async {
+    final text = await _askStickyText(
+      title: '포스트잇 수정',
+      initialValue: sticky.text,
+    );
+    if (text == null) return;
+    if (text.trim().isEmpty) {
+      _deleteSticky(sticky.id);
+      return;
+    }
+    final page = _note.pages[_currentPageIndex];
+    _replaceCurrentPage(
+      page.copyWith(
+        stickies: page.stickies
+            .map(
+              (item) => item.id == sticky.id
+                  ? item.copyWith(text: text.trim())
+                  : item,
+            )
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  Future<String?> _askStickyText({
+    required String title,
+    String initialValue = '',
+  }) async {
+    var value = initialValue;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: TextFormField(
+          key: const ValueKey('sticky-text-field'),
+          initialValue: initialValue,
+          autofocus: true,
+          minLines: 3,
+          maxLines: 6,
+          onChanged: (text) => value = text,
+          decoration: const InputDecoration(hintText: '메모를 입력하세요'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, value),
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+    return result;
+  }
+
+  void _moveSticky(String id, Offset delta) {
+    final page = _note.pages[_currentPageIndex];
+    _replaceCurrentPage(
+      page.copyWith(
+        stickies: page.stickies
+            .map(
+              (item) => item.id == id
+                  ? item.copyWith(
+                      x: (item.x + delta.dx).clamp(0, 2000),
+                      y: (item.y + delta.dy).clamp(0, 2000),
+                    )
+                  : item,
+            )
+            .toList(growable: false),
+      ),
+      saveImmediately: false,
+    );
+  }
+
+  void _deleteSticky(String id) {
+    final page = _note.pages[_currentPageIndex];
+    _replaceCurrentPage(
+      page.copyWith(
+        stickies: page.stickies
+            .where((item) => item.id != id)
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  void _replaceCurrentPage(NotePage page, {bool saveImmediately = true}) {
+    final pages = List<NotePage>.of(_note.pages)..[_currentPageIndex] = page;
+    setState(
+      () => _note = _note.copyWith(updatedAt: DateTime.now(), pages: pages),
+    );
+    if (saveImmediately) _scheduleSave();
   }
 
   String _paperLabel(PaperStyle style) => switch (style) {
@@ -3126,6 +3246,12 @@ class _NoteEditorState extends State<NoteEditor> {
                     .toList(growable: false),
                 icon: const Icon(Icons.grid_4x4_rounded),
               ),
+              IconButton.filledTonal(
+                key: const ValueKey('add-sticky'),
+                tooltip: '포스트잇 추가',
+                onPressed: _addSticky,
+                icon: const Icon(Icons.sticky_note_2_outlined),
+              ),
               PopupMenuButton<int>(
                 key: const ValueKey('paper-color-menu'),
                 tooltip: '종이 색상',
@@ -3269,22 +3395,65 @@ class _NoteEditorState extends State<NoteEditor> {
                   ],
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: Listener(
-                  key: const ValueKey('ink-canvas'),
-                  behavior: HitTestBehavior.opaque,
-                  onPointerDown: _begin,
-                  onPointerMove: _move,
-                  onPointerUp: _finish,
-                  onPointerCancel: (_) => setState(() => _active = null),
-                  child: CustomPaint(
-                    painter: InkPainter(
-                      page: _note.pages[_currentPageIndex],
-                      strokes: _currentStrokes,
-                      active: _active,
-                      selectionRect: _selectionRect,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Listener(
+                      key: const ValueKey('ink-canvas'),
+                      behavior: HitTestBehavior.opaque,
+                      onPointerDown: _begin,
+                      onPointerMove: _move,
+                      onPointerUp: _finish,
+                      onPointerCancel: (_) => setState(() => _active = null),
+                      child: CustomPaint(
+                        painter: InkPainter(
+                          page: _note.pages[_currentPageIndex],
+                          strokes: _currentStrokes,
+                          active: _active,
+                          selectionRect: _selectionRect,
+                        ),
+                        size: Size.infinite,
+                      ),
                     ),
-                    size: Size.infinite,
-                  ),
+                    for (final sticky
+                        in _note.pages[_currentPageIndex].stickies)
+                      Positioned(
+                        left: sticky.x,
+                        top: sticky.y,
+                        child: GestureDetector(
+                          key: ValueKey('sticky-${sticky.id}'),
+                          onPanUpdate: (details) =>
+                              _moveSticky(sticky.id, details.delta),
+                          onPanEnd: (_) => _scheduleSave(),
+                          onTap: () => _editSticky(sticky),
+                          onLongPress: () => _deleteSticky(sticky.id),
+                          child: Container(
+                            width: 150,
+                            constraints: const BoxConstraints(minHeight: 110),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Color(sticky.color),
+                              borderRadius: BorderRadius.circular(4),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x24000000),
+                                  blurRadius: 10,
+                                  offset: Offset(0, 5),
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              sticky.text,
+                              style: const TextStyle(
+                                color: Color(0xff29271f),
+                                fontSize: 15,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
