@@ -839,6 +839,12 @@ test.describe('필기 저장·복원 계약', () => {
 
     const editor = page.getByRole('dialog', { name: '포스트잇 내용' });
     await expect(editor).toBeVisible();
+    await expect(editor.locator('#inkStickyText')).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(editor.getByRole('button', { name: '닫기' })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(editor.getByRole('button', { name: '포스트잇 추가' })).toBeFocused();
+    await editor.locator('#inkStickyText').focus();
     await editor.locator('#inkStickyText').fill('출시 점검 포스트잇');
     await editor.getByRole('button', { name: '포스트잇 추가' }).click();
     await expect(editor).toBeHidden();
