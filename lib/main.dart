@@ -680,6 +680,170 @@ class _StartCard extends StatelessWidget {
   }
 }
 
+class TranscriptionResultScreen extends StatefulWidget {
+  const TranscriptionResultScreen({
+    super.key,
+    required this.gateway,
+    required this.jobId,
+  });
+
+  final MeetingProcessingGateway gateway;
+  final String jobId;
+
+  @override
+  State<TranscriptionResultScreen> createState() =>
+      _TranscriptionResultScreenState();
+}
+
+class _TranscriptionResultScreenState extends State<TranscriptionResultScreen> {
+  MeetingProcessingJob? _job;
+  MeetingProcessingResult? _result;
+  String? _error;
+  Timer? _pollTimer;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    _pollTimer?.cancel();
+    try {
+      final job = await widget.gateway.readJob(widget.jobId);
+      if (!mounted) return;
+      if (job.status == 'done') {
+        final result = await widget.gateway.readResult(widget.jobId);
+        if (!mounted) return;
+        setState(() {
+          _job = job;
+          _result = result;
+          _error = null;
+          _loading = false;
+        });
+        return;
+      }
+      if (job.status == 'error' || job.status == 'interrupted') {
+        setState(() {
+          _job = job;
+          _error = job.phase.isEmpty ? '받아쓰기를 완료하지 못했습니다.' : job.phase;
+          _loading = false;
+        });
+        return;
+      }
+      setState(() {
+        _job = job;
+        _error = null;
+        _loading = false;
+      });
+      _pollTimer = Timer(const Duration(seconds: 1), _refresh);
+    } on MeetingProcessingException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.message;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = '받아쓰기 상태를 확인하지 못했습니다. 작업 결과는 삭제되지 않습니다.';
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final job = _job;
+    final result = _result;
+    return Scaffold(
+      appBar: AppBar(title: const Text('받아쓰기 결과')),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            if (result == null && _error == null) ...[
+              LinearProgressIndicator(
+                value: job != null && job.progress > 0
+                    ? job.progress.clamp(0, 100) / 100
+                    : null,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                job?.phase.isNotEmpty == true ? job!.phase : '받아쓰기 준비 중',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 6),
+              const Text('이 화면을 닫아도 녹음 원본과 서버 작업은 보존됩니다.'),
+            ],
+            if (_loading && result == null && _error != null)
+              const Center(child: CircularProgressIndicator()),
+            if (_error != null) ...[
+              Icon(
+                Icons.error_outline_rounded,
+                size: 48,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(height: 12),
+              Text(_error!, textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              FilledButton.tonalIcon(
+                onPressed: _loading
+                    ? null
+                    : () {
+                        setState(() {
+                          _loading = true;
+                          _error = null;
+                        });
+                        _refresh();
+                      },
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('다시 확인'),
+              ),
+            ],
+            if (result != null) ...[
+              Text(
+                result.filename.isEmpty ? '받아쓰기' : result.filename,
+                style: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                '받아쓰기',
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 10),
+              SelectableText(
+                result.transcript.isEmpty
+                    ? '인식된 말소리가 없습니다.'
+                    : result.transcript,
+              ),
+              if (result.summary.isNotEmpty) ...[
+                const SizedBox(height: 28),
+                Text(
+                  result.summaryTitle.isEmpty ? 'AI 회의록' : result.summaryTitle,
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 10),
+                SelectableText(result.summary),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class RecordingScreen extends StatefulWidget {
   const RecordingScreen({
     super.key,
@@ -813,6 +977,12 @@ class _RecordingScreenState extends State<RecordingScreen> {
       setState(() {
         _message = '받아쓰기 작업을 시작했습니다.\n작업번호 ${job.id}';
       });
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              TranscriptionResultScreen(gateway: gateway, jobId: job.id),
+        ),
+      );
     } on MeetingProcessingException catch (error) {
       if (!mounted) return;
       setState(() => _message = error.message);
