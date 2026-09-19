@@ -37,7 +37,7 @@ python -B -m unittest discover -s tests -v
 - iPad는 승인 후 실행하는 HTTPS companion과 설치형 PWA로 시험할 수 있습니다. Pointer Events 기반 필기 캔버스는 구현됐지만 실제 Safari·Apple Pencil·palm rejection·VoiceOver 검증은 남아 있습니다.
 - AI 로그인 상태와 사용량은 각 AI 제공사의 계정 정책을 따릅니다.
 - 설치 프로그램·코드 서명·자동 업데이트는 아직 없습니다.
-- 실제 회의 녹음 전 참석자에게 녹음과 AI 처리 사실을 알리고 동의를 받아야 합니다.
+- 녹음·녹화 및 외부 AI 사용 기준은 사용 지역의 법규와 조직 정책을 확인하세요.
 
 ## 중지·롤백
 
