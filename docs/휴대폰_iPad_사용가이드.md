@@ -34,10 +34,9 @@ AI PRONOTE의 휴대기기 화면은 PC에서 실행되는 설치본에 같은 W
 
 녹음·영상·기본 받아쓰기·필기는 로그인 없이 사용할 수 있습니다. AI 회의록·정확도 향상·에이전트 기능이 필요할 때만 연결합니다.
 
-- iPad·휴대폰의 `설정 · 어드민`에서 Claude 상태를 확인합니다.
-- `Google로 로그인`을 누르면 Safari 또는 Chrome에서 Claude 공식 로그인 페이지가 열립니다.
-- 로그인 후 표시된 일회용 인증 코드를 AI PRONOTE에 붙여넣습니다.
-- ChatGPT/Codex와 Gemini 공식 API 연결은 PC 설정에서 먼저 완료한 뒤 휴대기기에서 선택합니다.
+- iPad·휴대폰의 `설정 · 어드민`에서 OpenAI·Gemini·Anthropic 공식 API 연결 상태를 확인합니다.
+- 공식 API 키는 브라우저에 저장되지 않고 AI PRONOTE가 실행 중인 PC의 운영체제 보안 저장소에 보관됩니다.
+- Claude·ChatGPT/Codex 계정 로그인은 PC의 `2_AI_LOGIN`에서 완료한 뒤 휴대기기에서 선택합니다. 이 경로는 내부 실험 기능입니다.
 
 ## 회의가 다시 이어질 때
 

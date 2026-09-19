@@ -9,10 +9,10 @@ class DownloadPageAccuracyTests(unittest.TestCase):
     def test_ai_connection_copy_names_real_connection_methods(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
-        self.assertIn("Claude 또는 ChatGPT/Codex", html)
-        self.assertIn("Gemini 연결은 공식 실행 경로를 준비 중", html)
-        self.assertNotIn("Gemini는 공식 API 키 방식으로 지원합니다", html)
-        self.assertNotIn("Claude, ChatGPT/Codex 또는 Gemini 연결", html)
+        self.assertIn("OpenAI·Gemini·Anthropic 공식 API(BYOK)", html)
+        self.assertIn("Claude·ChatGPT/Codex 계정 로그인도 실험 기능", html)
+        self.assertNotIn("Gemini 연결은 공식 실행 경로를 준비 중", html)
+        self.assertNotIn("Gemini 연결은 준비 중", html)
 
     def test_ipad_copy_scopes_companion_mode_to_current_beta(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")

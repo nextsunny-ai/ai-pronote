@@ -26,7 +26,7 @@ $RootFiles = @(
 )
 $Directories = @('static', 'mac')
 $PublicDocs = @(
-    'AI_PRONOTE_v1.5_Beta10_사용설명서.pdf',
+    'AI_PRONOTE_v1.5_Beta13_사용설명서.pdf',
     'AI_PRONOTE_v1.5_빠른사용안내_2page.pdf',
     'FAQ_외부베타_v1.md', 'Mac_첫사용_체크리스트.md',
     '지원환경_v1.md', '알려진_제한_v1.md', '제거_롤백_v1.md',
