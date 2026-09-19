@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'processing/file_processing_job_repository.dart';
 import 'processing/local_meeting_processing_gateway.dart';
+import 'processing/transcript_exporter.dart';
 import 'recording/audio_recorder_gateway.dart';
 import 'recording/device_audio_recorder.dart';
 import 'recording/device_video_recorder.dart';
@@ -36,6 +37,15 @@ Future<Directory> _defaultVideoDirectory() async {
   return videos;
 }
 
+Future<Directory> _defaultExportDirectory() async {
+  final documents = await getApplicationDocumentsDirectory();
+  final exports = Directory(
+    '${documents.path}${Platform.pathSeparator}AI_PRONOTE_exports',
+  );
+  await exports.create(recursive: true);
+  return exports;
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final documents = await getApplicationDocumentsDirectory();
@@ -52,6 +62,7 @@ Future<void> main() async {
             )
           : null,
       processingJobRepository: FileProcessingJobRepository(documents),
+      transcriptExporter: const TranscriptExporter(_defaultExportDirectory),
       currentVersion: packageInfo.version,
       updateChecker: const RemoteUpdateChecker(
         'https://nextsunny-ai.github.io/ai-pronote/mobile-update.json',
@@ -71,6 +82,7 @@ class PronoteApp extends StatelessWidget {
     this.videoRecorderFactory,
     this.processingGateway,
     this.processingJobRepository,
+    this.transcriptExporter,
     this.recordingDirectoryProvider,
     this.recordingValidator,
     this.currentVersion = '1.0.0',
@@ -83,6 +95,7 @@ class PronoteApp extends StatelessWidget {
   final VideoRecorderGateway Function()? videoRecorderFactory;
   final MeetingProcessingGateway? processingGateway;
   final ProcessingJobRepository? processingJobRepository;
+  final TranscriptExporter? transcriptExporter;
   final Future<Directory> Function()? recordingDirectoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
   final String currentVersion;
@@ -111,6 +124,7 @@ class PronoteApp extends StatelessWidget {
         videoRecorderFactory: videoRecorderFactory,
         processingGateway: processingGateway,
         processingJobRepository: processingJobRepository,
+        transcriptExporter: transcriptExporter,
         recordingDirectoryProvider: recordingDirectoryProvider,
         recordingValidator: recordingValidator,
         displayVersion: _displayVersion(currentVersion),
@@ -198,6 +212,7 @@ class HomeScreen extends StatefulWidget {
     this.videoRecorderFactory,
     this.processingGateway,
     this.processingJobRepository,
+    this.transcriptExporter,
     this.recordingDirectoryProvider,
     this.recordingValidator,
     required this.displayVersion,
@@ -208,6 +223,7 @@ class HomeScreen extends StatefulWidget {
   final VideoRecorderGateway Function()? videoRecorderFactory;
   final MeetingProcessingGateway? processingGateway;
   final ProcessingJobRepository? processingJobRepository;
+  final TranscriptExporter? transcriptExporter;
   final Future<Directory> Function()? recordingDirectoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
   final String displayVersion;
@@ -309,6 +325,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           processingGateway: widget.processingGateway,
                           processingJobRepository:
                               widget.processingJobRepository,
+                          transcriptExporter: widget.transcriptExporter,
                           directoryProvider: widget.recordingDirectoryProvider,
                           recordingValidator: widget.recordingValidator,
                         ),
@@ -343,6 +360,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           processingGateway: widget.processingGateway,
                           processingJobRepository:
                               widget.processingJobRepository,
+                          transcriptExporter: widget.transcriptExporter,
                         ),
                       ),
                     );
@@ -477,6 +495,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 gateway: widget.processingGateway!,
                                 jobId: latest.jobId,
                                 noteRepository: widget.repository,
+                                transcriptExporter: widget.transcriptExporter,
                               ),
                             ),
                           ),
@@ -760,11 +779,13 @@ class TranscriptionResultScreen extends StatefulWidget {
     required this.gateway,
     required this.jobId,
     required this.noteRepository,
+    this.transcriptExporter,
   });
 
   final MeetingProcessingGateway gateway;
   final String jobId;
   final NoteRepository noteRepository;
+  final TranscriptExporter? transcriptExporter;
 
   @override
   State<TranscriptionResultScreen> createState() =>
@@ -779,6 +800,8 @@ class _TranscriptionResultScreenState extends State<TranscriptionResultScreen> {
   bool _loading = true;
   bool _savingNote = false;
   bool _savedAsNote = false;
+  bool _exporting = false;
+  String? _exportedPath;
 
   @override
   void initState() {
@@ -874,6 +897,27 @@ class _TranscriptionResultScreenState extends State<TranscriptionResultScreen> {
     }
   }
 
+  Future<void> _exportText() async {
+    final exporter = widget.transcriptExporter;
+    final result = _result;
+    if (exporter == null || result == null || _exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final path = await exporter.export(result);
+      if (!mounted) return;
+      setState(() => _exportedPath = path);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('텍스트 파일을 저장했습니다.\n$path')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('텍스트 파일을 저장하지 못했습니다. 다시 시도해 주세요.')),
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final job = _job;
@@ -950,6 +994,21 @@ class _TranscriptionResultScreenState extends State<TranscriptionResultScreen> {
                 ),
                 label: Text(_savedAsNote ? '노트에 저장됨' : '노트로 저장'),
               ),
+              if (widget.transcriptExporter != null) ...[
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  key: const ValueKey('export-transcript-text'),
+                  onPressed: _exporting ? null : _exportText,
+                  icon: Icon(
+                    _exportedPath == null
+                        ? Icons.download_outlined
+                        : Icons.check_rounded,
+                  ),
+                  label: Text(
+                    _exportedPath == null ? '텍스트 파일 저장' : '텍스트 파일 저장됨',
+                  ),
+                ),
+              ],
               if (result.summary.isNotEmpty) ...[
                 const SizedBox(height: 28),
                 Text(
@@ -975,6 +1034,7 @@ class RecordingScreen extends StatefulWidget {
     required this.repository,
     this.processingGateway,
     this.processingJobRepository,
+    this.transcriptExporter,
     this.directoryProvider,
     this.recordingValidator,
   });
@@ -983,6 +1043,7 @@ class RecordingScreen extends StatefulWidget {
   final NoteRepository repository;
   final MeetingProcessingGateway? processingGateway;
   final ProcessingJobRepository? processingJobRepository;
+  final TranscriptExporter? transcriptExporter;
   final Future<Directory> Function()? directoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
 
@@ -1117,6 +1178,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
             gateway: gateway,
             jobId: job.id,
             noteRepository: widget.repository,
+            transcriptExporter: widget.transcriptExporter,
           ),
         ),
       );
@@ -1300,6 +1362,7 @@ class VideoRecordingScreen extends StatefulWidget {
     required this.repository,
     this.processingGateway,
     this.processingJobRepository,
+    this.transcriptExporter,
     this.directoryProvider,
     this.recordingValidator,
   });
@@ -1308,6 +1371,7 @@ class VideoRecordingScreen extends StatefulWidget {
   final NoteRepository repository;
   final MeetingProcessingGateway? processingGateway;
   final ProcessingJobRepository? processingJobRepository;
+  final TranscriptExporter? transcriptExporter;
   final Future<Directory> Function()? directoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
 
@@ -1454,6 +1518,7 @@ class _VideoRecordingScreenState extends State<VideoRecordingScreen> {
             gateway: gateway,
             jobId: job.id,
             noteRepository: widget.repository,
+            transcriptExporter: widget.transcriptExporter,
           ),
         ),
       );

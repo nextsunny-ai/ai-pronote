@@ -146,8 +146,24 @@ void main() {
     final processing = FakeMeetingProcessingGateway();
     final jobs = FakeProcessingJobRepository();
     final notes = MemoryNoteRepository();
-    final exports = await Directory.systemTemp.createTemp('pronote-export-ui-');
-    addTearDown(() => exports.delete(recursive: true));
+    final exports = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('pronote-export-ui-'),
+    ))!;
+    addTearDown(() async {
+      for (var attempt = 0; attempt < 5; attempt++) {
+        try {
+          await exports.delete(recursive: true);
+          return;
+        } on FileSystemException {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+      }
+      try {
+        await exports.delete(recursive: true);
+      } on FileSystemException {
+        // Windows virus scanning can briefly retain a handle after file export.
+      }
+    });
     await tester.pumpWidget(
       PronoteApp(
         repository: notes,
@@ -180,11 +196,16 @@ void main() {
     expect(jobs.records.single.recordingPath, recorder.savedPath);
     expect(find.text('노트로 저장'), findsOneWidget);
     await tester.tap(find.text('노트로 저장'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     expect((await notes.list()).single.body, '테스트 받아쓰기');
     expect(find.text('텍스트 파일 저장'), findsOneWidget);
     await tester.tap(find.text('텍스트 파일 저장'));
-    await tester.pumpAndSettle();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     expect(exports.listSync().whereType<File>(), hasLength(1));
   });
 
