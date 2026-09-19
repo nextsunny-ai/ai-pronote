@@ -49,6 +49,15 @@ from pronote_p0 import (
 )
 from provider_api import ProviderRegistry
 from secure_credentials import MemoryCredentialStore, WindowsCredentialStore
+from updater import (
+    UpdateError,
+    activate_staged_version,
+    compare_versions,
+    load_manifest,
+    prepare_update,
+    prepare_version_runtime,
+    read_active_version,
+)
 
 ROOT = Path(__file__).parent
 STATIC_DIR = ROOT / "static"
@@ -103,6 +112,49 @@ if ENV_PATH.exists():
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 BYPASS_AUTH = os.environ.get("BYPASS_AUTH", "false").lower() == "true"
+DEFAULT_UPDATE_MANIFEST_URL = "https://nextsunny-ai.github.io/ai-pronote/update-manifest.json"
+UPDATE_MANIFEST_URL = os.environ.get(
+    "PRONOTE_UPDATE_MANIFEST_URL", DEFAULT_UPDATE_MANIFEST_URL
+).strip()
+UPDATE_PLATFORM = (
+    "windows"
+    if sys.platform.startswith("win")
+    else "mac"
+    if sys.platform == "darwin"
+    else "unsupported"
+)
+UPDATE_MANIFEST_MAX_BYTES = 64 * 1024
+_default_update_root = (
+    Path(os.environ.get("LOCALAPPDATA", Path.home()))
+    / "AI_PRONOTE"
+    / "v1.5"
+    / "install"
+    if sys.platform.startswith("win")
+    else Path.home()
+    / "Library"
+    / "Application Support"
+    / "AI_PRONOTE"
+    / "v1.5"
+    / "install"
+)
+UPDATE_INSTALL_ROOT = Path(os.environ.get("PRONOTE_INSTALL_ROOT", _default_update_root))
+_update_prepare_lock = threading.Lock()
+
+
+def _managed_update_ready() -> bool:
+    runtime_python = (
+        UPDATE_INSTALL_ROOT / "runtime" / ".venv" / "Scripts" / "pythonw.exe"
+        if UPDATE_PLATFORM == "windows"
+        else UPDATE_INSTALL_ROOT / "runtime" / ".venv" / "bin" / "python"
+    )
+    return all(
+        path.is_file()
+        for path in (
+            UPDATE_INSTALL_ROOT / "stable_launcher.py",
+            UPDATE_INSTALL_ROOT / "updater.py",
+            runtime_python,
+        )
+    )
 
 # Whisper — 모델별 캐시 (small / medium 등 = 사용자 선택)
 # 검증 결과 (1시간 14분 회의):
@@ -771,6 +823,7 @@ _IPAD_BLOCKED_PATHS = {
     "/api/auth/mark-logged-in",
     "/api/auth/clear-session",
     "/api/data/purge",
+    "/api/update/prepare",
 }
 
 app = FastAPI(title="AI PRONOTE V1.5")
@@ -920,6 +973,104 @@ def version_info():
         "github": "https://github.com/nextsunny-ai/ai-pronote",
         "release": "https://github.com/nextsunny-ai/ai-pronote/releases/tag/v1.5.0-beta8-20260918",
     }
+
+
+def _local_update_request(request: Request) -> bool:
+    client_host = request.client.host if request.client else ""
+    return client_host in {"127.0.0.1", "::1", "testclient"}
+
+
+@app.get("/api/update/status")
+def update_status(request: Request):
+    """Check a small release manifest; never download or install here."""
+    if not UPDATE_MANIFEST_URL:
+        return {"state": "disabled", "current_version": APP_VERSION}
+    if UPDATE_PLATFORM == "unsupported" or not UPDATE_MANIFEST_URL.startswith("https://"):
+        return {"state": "error", "message": "업데이트 정보를 확인하지 못했습니다"}
+    try:
+        manifest_request = urllib.request.Request(
+            UPDATE_MANIFEST_URL,
+            headers={
+                "User-Agent": f"AI-PRONOTE/{APP_VERSION}",
+                "Accept": "application/json",
+            },
+        )
+        with urllib.request.urlopen(manifest_request, timeout=5) as response:
+            raw = response.read(UPDATE_MANIFEST_MAX_BYTES + 1)
+        if len(raw) > UPDATE_MANIFEST_MAX_BYTES:
+            raise UpdateError("업데이트 정보가 너무 큽니다")
+        manifest = load_manifest(raw.decode("utf-8"), UPDATE_PLATFORM)
+        state = "available" if compare_versions(APP_VERSION, manifest.version) < 0 else "current"
+        return {
+            "state": state,
+            "current_version": APP_VERSION,
+            "version": manifest.version,
+            "channel": manifest.channel,
+            "published_at": manifest.published_at,
+            "release_notes_url": manifest.release_notes_url,
+            "prepare_allowed": _local_update_request(request),
+            "artifact": {"size": manifest.artifact.size},
+        }
+    except Exception as exc:
+        log(f"업데이트 확인 실패: {type(exc).__name__}", "WARN")
+        return {"state": "error", "message": "업데이트 정보를 확인하지 못했습니다"}
+
+
+@app.post("/api/update/prepare")
+def prepare_update_package(request: Request):
+    """Download and verify a newer package locally; activate only after restart."""
+    if not _local_update_request(request):
+        raise HTTPException(status_code=403, detail="local update request required")
+    if request.headers.get("X-Pronote-Update") != "prepare":
+        raise HTTPException(status_code=403, detail="explicit update action required")
+    if (
+        not UPDATE_MANIFEST_URL
+        or UPDATE_PLATFORM == "unsupported"
+        or not UPDATE_MANIFEST_URL.startswith("https://")
+    ):
+        raise HTTPException(status_code=409, detail="update channel unavailable")
+    if not _update_prepare_lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="update preparation already running")
+    try:
+        manifest_request = urllib.request.Request(
+            UPDATE_MANIFEST_URL,
+            headers={
+                "User-Agent": f"AI-PRONOTE/{APP_VERSION}",
+                "Accept": "application/json",
+            },
+        )
+        with urllib.request.urlopen(manifest_request, timeout=5) as response:
+            raw = response.read(UPDATE_MANIFEST_MAX_BYTES + 1)
+        if len(raw) > UPDATE_MANIFEST_MAX_BYTES:
+            raise UpdateError("업데이트 정보가 너무 큽니다")
+        manifest = load_manifest(raw.decode("utf-8"), UPDATE_PLATFORM)
+        if compare_versions(APP_VERSION, manifest.version) >= 0:
+            return {"state": "current", "version": APP_VERSION}
+        prepare_update(manifest, UPDATE_INSTALL_ROOT)
+        active_version = read_active_version(UPDATE_INSTALL_ROOT)
+        if _managed_update_ready() and active_version == APP_VERSION:
+            prepare_version_runtime(UPDATE_INSTALL_ROOT, manifest.version)
+            activate_staged_version(UPDATE_INSTALL_ROOT, manifest.version)
+            return {
+                "state": "prepared",
+                "version": manifest.version,
+                "restart_required": True,
+            }
+        return {
+            "state": "prepared_manual_install",
+            "version": manifest.version,
+            "restart_required": False,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log(f"업데이트 준비 실패: {type(exc).__name__}", "WARN")
+        raise HTTPException(
+            status_code=502,
+            detail="업데이트 파일을 준비하지 못했습니다",
+        ) from exc
+    finally:
+        _update_prepare_lock.release()
 
 
 @app.get("/api/v15/providers")
