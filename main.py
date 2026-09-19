@@ -1160,7 +1160,7 @@ def index():
 
 
 APP_VERSION = P0_APP_VERSION
-BUILD_DATE = "2026-09-19"
+BUILD_DATE = "2026-09-20"
 BUILD_NOTE = "관리형 설치·안전한 업데이트 준비·상태 확인·자동 복구를 포함한 외부 베타 10"
 
 
@@ -1186,7 +1186,7 @@ def version_info():
         "build_note": BUILD_NOTE,
         "drive_master": "Drive/SUNNY_TEAM/AI_PRONOTE/source_v1.3/",
         "github": "https://github.com/nextsunny-ai/ai-pronote",
-        "release": "https://github.com/nextsunny-ai/ai-pronote/releases/tag/v1.5.0-beta13-20260919",
+        "release": "https://github.com/nextsunny-ai/ai-pronote/releases/tag/v1.5.0-beta13-20260920",
     }
 
 

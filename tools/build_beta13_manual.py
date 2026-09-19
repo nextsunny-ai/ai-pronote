@@ -98,6 +98,10 @@ def add_inline(paragraph, text: str, size=10.5, color=TEXT) -> None:
 
 def add_page_field(paragraph) -> None:
     paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    # LibreOffice can clip the leading digit of two-digit PAGE fields when a
+    # right-aligned footer sits exactly on the printable edge. Keep a small
+    # inset so pages 10 and above render their full number.
+    paragraph.paragraph_format.right_indent = Inches(0.12)
     run = paragraph.add_run()
     fld_char = OxmlElement("w:fldChar")
     fld_char.set(qn("w:fldCharType"), "begin")
@@ -175,7 +179,7 @@ def add_cover(doc: Document) -> None:
     meta = [
         ("제작", "㈜써니엔터테인먼트"),
         ("제품", "AI PRONOTE v1.5"),
-        ("버전", "v1.5.0-beta13.20260919"),
+        ("버전", "v1.5.0-beta13.20260920"),
         ("발행", "2026년 9월 20일"),
         ("대상", "Windows · macOS · iPad · 휴대폰 외부 테스트"),
     ]

@@ -32,7 +32,7 @@ class UpdateApiTests(unittest.TestCase):
         self.client.close()
 
     @staticmethod
-    def _manifest(version="v1.5.0-beta13.20260920"):
+    def _manifest(version="v1.5.0-beta13.20260921"):
         return json.dumps({
             "schema_version": 1,
             "version": version,
@@ -68,7 +68,7 @@ class UpdateApiTests(unittest.TestCase):
         ):
             data = self.client.get("/api/update/status").json()
         self.assertEqual(data["state"], "available")
-        self.assertEqual(data["version"], "v1.5.0-beta13.20260920")
+        self.assertEqual(data["version"], "v1.5.0-beta13.20260921")
         self.assertNotIn("sha256", data)
         self.assertNotIn("url", data["artifact"])
         self.assertTrue(data["prepare_allowed"])
@@ -99,7 +99,7 @@ class UpdateApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_prepare_downloads_verified_package_but_does_not_activate_it(self):
-        staged = main.UPDATE_INSTALL_ROOT / "versions" / "v1.5.0-beta13.20260920"
+        staged = main.UPDATE_INSTALL_ROOT / "versions" / "v1.5.0-beta13.20260921"
         with (
             patch.object(main, "UPDATE_MANIFEST_URL", "https://example.com/update.json"),
             patch.object(main, "UPDATE_PLATFORM", "windows"),
@@ -115,14 +115,14 @@ class UpdateApiTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["state"], "prepared")
-        self.assertEqual(response.json()["version"], "v1.5.0-beta13.20260920")
+        self.assertEqual(response.json()["version"], "v1.5.0-beta13.20260921")
         self.assertNotIn("path", response.json())
         prepare.assert_called_once()
-        runtime.assert_called_once_with(main.UPDATE_INSTALL_ROOT, "v1.5.0-beta13.20260920")
-        activate.assert_called_once_with(main.UPDATE_INSTALL_ROOT, "v1.5.0-beta13.20260920")
+        runtime.assert_called_once_with(main.UPDATE_INSTALL_ROOT, "v1.5.0-beta13.20260921")
+        activate.assert_called_once_with(main.UPDATE_INSTALL_ROOT, "v1.5.0-beta13.20260921")
 
     def test_legacy_portable_install_prepares_but_never_changes_active_pointer(self):
-        staged = main.UPDATE_INSTALL_ROOT / "versions" / "v1.5.0-beta13.20260920"
+        staged = main.UPDATE_INSTALL_ROOT / "versions" / "v1.5.0-beta13.20260921"
         with (
             patch.object(main, "UPDATE_MANIFEST_URL", "https://example.com/update.json"),
             patch.object(main, "UPDATE_PLATFORM", "windows"),
@@ -144,7 +144,7 @@ class UpdateApiTests(unittest.TestCase):
     def test_managed_update_requires_active_version_runtime_and_marker(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            version = "v1.5.0-beta13.20260919"
+            version = "v1.5.0-beta13.20260920"
             runtime = root / "runtime" / "versions" / version
             executable = runtime / (
                 "Scripts/pythonw.exe" if main.UPDATE_PLATFORM == "windows" else "bin/python"
