@@ -1022,6 +1022,39 @@ test.describe('카메라 회의 녹화·보존 계약', () => {
     expect(await page.evaluate(() => window.__pronoteRecording.isActive())).toBeFalsy();
   });
 
+  test('녹음 전에 마이크와 카메라를 확인하고 고른 장치로 시작한다', async ({ page }) => {
+    await installSyntheticCameraAndMicrophone(page);
+    await page.addInitScript(() => {
+      const media = navigator.mediaDevices as MediaDevices & { enumerateDevices: () => Promise<MediaDeviceInfo[]> };
+      const original = media.getUserMedia.bind(media);
+      const calls: MediaStreamConstraints[] = [];
+      media.getUserMedia = async constraints => { calls.push(structuredClone(constraints)); return original(constraints); };
+      media.enumerateDevices = async () => [
+        { deviceId: 'mic-a', kind: 'audioinput', label: '노트북 마이크', groupId: 'a', toJSON() { return this; } },
+        { deviceId: 'mic-b', kind: 'audioinput', label: '회의실 마이크', groupId: 'b', toJSON() { return this; } },
+        { deviceId: 'cam-a', kind: 'videoinput', label: '내장 카메라', groupId: 'a', toJSON() { return this; } },
+        { deviceId: 'cam-b', kind: 'videoinput', label: '칠판 카메라', groupId: 'b', toJSON() { return this; } },
+      ] as MediaDeviceInfo[];
+      (window as typeof window & { __deviceConstraintCalls?: MediaStreamConstraints[] }).__deviceConstraintCalls = calls;
+    });
+    await mockBackend(page);
+    await openApp(page);
+    await page.locator('#newMeetingBtn').click();
+    await page.locator('#newMeetingVideo').locator('xpath=ancestor::label').click();
+    await expect(page.locator('#newMeetingVideo')).toBeChecked();
+    await page.locator('#meetingDeviceCheck').click();
+    await expect(page.locator('#meetingDevicePanel')).toBeVisible();
+    await expect(page.locator('#meetingMicDevice')).toContainText('회의실 마이크');
+    await expect(page.locator('#meetingCameraDevice')).toContainText('칠판 카메라');
+    await page.locator('#meetingMicDevice').selectOption('mic-b');
+    await page.locator('#meetingCameraDevice').selectOption('cam-b');
+    await page.locator('#meetingTypeStart').click();
+    await expect(page.locator('#view-live')).toHaveClass(/active/);
+    const calls = await page.evaluate(() => (window as typeof window & { __deviceConstraintCalls?: MediaStreamConstraints[] }).__deviceConstraintCalls || []);
+    expect(calls.some(call => (call.audio as MediaTrackConstraints)?.deviceId && JSON.stringify(call.audio).includes('mic-b'))).toBe(true);
+    expect(calls.some(call => (call.video as MediaTrackConstraints)?.deviceId && JSON.stringify(call.video).includes('cam-b'))).toBe(true);
+  });
+
   test('장치 연결 성공 뒤에만 실제 회의 화면과 타이머를 연다', async ({ page }) => {
     await installSyntheticCameraAndMicrophone(page);
     await mockBackend(page);
