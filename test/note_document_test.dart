@@ -26,4 +26,56 @@ void main() {
     expect(restored, note);
     expect(restored.strokes.single.points.last.pressure, .9);
   });
+
+  test('구형 단일 페이지 노트는 첫 페이지를 보존하며 새 형식으로 열린다', () {
+    final restored = NoteDocument.fromJson({
+      'schemaVersion': 1,
+      'id': 'legacy-note',
+      'title': '예전 노트',
+      'updatedAt': DateTime.utc(2026, 9, 18).toIso8601String(),
+      'strokes': [
+        {
+          'id': 'legacy-ink',
+          'tool': 'pen',
+          'color': 0xff1c1d1a,
+          'width': 4,
+          'points': [
+            {'x': 10, 'y': 20, 'pressure': .5},
+          ],
+        },
+      ],
+    });
+
+    expect(restored.pages, hasLength(1));
+    expect(restored.pages.single.strokes.single.id, 'legacy-ink');
+    expect(restored.toJson()['pages'], isA<List<Object?>>());
+  });
+
+  test('여러 페이지의 필기 획이 JSON 왕복 뒤에도 보존된다', () {
+    final note = NoteDocument(
+      id: 'multi-page',
+      title: '두 페이지 노트',
+      updatedAt: DateTime.utc(2026, 9, 19),
+      pages: const [
+        NotePage(id: 'page-1'),
+        NotePage(
+          id: 'page-2',
+          strokes: [
+            InkStroke(
+              id: 'ink-2',
+              tool: InkTool.highlighter,
+              color: 0xffffff00,
+              width: 12,
+              points: [InkPoint(x: 30, y: 40, pressure: .8)],
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final restored = NoteDocument.fromJson(note.toJson());
+
+    expect(restored, note);
+    expect(restored.pages[1].strokes.single.id, 'ink-2');
+  });
 }

@@ -530,6 +530,17 @@ class _NoteEditorState extends State<NoteEditor> {
   final List<List<InkStroke>> _undoHistory = [];
   final List<List<InkStroke>> _redoHistory = [];
   bool _fingerDrawingEnabled = false;
+  int _currentPageIndex = 0;
+
+  List<InkStroke> get _currentStrokes => _note.pages[_currentPageIndex].strokes;
+
+  NoteDocument _withCurrentStrokes(List<InkStroke> strokes) {
+    final pages = List<NotePage>.of(_note.pages);
+    pages[_currentPageIndex] = pages[_currentPageIndex].copyWith(
+      strokes: strokes,
+    );
+    return _note.copyWith(updatedAt: DateTime.now(), pages: pages);
+  }
 
   bool _canDraw(PointerEvent event) =>
       event.kind == PointerDeviceKind.stylus ||
@@ -575,14 +586,14 @@ class _NoteEditorState extends State<NoteEditor> {
     final active = _active;
     if (active == null) return;
     _active = null;
-    _commitStrokes([..._note.strokes, active]);
+    _commitStrokes([..._currentStrokes, active]);
   }
 
   void _commitStrokes(List<InkStroke> strokes) {
-    _undoHistory.add(List<InkStroke>.of(_note.strokes));
+    _undoHistory.add(List<InkStroke>.of(_currentStrokes));
     _redoHistory.clear();
     setState(() {
-      _note = _note.copyWith(updatedAt: DateTime.now(), strokes: strokes);
+      _note = _withCurrentStrokes(strokes);
       _active = null;
     });
     _scheduleSave();
@@ -591,26 +602,21 @@ class _NoteEditorState extends State<NoteEditor> {
   void _undo() {
     if (_undoHistory.isEmpty) return;
     final previous = _undoHistory.removeLast();
-    _redoHistory.add(List<InkStroke>.of(_note.strokes));
-    setState(
-      () =>
-          _note = _note.copyWith(updatedAt: DateTime.now(), strokes: previous),
-    );
+    _redoHistory.add(List<InkStroke>.of(_currentStrokes));
+    setState(() => _note = _withCurrentStrokes(previous));
     _scheduleSave();
   }
 
   void _redo() {
     if (_redoHistory.isEmpty) return;
     final next = _redoHistory.removeLast();
-    _undoHistory.add(List<InkStroke>.of(_note.strokes));
-    setState(
-      () => _note = _note.copyWith(updatedAt: DateTime.now(), strokes: next),
-    );
+    _undoHistory.add(List<InkStroke>.of(_currentStrokes));
+    setState(() => _note = _withCurrentStrokes(next));
     _scheduleSave();
   }
 
   void _eraseAt(Offset offset) {
-    final hit = _note.strokes.lastIndexWhere(
+    final hit = _currentStrokes.lastIndexWhere(
       (stroke) => stroke.points.any(
         (point) =>
             (Offset(point.x, point.y) - offset).distance <=
@@ -618,8 +624,33 @@ class _NoteEditorState extends State<NoteEditor> {
       ),
     );
     if (hit < 0) return;
-    final strokes = List<InkStroke>.of(_note.strokes)..removeAt(hit);
+    final strokes = List<InkStroke>.of(_currentStrokes)..removeAt(hit);
     _commitStrokes(strokes);
+  }
+
+  void _goToPage(int index) {
+    if (index < 0 || index >= _note.pages.length) return;
+    setState(() {
+      _currentPageIndex = index;
+      _active = null;
+      _undoHistory.clear();
+      _redoHistory.clear();
+    });
+  }
+
+  void _addPage() {
+    final page = NotePage(id: 'page-${DateTime.now().microsecondsSinceEpoch}');
+    setState(() {
+      _note = _note.copyWith(
+        updatedAt: DateTime.now(),
+        pages: [..._note.pages, page],
+      );
+      _currentPageIndex = _note.pages.length - 1;
+      _active = null;
+      _undoHistory.clear();
+      _redoHistory.clear();
+    });
+    _scheduleSave();
   }
 
   InkPoint _point(Offset offset, double pressure) => InkPoint(
@@ -650,8 +681,8 @@ class _NoteEditorState extends State<NoteEditor> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(_note.title),
-          const Text(
-            '1페이지',
+          Text(
+            '${_currentPageIndex + 1}/${_note.pages.length} 페이지',
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
           ),
         ],
@@ -670,6 +701,29 @@ class _NoteEditorState extends State<NoteEditor> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
+              IconButton(
+                key: const ValueKey('previous-page'),
+                tooltip: '이전 페이지',
+                onPressed: _currentPageIndex == 0
+                    ? null
+                    : () => _goToPage(_currentPageIndex - 1),
+                icon: const Icon(Icons.chevron_left_rounded),
+              ),
+              IconButton(
+                key: const ValueKey('next-page'),
+                tooltip: '다음 페이지',
+                onPressed: _currentPageIndex == _note.pages.length - 1
+                    ? null
+                    : () => _goToPage(_currentPageIndex + 1),
+                icon: const Icon(Icons.chevron_right_rounded),
+              ),
+              IconButton.filledTonal(
+                key: const ValueKey('add-page'),
+                tooltip: '새 페이지',
+                onPressed: _addPage,
+                icon: const Icon(Icons.note_add_outlined),
+              ),
+              const SizedBox(width: 8),
               SegmentedButton<InkTool>(
                 segments: const [
                   ButtonSegment(
@@ -802,7 +856,7 @@ class _NoteEditorState extends State<NoteEditor> {
                   onPointerCancel: (_) => setState(() => _active = null),
                   child: CustomPaint(
                     painter: InkPainter(
-                      strokes: _note.strokes,
+                      strokes: _currentStrokes,
                       active: _active,
                     ),
                     size: Size.infinite,

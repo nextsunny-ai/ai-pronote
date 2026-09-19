@@ -159,4 +159,35 @@ void main() {
     expect((await repository.list()).single.strokes, hasLength(1));
     expect(find.text('손가락 필기'), findsOneWidget);
   });
+
+  testWidgets('새 페이지를 추가하고 각 페이지 필기를 따로 저장한다', (tester) async {
+    final repository = MemoryNoteRepository();
+    await tester.pumpWidget(PronoteApp(repository: repository));
+    await tester.tap(find.text('새 노트'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('add-page')));
+    await tester.pump();
+    expect(find.text('2/2 페이지'), findsOneWidget);
+
+    final canvas = find.byKey(const ValueKey('ink-canvas'));
+    final center = tester.getCenter(canvas);
+    final pencil = await tester.createGesture(
+      pointer: 13,
+      kind: PointerDeviceKind.stylus,
+    );
+    await pencil.down(center - const Offset(20, 0));
+    await pencil.moveTo(center + const Offset(20, 0));
+    await pencil.up();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final saved = (await repository.list()).single;
+    expect(saved.pages, hasLength(2));
+    expect(saved.pages.first.strokes, isEmpty);
+    expect(saved.pages.last.strokes, hasLength(1));
+
+    await tester.tap(find.byKey(const ValueKey('previous-page')));
+    await tester.pump();
+    expect(find.text('1/2 페이지'), findsOneWidget);
+  });
 }
