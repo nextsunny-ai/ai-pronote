@@ -51,7 +51,10 @@ function Get-ActiveJobCount {
     try {
         $payload = Invoke-RestMethod -Uri "$BaseUrl/api/jobs" -TimeoutSec 3
         $items = if ($payload -is [array]) { $payload } elseif ($payload.jobs) { $payload.jobs } else { @() }
-        return @($items | Where-Object { $_.status -in @('queued', 'processing', 'running', 'transcribing', 'summarizing') }).Count
+        return @($items | Where-Object {
+            $_.status -in @('queued', 'processing', 'running', 'transcribing', 'summarizing') -or
+            $_.summary_status -in @('pending', 'running')
+        }).Count
     } catch {
         return -1
     }

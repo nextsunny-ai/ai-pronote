@@ -21,6 +21,7 @@ class LauncherContractTests(unittest.TestCase):
         self.assertIn("AbandonedMutexException", launcher)
         self.assertIn("Confirm-And-StopPreviousVersion", launcher)
         self.assertIn("Get-ActiveJobCount", launcher)
+        self.assertIn("$_.summary_status -in @('pending', 'running')", launcher)
         self.assertIn("MessageBoxButtons]::YesNo", launcher)
         self.assertIn("Stop-Process -Id $listener.OwningProcess", launcher)
         self.assertIn("Get-NetTCPConnection -LocalPort $Port", launcher)
