@@ -58,4 +58,47 @@ void main() {
     expect(find.byKey(const ValueKey('ink-canvas')), findsOneWidget);
     expect(find.text('제품 회의 노트'), findsOneWidget);
   });
+
+  testWidgets('필기 획을 실행 취소하고 다시 실행한다', (tester) async {
+    final repository = MemoryNoteRepository();
+    await tester.pumpWidget(PronoteApp(repository: repository));
+    await tester.tap(find.text('새 노트'));
+    await tester.pumpAndSettle();
+    final canvas = find.byKey(const ValueKey('ink-canvas'));
+    final center = tester.getCenter(canvas);
+    final gesture = await tester.createGesture(pointer: 8, kind: PointerDeviceKind.stylus);
+    await gesture.down(center - const Offset(30, 10));
+    await gesture.moveTo(center + const Offset(30, 10));
+    await gesture.up();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('undo-ink')));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect((await repository.list()).single.strokes, isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('redo-ink')));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect((await repository.list()).single.strokes, hasLength(1));
+  });
+
+  testWidgets('지우개로 닿은 필기 획을 삭제한다', (tester) async {
+    final repository = MemoryNoteRepository();
+    await tester.pumpWidget(PronoteApp(repository: repository));
+    await tester.tap(find.text('새 노트'));
+    await tester.pumpAndSettle();
+    final canvas = find.byKey(const ValueKey('ink-canvas'));
+    final center = tester.getCenter(canvas);
+    final pen = await tester.createGesture(pointer: 9, kind: PointerDeviceKind.stylus);
+    await pen.down(center - const Offset(20, 0));
+    await pen.moveTo(center + const Offset(20, 0));
+    await pen.up();
+    await tester.tap(find.text('지우개'));
+    await tester.pump();
+    final eraser = await tester.createGesture(pointer: 10, kind: PointerDeviceKind.stylus);
+    await eraser.down(center);
+    await eraser.up();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect((await repository.list()).single.strokes, isEmpty);
+  });
 }
