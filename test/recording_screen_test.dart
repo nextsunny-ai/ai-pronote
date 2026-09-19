@@ -198,4 +198,33 @@ void main() {
     expect(find.textContaining('회의 노트 '), findsOneWidget);
     expect(recorder.recording, isTrue);
   });
+
+  testWidgets('앱을 다시 열면 저장된 받아쓰기 작업을 홈에서 복구한다', (tester) async {
+    final processing = FakeMeetingProcessingGateway();
+    final jobs = FakeProcessingJobRepository()
+      ..records.add(
+        ProcessingJobRecord(
+          jobId: 'job-123',
+          recordingPath: 'meeting.m4a',
+          createdAt: DateTime.utc(2026, 9, 19),
+        ),
+      );
+
+    await tester.pumpWidget(
+      PronoteApp(
+        repository: MemoryNoteRepository(),
+        processingGateway: processing,
+        processingJobRepository: jobs,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('지난 받아쓰기 작업'), findsOneWidget);
+    expect(find.text('meeting.m4a'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('resume-job-job-123')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('받아쓰기 결과'), findsOneWidget);
+    expect(find.text('테스트 받아쓰기'), findsOneWidget);
+  });
 }
