@@ -462,6 +462,41 @@ test.describe('라이브러리 재열기 회귀', () => {
   });
 });
 
+test.describe('회의 결과 주요 행동', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockBackend(page);
+    await seedSyntheticMeeting(page);
+  });
+
+  test('제목·회의정보를 명시적으로 편집해 저장하고 회의록 본문을 복사한다', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText: async (value: string) => { (window as any).__copiedMeeting = value; } },
+      });
+    });
+    await openApp(page);
+    await page.evaluate(() => window.switchView?.('result'));
+    await expect(page.locator('#resultEditBtn')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#view-result .result-title')).toHaveAttribute('contenteditable', 'false');
+    await page.locator('#resultEditBtn').click();
+    await expect(page.locator('#resultEditBtn')).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('#view-result .result-title').fill('수정된 출시 회의');
+    await page.locator('#view-result #info .info-item-value').nth(1).fill('서울 회의실');
+    await page.locator('#resultEditBtn').click();
+    await expect(page.locator('#resultEditBtn')).toHaveAttribute('aria-pressed', 'false');
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]')[0]);
+    expect(saved.title).toBe('수정된 출시 회의');
+    expect(saved.location).toBe('서울 회의실');
+
+    await page.locator('#resultCopyBtn').click();
+    await expect(page.locator('#toast')).toContainText('회의록 본문을 복사했습니다');
+    const copied = await page.evaluate(() => (window as any).__copiedMeeting);
+    expect(copied).toContain('수정된 출시 회의');
+    expect(copied).toContain('합성 회의 요약입니다.');
+  });
+});
+
 test.describe('필기 저장·복원 계약', () => {
   test.beforeEach(async ({ page }) => {
     await mockBackend(page);

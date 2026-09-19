@@ -250,6 +250,17 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('rawTranscript', HTML)
         self.assertIn("panel.getAttribute('contenteditable') !== 'true'", HTML)
 
+    def test_result_actions_are_explicitly_wired(self):
+        for control_id in (
+            'resultEditBtn', 'resultMailShareBtn', 'resultDownloadBtn', 'resultCopyBtn',
+        ):
+            self.assertIn(f'id="{control_id}"', HTML)
+        self.assertIn('function copyMeetingResult()', HTML)
+        self.assertIn('function toggleResultEdit(button)', HTML)
+        self.assertIn("btn.id === 'resultMailShareBtn'", HTML)
+        self.assertIn("btn.id === 'resultDownloadBtn'", HTML)
+        self.assertNotIn('회의록 링크 복사', HTML)
+
 
 if __name__ == "__main__":
     unittest.main()
