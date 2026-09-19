@@ -6,8 +6,11 @@ import 'notes/note_document.dart';
 import 'notes/file_note_repository.dart';
 import 'notes/note_repository.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'recording/audio_recorder_gateway.dart';
 import 'recording/device_audio_recorder.dart';
+import 'update/update_checker.dart';
 
 Future<Directory> _defaultRecordingDirectory() async {
   final documents = await getApplicationDocumentsDirectory();
@@ -21,9 +24,20 @@ Future<Directory> _defaultRecordingDirectory() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final documents = await getApplicationDocumentsDirectory();
+  final packageInfo = await PackageInfo.fromPlatform();
   runApp(PronoteApp(
     repository: FileNoteRepository(documents),
     recorder: DeviceAudioRecorderGateway(),
+    currentVersion: packageInfo.version,
+    updateChecker: const RemoteUpdateChecker(
+      'https://nextsunny-ai.github.io/ai-pronote/mobile-update.json',
+    ),
+    openExternalUrl: (url) async {
+      await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+    },
   ));
 }
 
@@ -33,11 +47,17 @@ class PronoteApp extends StatelessWidget {
     required this.repository,
     this.recorder = const DisabledAudioRecorderGateway(),
     this.recordingDirectoryProvider,
+    this.currentVersion = '1.0.0',
+    this.updateChecker,
+    this.openExternalUrl,
   });
 
   final NoteRepository repository;
   final AudioRecorderGateway recorder;
   final Future<Directory> Function()? recordingDirectoryProvider;
+  final String currentVersion;
+  final UpdateChecker? updateChecker;
+  final Future<void> Function(String url)? openExternalUrl;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -51,12 +71,89 @@ class PronoteApp extends StatelessWidget {
           scaffoldBackgroundColor: const Color(0xfff4f2ec),
           useMaterial3: true,
         ),
-        home: HomeScreen(
-          repository: repository,
-          recorder: recorder,
-          recordingDirectoryProvider: recordingDirectoryProvider,
+        home: UpdatePromptHost(
+          currentVersion: currentVersion,
+          updateChecker: updateChecker,
+          openExternalUrl: openExternalUrl,
+          child: HomeScreen(
+            repository: repository,
+            recorder: recorder,
+            recordingDirectoryProvider: recordingDirectoryProvider,
+            displayVersion: _displayVersion(currentVersion),
+          ),
         ),
       );
+}
+
+String _displayVersion(String version) {
+  final parts = version.split('.');
+  return parts.length >= 2 ? '${parts[0]}.${parts[1]}' : version;
+}
+
+class UpdatePromptHost extends StatefulWidget {
+  const UpdatePromptHost({
+    super.key,
+    required this.currentVersion,
+    required this.child,
+    this.updateChecker,
+    this.openExternalUrl,
+  });
+
+  final String currentVersion;
+  final Widget child;
+  final UpdateChecker? updateChecker;
+  final Future<void> Function(String url)? openExternalUrl;
+
+  @override
+  State<UpdatePromptHost> createState() => _UpdatePromptHostState();
+}
+
+class _UpdatePromptHostState extends State<UpdatePromptHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+  }
+
+  Future<void> _check() async {
+    final checker = widget.updateChecker;
+    if (checker == null) return;
+    final update = await checker.check(widget.currentVersion);
+    if (!mounted || update == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('새 버전이 있습니다'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(update.version),
+            if (update.notes.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(update.notes),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('나중에'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await widget.openExternalUrl?.call(update.downloadUrl);
+            },
+            child: const Text('업데이트 받기'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class HomeScreen extends StatefulWidget {
@@ -65,11 +162,13 @@ class HomeScreen extends StatefulWidget {
     required this.repository,
     required this.recorder,
     this.recordingDirectoryProvider,
+    required this.displayVersion,
   });
 
   final NoteRepository repository;
   final AudioRecorderGateway recorder;
   final Future<Directory> Function()? recordingDirectoryProvider;
+  final String displayVersion;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -110,7 +209,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
           backgroundColor: Colors.transparent,
-          title: const Text('AI PRONOTE', style: TextStyle(fontWeight: FontWeight.w800)),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('AI PRONOTE', style: TextStyle(fontWeight: FontWeight.w800)),
+              Text('버전 ${widget.displayVersion}', style: const TextStyle(fontSize: 12)),
+            ],
+          ),
         ),
         body: SafeArea(
           child: Padding(

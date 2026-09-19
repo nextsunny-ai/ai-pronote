@@ -11,6 +11,7 @@ void main() {
     await tester.pumpWidget(PronoteApp(repository: MemoryNoteRepository()));
 
     expect(find.text('AI PRONOTE'), findsOneWidget);
+    expect(find.text('버전 1.0'), findsOneWidget);
     expect(find.text('새 노트'), findsOneWidget);
     expect(find.text('회의 녹음'), findsOneWidget);
     expect(find.text('최근 노트'), findsOneWidget);
