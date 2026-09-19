@@ -43,6 +43,7 @@ class FakeAudioRecorderGateway implements AudioRecorderGateway {
 
 class FakeMeetingProcessingGateway implements MeetingProcessingGateway {
   String? submittedPath;
+  String? requestedSummaryProvider;
 
   @override
   Future<MeetingProcessingJob> submitTranscription(String recordingPath) async {
@@ -61,11 +62,26 @@ class FakeMeetingProcessingGateway implements MeetingProcessingGateway {
 
   @override
   Future<MeetingProcessingResult> readResult(String jobId) async =>
-      const MeetingProcessingResult(
+      MeetingProcessingResult(
         id: 'job-123',
         filename: 'meeting.m4a',
         transcript: '테스트 받아쓰기',
+        summaryTitle: requestedSummaryProvider == null ? '' : '주간 회의',
+        summary: requestedSummaryProvider == null ? '' : '결정 사항과 다음 할 일',
       );
+
+  @override
+  Future<MeetingProcessingJob> requestSummary(
+    String jobId, {
+    required String provider,
+  }) async {
+    requestedSummaryProvider = provider;
+    return const MeetingProcessingJob(
+      id: 'job-123',
+      status: 'done',
+      summaryStatus: 'done',
+    );
+  }
 }
 
 class FakeProcessingJobRepository implements ProcessingJobRepository {
@@ -207,6 +223,33 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(exports.listSync().whereType<File>(), hasLength(1));
+  });
+
+  testWidgets('Claude를 선택하고 확인한 후에만 AI 회의록을 만든다', (tester) async {
+    final processing = FakeMeetingProcessingGateway();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TranscriptionResultScreen(
+          gateway: processing,
+          jobId: 'job-123',
+          noteRepository: MemoryNoteRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('AI 회의록 만들기'), findsOneWidget);
+    await tester.tap(find.text('AI 회의록 만들기'));
+    await tester.pumpAndSettle();
+    expect(find.text('Claude 연결'), findsOneWidget);
+    expect(find.text('ChatGPT/Codex 연결'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('summary-consent')));
+    await tester.tap(find.text('회의록 생성'));
+    await tester.pumpAndSettle();
+
+    expect(processing.requestedSummaryProvider, 'claude_cli');
+    expect(find.text('결정 사항과 다음 할 일'), findsOneWidget);
   });
 
   testWidgets('녹음 중 회의 노트를 열어 필기를 계속할 수 있다', (tester) async {

@@ -69,6 +69,16 @@ class FakeVideoProcessingGateway implements MeetingProcessingGateway {
         filename: 'meeting.mp4',
         transcript: '영상 회의 받아쓰기',
       );
+
+  @override
+  Future<MeetingProcessingJob> requestSummary(
+    String jobId, {
+    required String provider,
+  }) async => const MeetingProcessingJob(
+    id: 'video-job',
+    status: 'done',
+    summaryStatus: 'done',
+  );
 }
 
 void main() {
