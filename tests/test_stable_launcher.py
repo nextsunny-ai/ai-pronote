@@ -66,6 +66,7 @@ class StableLauncherTests(unittest.TestCase):
             with patch("stable_launcher.subprocess.Popen") as popen:
                 _launch_target(target)
             self.assertEqual(popen.call_args.kwargs["env"]["PRONOTE_SHARED_VENV"], str(runtime))
+            self.assertTrue(popen.call_args.args[0][0].lower().endswith("windows\\system32\\windowspowershell\\v1.0\\powershell.exe"))
 
     def test_failed_new_version_rolls_back_and_launches_previous(self):
         with tempfile.TemporaryDirectory() as td:

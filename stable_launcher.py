@@ -47,8 +47,12 @@ def _launch_target(target: Path) -> None:
         if runtime_python.is_file() and (runtime_root / ".runtime-complete.json").is_file():
             env["PRONOTE_SHARED_VENV"] = str(runtime_root)
     if target.suffix.lower() == ".ps1":
+        system_root = Path(os.environ.get("SystemRoot", r"C:\Windows"))
+        powershell = system_root / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+        if not powershell.is_file():
+            raise LauncherError("Windows PowerShell 실행 파일을 찾을 수 없습니다")
         subprocess.Popen(
-            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(target)],
+            [str(powershell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(target)],
             cwd=target.parent,
             env=env,
         )
