@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
-URL="http://127.0.0.1:8795"; EXPECTED_VERSION="v1.5.0-beta12.20260919"; LOCK="/tmp/ai_pronote_v15_${UID}.lock"
+URL="http://127.0.0.1:8795"; EXPECTED_VERSION="v1.5.0-beta13.20260919"; LOCK="/tmp/ai_pronote_v15_${UID}.lock"
 PYTHON="$ROOT/.venv/bin/python"
 if [[ ! -x "$PYTHON" ]]; then
   echo "처음 설치가 필요합니다. mac/1_FIRST_SETUP.command를 먼저 실행하세요."

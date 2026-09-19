@@ -885,7 +885,7 @@ test.describe('버전 표시와 자동 업데이트 안내', () => {
     await mockBackend(page);
     let prepared = false;
     await page.route('**/api/health', route => route.fulfill({
-      status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok', version: 'v1.5.0-beta12.20260919' })
+      status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok', version: 'v1.5.0-beta13.20260919' })
     }));
     await page.route('**/api/update/status', route => route.fulfill({
       status: 200, contentType: 'application/json', body: JSON.stringify({
@@ -900,7 +900,7 @@ test.describe('버전 표시와 자동 업데이트 안내', () => {
       });
     });
     await openApp(page);
-    await expect(page.locator('#appVersionLabel')).toContainText('v1.5.0-beta12.20260919');
+    await expect(page.locator('#appVersionLabel')).toContainText('v1.5.0-beta13.20260919');
     await expect(page.locator('#updateAvailableModal')).toHaveClass(/open/);
     await expect(page.locator('#updateAvailableVersion')).toContainText('1.5.0-beta13.20260920');
     expect(prepared).toBeFalsy();
