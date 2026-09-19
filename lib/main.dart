@@ -321,6 +321,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           const DisabledVideoRecorderGateway())
                                   .call(),
                           repository: widget.repository,
+                          processingGateway: widget.processingGateway,
                         ),
                       ),
                     );
@@ -1161,12 +1162,14 @@ class VideoRecordingScreen extends StatefulWidget {
     super.key,
     required this.recorder,
     required this.repository,
+    this.processingGateway,
     this.directoryProvider,
     this.recordingValidator,
   });
 
   final VideoRecorderGateway recorder;
   final NoteRepository repository;
+  final MeetingProcessingGateway? processingGateway;
   final Future<Directory> Function()? directoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
 
@@ -1180,6 +1183,7 @@ class _VideoRecordingScreenState extends State<VideoRecordingScreen> {
   bool _busy = true;
   String? _message;
   String? _destinationPath;
+  String? _savedPath;
   Timer? _ticker;
   final Stopwatch _elapsed = Stopwatch();
 
@@ -1243,6 +1247,7 @@ class _VideoRecordingScreenState extends State<VideoRecordingScreen> {
       });
       setState(() {
         _destinationPath = path;
+        _savedPath = null;
         _recording = true;
         _message = null;
       });
@@ -1269,6 +1274,7 @@ class _VideoRecordingScreenState extends State<VideoRecordingScreen> {
       setState(() {
         _recording = false;
         _destinationPath = null;
+        _savedPath = saved ? path : null;
         _message = saved
             ? '영상과 음성이 기기에 저장되었습니다.\n$path'
             : '영상 파일을 확인하지 못했습니다. 저장 공간을 확인해 주세요.';
@@ -1277,6 +1283,37 @@ class _VideoRecordingScreenState extends State<VideoRecordingScreen> {
       if (mounted) {
         setState(() => _message = '영상 녹화를 저장하지 못했습니다. 다시 시도해 주세요.');
       }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _startTranscription() async {
+    final gateway = widget.processingGateway;
+    final path = _savedPath;
+    if (_busy || gateway == null || path == null) return;
+    setState(() {
+      _busy = true;
+      _message = '받아쓰기 작업을 준비하고 있습니다…';
+    });
+    try {
+      final job = await gateway.submitTranscription(path);
+      if (!mounted) return;
+      setState(() {
+        _message = '받아쓰기 작업을 시작했습니다.\n작업번호 ${job.id}';
+      });
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              TranscriptionResultScreen(gateway: gateway, jobId: job.id),
+        ),
+      );
+    } on MeetingProcessingException catch (error) {
+      if (!mounted) return;
+      setState(() => _message = error.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _message = '받아쓰기를 시작하지 못했습니다. 영상 원본은 기기에 그대로 보존되어 있습니다.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1401,6 +1438,15 @@ class _VideoRecordingScreenState extends State<VideoRecordingScreen> {
                     icon: const Icon(Icons.draw_outlined),
                     label: Text(_recording ? '녹화하며 필기' : '회의 노트 열기'),
                   ),
+                  if (!_recording &&
+                      _savedPath != null &&
+                      widget.processingGateway != null)
+                    FilledButton.tonalIcon(
+                      key: const ValueKey('start-video-transcription'),
+                      onPressed: _busy ? null : _startTranscription,
+                      icon: const Icon(Icons.text_snippet_outlined),
+                      label: const Text('받아쓰기 시작'),
+                    ),
                   if (!_ready && !_busy)
                     TextButton.icon(
                       onPressed: _initialize,
