@@ -1,21 +1,43 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'notes/note_document.dart';
 import 'notes/file_note_repository.dart';
 import 'notes/note_repository.dart';
 import 'package:path_provider/path_provider.dart';
+import 'recording/audio_recorder_gateway.dart';
+import 'recording/device_audio_recorder.dart';
+
+Future<Directory> _defaultRecordingDirectory() async {
+  final documents = await getApplicationDocumentsDirectory();
+  final recordings = Directory(
+    '${documents.path}${Platform.pathSeparator}recordings',
+  );
+  await recordings.create(recursive: true);
+  return recordings;
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final documents = await getApplicationDocumentsDirectory();
-  runApp(PronoteApp(repository: FileNoteRepository(documents)));
+  runApp(PronoteApp(
+    repository: FileNoteRepository(documents),
+    recorder: DeviceAudioRecorderGateway(),
+  ));
 }
 
 class PronoteApp extends StatelessWidget {
-  const PronoteApp({super.key, required this.repository});
+  const PronoteApp({
+    super.key,
+    required this.repository,
+    this.recorder = const DisabledAudioRecorderGateway(),
+    this.recordingDirectoryProvider,
+  });
 
   final NoteRepository repository;
+  final AudioRecorderGateway recorder;
+  final Future<Directory> Function()? recordingDirectoryProvider;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -29,14 +51,25 @@ class PronoteApp extends StatelessWidget {
           scaffoldBackgroundColor: const Color(0xfff4f2ec),
           useMaterial3: true,
         ),
-        home: HomeScreen(repository: repository),
+        home: HomeScreen(
+          repository: repository,
+          recorder: recorder,
+          recordingDirectoryProvider: recordingDirectoryProvider,
+        ),
       );
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.repository});
+  const HomeScreen({
+    super.key,
+    required this.repository,
+    required this.recorder,
+    this.recordingDirectoryProvider,
+  });
 
   final NoteRepository repository;
+  final AudioRecorderGateway recorder;
+  final Future<Directory> Function()? recordingDirectoryProvider;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -83,7 +116,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: const Text('새 노트'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () {},
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => RecordingScreen(
+                            recorder: widget.recorder,
+                            directoryProvider: widget.recordingDirectoryProvider,
+                          ),
+                        ),
+                      ),
                       icon: const Icon(Icons.mic_none_rounded),
                       label: const Text('회의 녹음'),
                     ),
@@ -118,6 +158,108 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      );
+}
+
+class RecordingScreen extends StatefulWidget {
+  const RecordingScreen({
+    super.key,
+    required this.recorder,
+    this.directoryProvider,
+  });
+
+  final AudioRecorderGateway recorder;
+  final Future<Directory> Function()? directoryProvider;
+
+  @override
+  State<RecordingScreen> createState() => _RecordingScreenState();
+}
+
+class _RecordingScreenState extends State<RecordingScreen> {
+  bool _recording = false;
+  bool _busy = false;
+  String? _message;
+
+  Future<void> _start() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final permitted = await widget.recorder.hasPermission();
+      if (!mounted) return;
+      if (!permitted) {
+        setState(() => _message = '마이크 권한을 허용한 뒤 다시 시도해 주세요.');
+        return;
+      }
+      final recordings = await (
+        widget.directoryProvider?.call() ?? _defaultRecordingDirectory()
+      );
+      if (!mounted) return;
+      final path = '${recordings.path}${Platform.pathSeparator}meeting_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await widget.recorder.start(path);
+      if (!mounted) return;
+      setState(() {
+        _recording = true;
+        _message = null;
+      });
+    } catch (_) {
+      setState(() => _message = '녹음을 시작하지 못했습니다. 마이크 설정을 확인해 주세요.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _stop() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.recorder.stop();
+      if (!mounted) return;
+      setState(() {
+        _recording = false;
+        _message = '녹음이 기기에 저장되었습니다.';
+      });
+    } catch (_) {
+      setState(() => _message = '녹음을 저장하지 못했습니다. 다시 시도해 주세요.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('회의 녹음')),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _recording ? Icons.graphic_eq_rounded : Icons.mic_none_rounded,
+                    size: 72,
+                    color: _recording ? Colors.redAccent : null,
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    _recording ? '녹음 중' : '새 회의 녹음',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: _busy ? null : (_recording ? _stop : _start),
+                    icon: Icon(_recording ? Icons.stop_rounded : Icons.mic_rounded),
+                    label: Text(_recording ? '녹음 정지' : '녹음 시작'),
+                  ),
+                  if (_message != null) ...[
+                    const SizedBox(height: 20),
+                    Text(_message!, textAlign: TextAlign.center),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
