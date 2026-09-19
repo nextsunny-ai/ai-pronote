@@ -156,13 +156,22 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("Scripts\\pythonw.exe", launcher)
         self.assertNotIn("2_CLAUDE_LOGIN.cmd", installer)
         self.assertIn("64비트 Python", installer)
-        self.assertIn("-gt 12", installer)
+        self.assertIn("[int]$parts[1] -ne 12", installer)
+        self.assertIn("$venvVersion -ne '3.12'", installer)
+        self.assertNotIn("3.10~3.12", installer)
         self.assertIn("[switch]$SkipShortcut", installer)
         self.assertIn("if (-not $SkipShortcut)", installer)
         self.assertIn("WindowsPowerShell\\v1.0\\powershell.exe", installer)
         self.assertIn("-WindowStyle Hidden", installer)
         self.assertIn("launch_managed_windows.ps1", installer)
         self.assertNotIn("$shortcut.TargetPath = Join-Path $Root '3_START_AI_PRONOTE.vbs'", installer)
+
+    def test_mac_installer_uses_the_locked_python_minor(self):
+        setup = (ROOT / "mac" / "1_FIRST_SETUP.command").read_text(encoding="utf-8")
+        self.assertIn("sys.version_info[:2] == (3,12)", setup)
+        self.assertIn('Python 3.12 64비트', setup)
+        self.assertNotIn("python3.11", setup)
+        self.assertNotIn("python3.10", setup)
 
     def test_permanent_delete_clears_server_and_browser_namespaces(self):
         self.assertIn("fetch('/api/data/purge'", HTML)
