@@ -88,6 +88,17 @@ class InkContractTests(unittest.TestCase):
         self.assertIn('type="color" id="inkColor"', self.html)
         self.assertIn("document.querySelectorAll('[data-ink-color]')", self.js)
 
+    def test_primary_tools_use_familiar_icon_buttons_with_accessible_names(self):
+        for label in ('펜', '형광펜', '지우개', '올가미', '포스트잇', '실행 취소', '다시 실행'):
+            self.assertIn(f'aria-label="{label}"', self.html)
+        self.assertIn('class="ink-icon-btn"', self.html)
+        for label in ('페이지 추가', '현재 페이지 삭제', '자료와 노트 분할 보기', 'PDF 또는 이미지 자료 열기', '현재 페이지 내보내기'):
+            self.assertIn(f'aria-label="{label}"', self.html)
+
+    def test_hidden_text_editor_cannot_cover_the_ink_canvas(self):
+        self.assertIn('.mynote-block.fullpage.ink-active .mynote-block-content { display: none!important; }', self.html)
+        self.assertIn('.mynote-block .mynote-block-content[hidden] { display: none!important; }', self.html)
+
     def test_page_template_image_can_be_annotated_and_saved(self):
         for token in ('id="inkTemplateOpen"', 'id="inkTemplateInput"', 'id="inkTemplateImage"'):
             self.assertIn(token, self.html)
