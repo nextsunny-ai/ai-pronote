@@ -109,7 +109,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('회의 기록'));
+    await tester.tap(find.text('회의 시작'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('meeting-audio-mode')));
     await tester.pumpAndSettle();
@@ -140,7 +140,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('회의 기록'));
+    await tester.tap(find.text('회의 시작'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('meeting-audio-mode')));
     await tester.pumpAndSettle();
@@ -181,7 +181,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('회의 기록'));
+    await tester.tap(find.text('회의 시작'));
     await tester.pumpAndSettle();
     expect(find.text('기존 녹음·영상 가져오기'), findsOneWidget);
     await tester.ensureVisible(find.text('기존 녹음·영상 가져오기'));
@@ -234,7 +234,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('회의 기록'));
+    await tester.tap(find.text('회의 시작'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('meeting-audio-mode')));
     await tester.pumpAndSettle();
@@ -306,7 +306,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('회의 기록'));
+    await tester.tap(find.text('회의 시작'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('meeting-audio-mode')));
     await tester.pumpAndSettle();

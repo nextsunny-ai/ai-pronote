@@ -82,7 +82,7 @@ class FakeVideoProcessingGateway implements MeetingProcessingGateway {
 }
 
 void main() {
-  testWidgets('회의 기록에서 영상과 음성 모드를 선택할 수 있다', (tester) async {
+  testWidgets('회의 시작에서 영상과 음성 모드를 선택할 수 있다', (tester) async {
     final recorder = FakeVideoRecorderGateway();
     await tester.pumpWidget(
       PronoteApp(
@@ -91,7 +91,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('회의 기록'));
+    await tester.tap(find.text('회의 시작'));
     await tester.pumpAndSettle();
     expect(find.text('음성 녹음'), findsOneWidget);
     expect(find.text('영상 + 음성 녹화'), findsOneWidget);

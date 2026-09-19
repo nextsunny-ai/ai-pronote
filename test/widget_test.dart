@@ -46,13 +46,13 @@ void main() {
     expect(find.text('문서 2개를 저장했습니다'), findsOneWidget);
   });
 
-  testWidgets('첫 화면에서 노트와 회의 기록을 바로 시작한다', (tester) async {
+  testWidgets('첫 화면에서 노트와 회의를 바로 시작한다', (tester) async {
     await tester.pumpWidget(PronoteApp(repository: MemoryNoteRepository()));
 
     expect(find.text('AI PRONOTE'), findsOneWidget);
     expect(find.text('버전 1.0'), findsOneWidget);
     expect(find.text('새 노트'), findsOneWidget);
-    expect(find.text('회의 기록'), findsOneWidget);
+    expect(find.text('회의 시작'), findsOneWidget);
     expect(find.text('내 노트'), findsOneWidget);
   });
 
@@ -155,11 +155,16 @@ void main() {
     expect((await repository.list()).single.strokes, isEmpty);
   });
 
-  testWidgets('손가락 필기가 꺼져 있으면 터치가 필기 획으로 저장되지 않는다', (tester) async {
+  testWidgets('이동 도구로 바꾸면 터치가 필기 획으로 저장되지 않는다', (tester) async {
     final repository = MemoryNoteRepository();
     await tester.pumpWidget(PronoteApp(repository: repository));
     await tester.tap(find.text('새 노트'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('finger-drawing-toggle')),
+    );
+    await tester.tap(find.byKey(const ValueKey('finger-drawing-toggle')));
+    await tester.pump();
     final canvas = find.byKey(const ValueKey('ink-canvas'));
     final center = tester.getCenter(canvas);
     final touch = await tester.createGesture(
@@ -176,16 +181,11 @@ void main() {
     expect(find.text('손가락 이동'), findsOneWidget);
   });
 
-  testWidgets('손가락 필기를 켜면 터치로 필기할 수 있다', (tester) async {
+  testWidgets('새 노트는 기본으로 손가락 필기가 된다', (tester) async {
     final repository = MemoryNoteRepository();
     await tester.pumpWidget(PronoteApp(repository: repository));
     await tester.tap(find.text('새 노트'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('finger-drawing-toggle')),
-    );
-    await tester.tap(find.byKey(const ValueKey('finger-drawing-toggle')));
-    await tester.pump();
     final canvas = find.byKey(const ValueKey('ink-canvas'));
     final center = tester.getCenter(canvas);
     final touch = await tester.createGesture(

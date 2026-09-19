@@ -552,7 +552,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: _StartCard(
                       key: const ValueKey('start-recording-card'),
                       icon: Icons.mic_none_rounded,
-                      title: '회의 기록',
+                      title: '회의 시작',
                       description: '음성 또는 영상으로 기록하며 필기',
                       onTap: _chooseMeetingMode,
                     ),
@@ -1950,7 +1950,7 @@ class _NoteEditorState extends State<NoteEditor> {
   Timer? _saveTimer;
   final List<List<InkStroke>> _undoHistory = [];
   final List<List<InkStroke>> _redoHistory = [];
-  bool _fingerDrawingEnabled = false;
+  bool _fingerDrawingEnabled = true;
   int _currentPageIndex = 0;
   Rect? _selectionRect;
   Set<String> _selectedStrokeIds = {};
