@@ -1882,4 +1882,19 @@ test.describe('카메라 회의 녹화·보존 계약', () => {
     await expect.poll(() => page.evaluate(async () => !!(await window.__pronoteDB.get('__draft_video__old-session')))).toBeTruthy();
     await page.evaluate(() => window.__pronoteRecording.stop());
   });
+
+  test('AI 회의록 Markdown 코드블록을 손실 없이 안전하게 표시한다', async ({ page }) => {
+    await mockBackend(page);
+    await openApp(page);
+
+    const rendered = await page.evaluate(() => window.__pronoteResult.mdToHtml(
+      '# 개발 회의\n\n```js\nconst unsafe = "<script>alert(1)</script>";\n```'
+    ));
+
+    expect(rendered).toContain('<h1>개발 회의</h1>');
+    expect(rendered).toContain('<pre><code>');
+    expect(rendered).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(rendered).not.toContain('\uFFFD');
+    expect(rendered).not.toContain('<script>');
+  });
 });

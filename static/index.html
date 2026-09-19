@@ -9798,7 +9798,7 @@ if ('serviceWorker' in navigator) {
       const codeBlocks = [];
       s = s.replace(/```([\s\S]*?)```/g, (_, code) => {
         codeBlocks.push(code);
-        return ' CODE' + (codeBlocks.length - 1) + ' ';
+        return '\uE000CODE' + (codeBlocks.length - 1) + '\uE001';
       });
       s = escHtml(s);
       // headings
@@ -9840,7 +9840,7 @@ if ('serviceWorker' in navigator) {
         return '<p>' + p.replace(/\n/g, '<br/>') + '</p>';
       }).join('\n');
       // restore code blocks
-      s = s.replace(/ CODE(\d+) /g, (_, i) => '<pre><code>' + escHtml(codeBlocks[Number(i)] || '') + '</code></pre>');
+      s = s.replace(/\uE000CODE(\d+)\uE001/g, (_, i) => '<pre><code>' + escHtml(codeBlocks[Number(i)] || '') + '</code></pre>');
       return s;
     }
 
