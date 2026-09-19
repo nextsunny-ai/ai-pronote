@@ -160,6 +160,7 @@ void main() {
   testWidgets('기존 녹음 파일을 가져와 받아쓰기 결과로 연다', (tester) async {
     final processing = FakeMeetingProcessingGateway();
     final jobs = FakeProcessingJobRepository();
+    var pickerCalled = false;
     final source = File(
       '${Directory.systemTemp.path}${Platform.pathSeparator}imported-meeting.m4a',
     )..writeAsBytesSync([1, 2, 3]);
@@ -172,14 +173,24 @@ void main() {
         recorder: FakeAudioRecorderGateway(),
         processingGateway: processing,
         processingJobRepository: jobs,
-        importRecordingPicker: () async => source.path,
+        importRecordingPicker: () async {
+          pickerCalled = true;
+          return source.path;
+        },
+        recordingValidator: (_) async => true,
       ),
     );
 
     await tester.tap(find.text('회의 기록'));
     await tester.pumpAndSettle();
     expect(find.text('기존 녹음·영상 가져오기'), findsOneWidget);
+    await tester.ensureVisible(find.text('기존 녹음·영상 가져오기'));
     await tester.tap(find.text('기존 녹음·영상 가져오기'));
+    await tester.pump();
+    expect(pickerCalled, isTrue);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
     await tester.pumpAndSettle();
 
     expect(processing.submittedPath, source.path);

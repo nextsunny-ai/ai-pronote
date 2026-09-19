@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show FontFeature, PointerDeviceKind;
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import 'notes/note_document.dart';
@@ -46,6 +47,15 @@ Future<Directory> _defaultExportDirectory() async {
   return exports;
 }
 
+Future<String?> _pickExistingMeetingMedia() async {
+  const media = XTypeGroup(
+    label: '녹음 및 영상',
+    extensions: ['m4a', 'mp3', 'wav', 'aac', 'mp4', 'mov', 'm4v'],
+  );
+  final file = await openFile(acceptedTypeGroups: const [media]);
+  return file?.path;
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final documents = await getApplicationDocumentsDirectory();
@@ -63,6 +73,7 @@ Future<void> main() async {
           : null,
       processingJobRepository: FileProcessingJobRepository(documents),
       transcriptExporter: const TranscriptExporter(_defaultExportDirectory),
+      importRecordingPicker: _pickExistingMeetingMedia,
       currentVersion: packageInfo.version,
       updateChecker: const RemoteUpdateChecker(
         'https://nextsunny-ai.github.io/ai-pronote/mobile-update.json',
@@ -83,6 +94,7 @@ class PronoteApp extends StatelessWidget {
     this.processingGateway,
     this.processingJobRepository,
     this.transcriptExporter,
+    this.importRecordingPicker,
     this.recordingDirectoryProvider,
     this.recordingValidator,
     this.currentVersion = '1.0.0',
@@ -96,6 +108,7 @@ class PronoteApp extends StatelessWidget {
   final MeetingProcessingGateway? processingGateway;
   final ProcessingJobRepository? processingJobRepository;
   final TranscriptExporter? transcriptExporter;
+  final Future<String?> Function()? importRecordingPicker;
   final Future<Directory> Function()? recordingDirectoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
   final String currentVersion;
@@ -125,6 +138,7 @@ class PronoteApp extends StatelessWidget {
         processingGateway: processingGateway,
         processingJobRepository: processingJobRepository,
         transcriptExporter: transcriptExporter,
+        importRecordingPicker: importRecordingPicker,
         recordingDirectoryProvider: recordingDirectoryProvider,
         recordingValidator: recordingValidator,
         displayVersion: _displayVersion(currentVersion),
@@ -213,6 +227,7 @@ class HomeScreen extends StatefulWidget {
     this.processingGateway,
     this.processingJobRepository,
     this.transcriptExporter,
+    this.importRecordingPicker,
     this.recordingDirectoryProvider,
     this.recordingValidator,
     required this.displayVersion,
@@ -224,6 +239,7 @@ class HomeScreen extends StatefulWidget {
   final MeetingProcessingGateway? processingGateway;
   final ProcessingJobRepository? processingJobRepository;
   final TranscriptExporter? transcriptExporter;
+  final Future<String?> Function()? importRecordingPicker;
   final Future<Directory> Function()? recordingDirectoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
   final String displayVersion;
@@ -242,6 +258,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _query = '';
   bool _favoritesOnly = false;
   _NoteSort _sort = _NoteSort.updated;
+  bool _importingMedia = false;
 
   Future<void> _newNote() async {
     final note = NoteDocument(
@@ -373,12 +390,88 @@ class _HomeScreenState extends State<HomeScreen> {
                     }
                   },
                 ),
+                const Divider(),
+                ListTile(
+                  key: const ValueKey('import-meeting-media'),
+                  enabled: !_importingMedia,
+                  leading: const Icon(Icons.upload_file_outlined),
+                  title: const Text('기존 녹음·영상 가져오기'),
+                  subtitle: const Text('저장된 파일로 받아쓰기 시작'),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    await _importMeetingMedia();
+                  },
+                ),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _importMeetingMedia() async {
+    final gateway = widget.processingGateway;
+    final picker = widget.importRecordingPicker;
+    if (_importingMedia || picker == null) return;
+    if (gateway == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('받아쓰기 연결을 설정한 후 파일을 가져올 수 있습니다.')),
+      );
+      return;
+    }
+    setState(() => _importingMedia = true);
+    try {
+      final path = await picker();
+      if (path == null) return;
+      final file = File(path);
+      final valid = widget.recordingValidator != null
+          ? await widget.recordingValidator!(path)
+          : await file.exists() && await file.length() > 0;
+      if (!valid) {
+        throw const MeetingProcessingException('선택한 파일을 읽을 수 없습니다.');
+      }
+      final job = await gateway.submitTranscription(path);
+      await widget.processingJobRepository?.save(
+        ProcessingJobRecord(
+          jobId: job.id,
+          recordingPath: path,
+          createdAt: DateTime.now(),
+          status: job.status,
+        ),
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => TranscriptionResultScreen(
+            gateway: gateway,
+            jobId: job.id,
+            noteRepository: widget.repository,
+            transcriptExporter: widget.transcriptExporter,
+          ),
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _processingJobs =
+              widget.processingJobRepository?.list() ??
+              Future.value(const <ProcessingJobRecord>[]);
+        });
+      }
+    } on MeetingProcessingException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('파일을 가져오지 못했습니다. 다시 시도해 주세요.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _importingMedia = false);
+    }
   }
 
   @override
