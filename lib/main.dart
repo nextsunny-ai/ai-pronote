@@ -255,62 +255,66 @@ class _HomeScreenState extends State<HomeScreen> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                '회의 기록 방식',
-                style: Theme.of(context).textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 8),
-              const Text('음성만 녹음하거나 카메라 영상과 음성을 함께 남길 수 있습니다.'),
-              const SizedBox(height: 18),
-              ListTile(
-                key: const ValueKey('meeting-audio-mode'),
-                leading: const Icon(Icons.mic_rounded),
-                title: const Text('음성 녹음'),
-                subtitle: const Text('가볍게 녹음하며 회의 노트 필기'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => RecordingScreen(
-                        recorder: widget.recorder,
-                        repository: widget.repository,
-                        directoryProvider: widget.recordingDirectoryProvider,
-                        recordingValidator: widget.recordingValidator,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '회의 기록 방식',
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                const Text('음성만 녹음하거나 카메라 영상과 음성을 함께 남길 수 있습니다.'),
+                const SizedBox(height: 18),
+                ListTile(
+                  key: const ValueKey('meeting-audio-mode'),
+                  leading: const Icon(Icons.mic_rounded),
+                  title: const Text('음성 녹음'),
+                  subtitle: const Text('가볍게 녹음하며 회의 노트 필기'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => RecordingScreen(
+                          recorder: widget.recorder,
+                          repository: widget.repository,
+                          directoryProvider: widget.recordingDirectoryProvider,
+                          recordingValidator: widget.recordingValidator,
+                        ),
                       ),
-                    ),
-                  );
-                },
-              ),
-              const Divider(),
-              ListTile(
-                key: const ValueKey('meeting-video-mode'),
-                leading: const Icon(Icons.videocam_rounded),
-                title: const Text('영상 + 음성 녹화'),
-                subtitle: const Text('카메라로 칠판과 현장을 함께 기록'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => VideoRecordingScreen(
-                        recorder:
-                            (widget.videoRecorderFactory ??
-                                    () => const DisabledVideoRecorderGateway())
-                                .call(),
-                        repository: widget.repository,
+                    );
+                  },
+                ),
+                const Divider(),
+                ListTile(
+                  key: const ValueKey('meeting-video-mode'),
+                  leading: const Icon(Icons.videocam_rounded),
+                  title: const Text('영상 + 음성 녹화'),
+                  subtitle: const Text('카메라로 칠판과 현장을 함께 기록'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => VideoRecordingScreen(
+                          recorder:
+                              (widget.videoRecorderFactory ??
+                                      () =>
+                                          const DisabledVideoRecorderGateway())
+                                  .call(),
+                          repository: widget.repository,
+                        ),
                       ),
-                    ),
-                  );
-                },
-              ),
-            ],
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
