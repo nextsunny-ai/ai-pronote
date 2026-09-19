@@ -120,7 +120,7 @@
 - OpenAI·Gemini·Anthropic 공식 BYOK를 실제 요약·에이전트 실행 경로에 연결하고 Windows 자격 증명 관리자 보관, 명시적 외부 전송 동의, 실험 CLI 분리를 검증함(`2647d7b`).
 - E2E가 실제 자격 증명 저장소에 접근하는 결함을 발견해 모의 라우팅으로 완전 격리하고 74건 전체 회귀를 재통과함(`1e5902b`). 영향을 받은 Gemini 키는 재등록이 필요하다.
 - Windows 데이터 보존형 제거 도구를 추가했다. 격리 설치본에서 소유 바로가기·프로그램 파일을 복구 기록과 함께 보관하고 회의·녹음·노트 데이터를 보존함(`dd2c4ff`).
-- 최신 Windows 납품 후보: `AI_PRONOTE_1.5.0-beta13_desktop_full_candidate_79b0bc9.zip`, SHA256 `5D366B560E11D75019A25C461F6DF1993CA756F679149AEE930FE2D7B3D53F3B`. 배포 문서의 실제 지원 범위를 Python 3.12 64비트·관리형 바로가기·OS 사용자 데이터 경로로 일치시켰다(`79b0bc9`).
+- 최신 Windows 납품 후보: `AI_PRONOTE_1.5.0-beta13_desktop_full_candidate_1500f68.zip`, SHA256 `C821B40D57527F8E6A16886848A5F49A7EA21003366EC4A65844FD37E51B5DFB`. 배포 문서를 Python 3.12 64비트·관리형 바로가기·OS 사용자 데이터 경로로 일치시켰고(`79b0bc9`), Windows 실행 의존성 45개를 실제 검증 버전으로 완전 고정했다(`1500f68`).
 
 ### 아직 증명되지 않음
 
