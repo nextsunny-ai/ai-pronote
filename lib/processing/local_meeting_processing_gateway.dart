@@ -45,7 +45,13 @@ class MeetingProcessingException implements Exception {
   String toString() => message;
 }
 
-class LocalMeetingProcessingGateway {
+abstract interface class MeetingProcessingGateway {
+  Future<MeetingProcessingJob> submitTranscription(String recordingPath);
+
+  Future<MeetingProcessingJob> readJob(String jobId);
+}
+
+class LocalMeetingProcessingGateway implements MeetingProcessingGateway {
   LocalMeetingProcessingGateway({
     required this.baseUri,
     http.Client? client,
@@ -56,6 +62,7 @@ class LocalMeetingProcessingGateway {
   final Duration timeout;
   final http.Client _client;
 
+  @override
   Future<MeetingProcessingJob> submitTranscription(String recordingPath) async {
     final file = File(recordingPath);
     if (!await file.exists()) {
@@ -95,6 +102,7 @@ class LocalMeetingProcessingGateway {
     }
   }
 
+  @override
   Future<MeetingProcessingJob> readJob(String jobId) async {
     final safeId = Uri.encodeComponent(jobId);
     try {

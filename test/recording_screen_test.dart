@@ -43,9 +43,7 @@ class FakeMeetingProcessingGateway implements MeetingProcessingGateway {
   String? submittedPath;
 
   @override
-  Future<MeetingProcessingJob> submitTranscription(
-    String recordingPath,
-  ) async {
+  Future<MeetingProcessingJob> submitTranscription(String recordingPath) async {
     submittedPath = recordingPath;
     return const MeetingProcessingJob(id: 'job-123', status: 'queued');
   }

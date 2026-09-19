@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'processing/local_meeting_processing_gateway.dart';
 import 'recording/audio_recorder_gateway.dart';
 import 'recording/device_audio_recorder.dart';
 import 'recording/device_video_recorder.dart';
@@ -43,6 +44,12 @@ Future<void> main() async {
       repository: FileNoteRepository(documents),
       recorder: DeviceAudioRecorderGateway(),
       videoRecorderFactory: DeviceVideoRecorderGateway.new,
+      processingGateway:
+          Platform.isWindows || Platform.isMacOS || Platform.isLinux
+          ? LocalMeetingProcessingGateway(
+              baseUri: Uri.parse('http://127.0.0.1:8795'),
+            )
+          : null,
       currentVersion: packageInfo.version,
       updateChecker: const RemoteUpdateChecker(
         'https://nextsunny-ai.github.io/ai-pronote/mobile-update.json',
@@ -60,6 +67,7 @@ class PronoteApp extends StatelessWidget {
     required this.repository,
     this.recorder = const DisabledAudioRecorderGateway(),
     this.videoRecorderFactory,
+    this.processingGateway,
     this.recordingDirectoryProvider,
     this.recordingValidator,
     this.currentVersion = '1.0.0',
@@ -70,6 +78,7 @@ class PronoteApp extends StatelessWidget {
   final NoteRepository repository;
   final AudioRecorderGateway recorder;
   final VideoRecorderGateway Function()? videoRecorderFactory;
+  final MeetingProcessingGateway? processingGateway;
   final Future<Directory> Function()? recordingDirectoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
   final String currentVersion;
@@ -96,6 +105,7 @@ class PronoteApp extends StatelessWidget {
         repository: repository,
         recorder: recorder,
         videoRecorderFactory: videoRecorderFactory,
+        processingGateway: processingGateway,
         recordingDirectoryProvider: recordingDirectoryProvider,
         recordingValidator: recordingValidator,
         displayVersion: _displayVersion(currentVersion),
@@ -181,6 +191,7 @@ class HomeScreen extends StatefulWidget {
     required this.repository,
     required this.recorder,
     this.videoRecorderFactory,
+    this.processingGateway,
     this.recordingDirectoryProvider,
     this.recordingValidator,
     required this.displayVersion,
@@ -189,6 +200,7 @@ class HomeScreen extends StatefulWidget {
   final NoteRepository repository;
   final AudioRecorderGateway recorder;
   final VideoRecorderGateway Function()? videoRecorderFactory;
+  final MeetingProcessingGateway? processingGateway;
   final Future<Directory> Function()? recordingDirectoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
   final String displayVersion;
@@ -284,6 +296,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         builder: (_) => RecordingScreen(
                           recorder: widget.recorder,
                           repository: widget.repository,
+                          processingGateway: widget.processingGateway,
                           directoryProvider: widget.recordingDirectoryProvider,
                           recordingValidator: widget.recordingValidator,
                         ),
@@ -672,12 +685,14 @@ class RecordingScreen extends StatefulWidget {
     super.key,
     required this.recorder,
     required this.repository,
+    this.processingGateway,
     this.directoryProvider,
     this.recordingValidator,
   });
 
   final AudioRecorderGateway recorder;
   final NoteRepository repository;
+  final MeetingProcessingGateway? processingGateway;
   final Future<Directory> Function()? directoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
 
@@ -691,6 +706,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
   bool _busy = false;
   String? _message;
   String? _activePath;
+  String? _savedPath;
   Timer? _ticker;
   final Stopwatch _elapsed = Stopwatch();
 
@@ -741,6 +757,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
         _recording = true;
         _paused = false;
         _activePath = path;
+        _savedPath = null;
         _message = null;
       });
     } catch (_) {
@@ -770,12 +787,38 @@ class _RecordingScreenState extends State<RecordingScreen> {
         _recording = false;
         _paused = false;
         _activePath = null;
+        _savedPath = saved ? path : null;
         _message = saved
             ? '녹음이 기기에 저장되었습니다.\n$path'
             : '녹음 파일을 확인하지 못했습니다. 저장 공간을 확인해 주세요.';
       });
     } catch (_) {
       setState(() => _message = '녹음을 저장하지 못했습니다. 다시 시도해 주세요.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _startTranscription() async {
+    final gateway = widget.processingGateway;
+    final path = _savedPath;
+    if (_busy || gateway == null || path == null) return;
+    setState(() {
+      _busy = true;
+      _message = '받아쓰기 작업을 준비하고 있습니다…';
+    });
+    try {
+      final job = await gateway.submitTranscription(path);
+      if (!mounted) return;
+      setState(() {
+        _message = '받아쓰기 작업을 시작했습니다.\n작업번호 ${job.id}';
+      });
+    } on MeetingProcessingException catch (error) {
+      if (!mounted) return;
+      setState(() => _message = error.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _message = '받아쓰기를 시작하지 못했습니다. 녹음 원본은 기기에 그대로 보존되어 있습니다.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -919,6 +962,15 @@ class _RecordingScreenState extends State<RecordingScreen> {
                       icon: const Icon(Icons.draw_outlined),
                       label: Text(_recording ? '녹음하며 필기' : '회의 노트 열기'),
                     ),
+                    if (!_recording &&
+                        _savedPath != null &&
+                        widget.processingGateway != null)
+                      FilledButton.tonalIcon(
+                        key: const ValueKey('start-transcription'),
+                        onPressed: _busy ? null : _startTranscription,
+                        icon: const Icon(Icons.text_snippet_outlined),
+                        label: const Text('받아쓰기 시작'),
+                      ),
                   ],
                 ),
                 if (_message != null) ...[
