@@ -19,8 +19,12 @@ class LauncherContractTests(unittest.TestCase):
         self.assertIn("AppActivate", launcher)
         self.assertIn("version conflict", lowered)
         self.assertIn("AbandonedMutexException", launcher)
-        self.assertIn("Select-AvailablePort", launcher)
-        self.assertIn("8796..8815", launcher)
+        self.assertIn("Confirm-And-StopPreviousVersion", launcher)
+        self.assertIn("Get-ActiveJobCount", launcher)
+        self.assertIn("MessageBoxButtons]::YesNo", launcher)
+        self.assertIn("Stop-Process -Id $listener.OwningProcess", launcher)
+        self.assertIn("Get-NetTCPConnection -LocalPort $Port", launcher)
+        self.assertNotIn("8796..8815", launcher)
 
     def test_launcher_releases_mutex_before_blocking_error_dialogs(self):
         launcher = (ROOT / "start_v15.ps1").read_text(encoding="utf-8")

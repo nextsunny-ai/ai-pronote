@@ -24,23 +24,6 @@ function Get-Health {
     }
 }
 
-function Select-AvailablePort {
-    foreach ($candidate in 8796..8815) {
-        $listener = $null
-        try {
-            $listener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, $candidate)
-            $listener.Start()
-            $listener.Stop()
-            $script:Port = $candidate
-            $script:BaseUrl = "http://${HostAddress}:${candidate}"
-            return $true
-        } catch {
-            if ($listener) { try { $listener.Stop() } catch {} }
-        }
-    }
-    return $false
-}
-
 function Show-AppWindow {
     $matching = Get-CimInstance Win32_Process -Filter "Name = 'chrome.exe'" -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -and $_.CommandLine.Contains("--app=$BaseUrl") } |
@@ -62,6 +45,58 @@ function Show-AppWindow {
     } else {
         Start-Process $BaseUrl
     }
+}
+
+function Get-ActiveJobCount {
+    try {
+        $payload = Invoke-RestMethod -Uri "$BaseUrl/api/jobs" -TimeoutSec 3
+        $items = if ($payload -is [array]) { $payload } elseif ($payload.jobs) { $payload.jobs } else { @() }
+        return @($items | Where-Object { $_.status -in @('queued', 'processing', 'running', 'transcribing', 'summarizing') }).Count
+    } catch {
+        return -1
+    }
+}
+
+function Confirm-And-StopPreviousVersion([string]$runningVersion) {
+    Add-Type -AssemblyName System.Windows.Forms
+    $activeJobs = Get-ActiveJobCount
+    if ($activeJobs -ne 0) {
+        $detail = if ($activeJobs -gt 0) { "진행 중인 작업 ${activeJobs}건이 있습니다." } else { "이전 버전의 작업 상태를 확인하지 못했습니다." }
+        [System.Windows.Forms.MessageBox]::Show(
+            "$detail`n이전 AI PRONOTE에서 작업이 끝난 뒤 다시 실행하세요.",
+            "AI PRONOTE - 업데이트 대기",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Warning
+        ) | Out-Null
+        return $false
+    }
+    $answer = [System.Windows.Forms.MessageBox]::Show(
+        "이전 버전($runningVersion)이 실행 중입니다.`n`n진행 중인 녹음이 없는지 확인했습니다. 이전 서버를 종료하고 새 버전을 시작할까요?`n회의·노트·녹음 원본은 삭제되지 않습니다.",
+        "AI PRONOTE 업데이트",
+        [System.Windows.Forms.MessageBoxButtons]::YesNo,
+        [System.Windows.Forms.MessageBoxIcon]::Question
+    )
+    if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { return $false }
+
+    $listener = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $listener) { return $true }
+    $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
+    if (-not $processInfo -or $processInfo.Name -notmatch '^pythonw?\.exe$' -or $processInfo.CommandLine -notmatch '(^|[\\/\s])main\.py([\s\"]|$)') {
+        [System.Windows.Forms.MessageBox]::Show(
+            "포트 $Port 사용 프로그램을 AI PRONOTE로 확인하지 못해 종료하지 않았습니다.",
+            "AI PRONOTE - 안전 확인 실패",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Warning
+        ) | Out-Null
+        return $false
+    }
+    Stop-Process -Id $listener.OwningProcess -ErrorAction Stop
+    $deadline = (Get-Date).AddSeconds(10)
+    do {
+        Start-Sleep -Milliseconds 250
+        if (-not (Get-Health)) { return $true }
+    } while ((Get-Date) -lt $deadline)
+    return $false
 }
 
 function Release-LauncherMutex {
@@ -92,11 +127,7 @@ try {
     $health = Get-Health
     if ($health) {
         if ($health.version -ne $ExpectedVersion) {
-            if (-not (Select-AvailablePort)) {
-                Release-LauncherMutex
-                Show-VersionConflict ([string]$health.version)
-                exit 2
-            }
+            if (-not (Confirm-And-StopPreviousVersion ([string]$health.version))) { exit 2 }
             $health = $null
         } else {
             Show-AppWindow
