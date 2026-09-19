@@ -17,7 +17,10 @@ class DownloadPageAccuracyTests(unittest.TestCase):
     def test_ipad_copy_scopes_companion_mode_to_current_beta(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
-        self.assertIn("현재 Beta10의 iPad·휴대폰 사용", html)
+        self.assertIn("iPad·휴대폰 사용", html)
+        self.assertIn("v1.5.0-beta11-20260919", html)
+        self.assertIn("1_FIRST_SETUP.cmd", html)
+        self.assertIn("setup_mac.command", html)
         self.assertIn("iPad 네이티브 앱은 별도 배포 준비 중", html)
         self.assertNotIn("휴대폰·iPad 사용</strong> · 별도 앱을 내려받는 방식이 아닙니다", html)
 
