@@ -45,6 +45,13 @@ class LauncherContractTests(unittest.TestCase):
         self.assertIn('.venv\\Scripts\\pythonw.exe', boot)
         self.assertNotIn('Get-Command python', boot)
 
+    def test_windows_launchers_keep_user_data_outside_versioned_package(self):
+        for name in ("start_v15.ps1", "start_v15_server_only.ps1"):
+            launcher = (ROOT / name).read_text(encoding="utf-8")
+            self.assertIn("LocalApplicationData", launcher)
+            self.assertIn('AI_PRONOTE\\v1.5\\data', launcher)
+            self.assertNotIn('Join-Path $ProjectDir "data_v15"', launcher)
+
     def test_all_launchers_match_application_build_identity(self):
         version_source = (ROOT / "pronote_p0.py").read_text(encoding="utf-8")
         windows = (ROOT / "start_v15.ps1").read_text(encoding="utf-8")

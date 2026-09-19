@@ -5,7 +5,13 @@ $HostAddress = "127.0.0.1"
 $Port = 8795
 $BaseUrl = "http://${HostAddress}:${Port}"
 $ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$DataDir = Join-Path $ProjectDir "data_v15"
+$LocalDataRoot = [Environment]::GetFolderPath('LocalApplicationData')
+if ([string]::IsNullOrWhiteSpace($LocalDataRoot)) {
+    throw "Windows 사용자 데이터 폴더를 찾을 수 없습니다."
+}
+# Keep recordings, transcripts, and reports outside the versioned application
+# folder so a side-by-side update cannot hide or orphan existing work.
+$DataDir = Join-Path $LocalDataRoot "AI_PRONOTE\v1.5\data"
 $mutex = New-Object System.Threading.Mutex($false, "Local\AI_PRONOTE_v15_Launcher")
 $hasMutex = $false
 $splash = $null
