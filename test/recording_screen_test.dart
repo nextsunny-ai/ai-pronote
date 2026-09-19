@@ -157,6 +157,37 @@ void main() {
     expect(find.text('일시정지'), findsOneWidget);
   });
 
+  testWidgets('기존 녹음 파일을 가져와 받아쓰기 결과로 연다', (tester) async {
+    final processing = FakeMeetingProcessingGateway();
+    final jobs = FakeProcessingJobRepository();
+    final source = File(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}imported-meeting.m4a',
+    )..writeAsBytesSync([1, 2, 3]);
+    addTearDown(() async {
+      if (await source.exists()) await source.delete();
+    });
+    await tester.pumpWidget(
+      PronoteApp(
+        repository: MemoryNoteRepository(),
+        recorder: FakeAudioRecorderGateway(),
+        processingGateway: processing,
+        processingJobRepository: jobs,
+        importRecordingPicker: () async => source.path,
+      ),
+    );
+
+    await tester.tap(find.text('회의 기록'));
+    await tester.pumpAndSettle();
+    expect(find.text('기존 녹음·영상 가져오기'), findsOneWidget);
+    await tester.tap(find.text('기존 녹음·영상 가져오기'));
+    await tester.pumpAndSettle();
+
+    expect(processing.submittedPath, source.path);
+    expect(jobs.records.single.recordingPath, source.path);
+    expect(find.text('받아쓰기 결과'), findsOneWidget);
+    expect(find.text('테스트 받아쓰기'), findsOneWidget);
+  });
+
   testWidgets('저장된 녹음을 로그인 없이 받아쓰기 작업으로 보낸다', (tester) async {
     final recorder = FakeAudioRecorderGateway();
     final processing = FakeMeetingProcessingGateway();
