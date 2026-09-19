@@ -58,6 +58,13 @@ function Show-AppWindow {
     }
 }
 
+function Release-LauncherMutex {
+    if ($script:hasMutex) {
+        try { $script:mutex.ReleaseMutex() } catch {}
+        $script:hasMutex = $false
+    }
+}
+
 function Show-VersionConflict([string]$runningVersion) {
     Add-Type -AssemblyName System.Windows.Forms
     [System.Windows.Forms.MessageBox]::Show(
@@ -80,6 +87,7 @@ try {
     if ($health) {
         if ($health.version -ne $ExpectedVersion) {
             if (-not (Select-AvailablePort)) {
+                Release-LauncherMutex
                 Show-VersionConflict ([string]$health.version)
                 exit 2
             }
@@ -129,6 +137,7 @@ try {
 
     if (-not $health) { throw "서버가 45초 안에 준비되지 않았습니다." }
     if ($health.version -ne $ExpectedVersion) {
+        Release-LauncherMutex
         Show-VersionConflict ([string]$health.version)
         exit 2
     }
@@ -137,6 +146,7 @@ try {
     Show-AppWindow
 } catch {
     if ($splash) { $splash.Close() }
+    Release-LauncherMutex
     Add-Type -AssemblyName System.Windows.Forms
     [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "AI PRONOTE 시작 실패") | Out-Null
     exit 1

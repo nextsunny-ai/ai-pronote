@@ -22,6 +22,15 @@ class LauncherContractTests(unittest.TestCase):
         self.assertIn("Select-AvailablePort", launcher)
         self.assertIn("8796..8815", launcher)
 
+    def test_launcher_releases_mutex_before_blocking_error_dialogs(self):
+        launcher = (ROOT / "start_v15.ps1").read_text(encoding="utf-8")
+        self.assertIn("function Release-LauncherMutex", launcher)
+        conflict = launcher.index("Show-VersionConflict ([string]$health.version)")
+        self.assertLess(launcher.rfind("Release-LauncherMutex", 0, conflict), conflict)
+        catch = launcher.index("} catch {", launcher.index("Show-AppWindow"))
+        message = launcher.index("[System.Windows.Forms.MessageBox]::Show($_.Exception.Message", catch)
+        self.assertLess(launcher.index("Release-LauncherMutex", catch), message)
+
     def test_hidden_vbs_wrapper_targets_new_launcher_only(self):
         wrapper = (ROOT / "start_v15.vbs").read_text(encoding="utf-8")
         self.assertIn("start_v15.ps1", wrapper)
