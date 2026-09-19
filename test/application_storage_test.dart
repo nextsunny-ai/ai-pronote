@@ -4,7 +4,7 @@ import 'package:ai_pronote_app/storage/application_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('기존 AI PRONOTE 데이터만 전용 폴더로 복사하고 원본은 보존한다', () async {
+  test('작은 기존 데이터만 복사하고 대용량 녹음과 영상은 원위치에 보존한다', () async {
     final documents = await Directory.systemTemp.createTemp(
       'pronote-storage-migration-',
     );
@@ -63,7 +63,7 @@ void main() {
       await File(
         '${storage.recordings.path}${Platform.pathSeparator}${legacyAudio.uri.pathSegments.last}',
       ).exists(),
-      isTrue,
+      isFalse,
     );
     expect(
       await File(
@@ -75,7 +75,7 @@ void main() {
       await File(
         '${storage.videos.path}${Platform.pathSeparator}${legacyVideo.uri.pathSegments.last}',
       ).exists(),
-      isTrue,
+      isFalse,
     );
     expect(
       await File(
