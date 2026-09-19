@@ -50,12 +50,18 @@ class RemoteUpdateChecker implements UpdateChecker {
 }
 
 bool _isNewer(String candidate, String current) {
-  List<int> parts(String value) => value
-      .split('+').first
-      .split('-').first
-      .split('.')
-      .map((part) => int.tryParse(part) ?? 0)
-      .toList();
+  List<int> parts(String value) {
+    final normalized = value.trim().replaceFirst(
+      RegExp(r'^[vV](?=\d)'),
+      '',
+    );
+    return normalized
+        .split('+').first
+        .split('-').first
+        .split('.')
+        .map((part) => int.tryParse(part) ?? 0)
+        .toList();
+  }
 
   final a = parts(candidate);
   final b = parts(current);
