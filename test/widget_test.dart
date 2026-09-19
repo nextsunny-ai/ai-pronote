@@ -232,6 +232,42 @@ void main() {
     expect(find.text('예산 검토'), findsNothing);
   });
 
+  testWidgets('노트를 즐겨찾기에 저장하고 즐겨찾기만 모아 본다', (tester) async {
+    final repository = MemoryNoteRepository();
+    await repository.save(
+      NoteDocument(
+        id: 'favorite-target',
+        title: '중요 회의',
+        updatedAt: DateTime(2026, 9, 19),
+      ),
+    );
+    await repository.save(
+      NoteDocument(
+        id: 'normal-note',
+        title: '일반 메모',
+        updatedAt: DateTime(2026, 9, 18),
+      ),
+    );
+    await tester.pumpWidget(PronoteApp(repository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('favorite-note-favorite-target')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      (await repository.list())
+          .singleWhere((note) => note.id == 'favorite-target')
+          .isFavorite,
+      isTrue,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('favorites-filter')));
+    await tester.pump();
+    expect(find.text('중요 회의'), findsOneWidget);
+    expect(find.text('일반 메모'), findsNothing);
+  });
+
   testWidgets('편집기에서 바꾼 노트 제목을 자동 저장한다', (tester) async {
     final repository = MemoryNoteRepository();
     await repository.save(

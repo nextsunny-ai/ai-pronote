@@ -78,4 +78,23 @@ void main() {
     expect(restored, note);
     expect(restored.pages[1].strokes.single.id, 'ink-2');
   });
+
+  test('즐겨찾기 상태는 저장되고 구형 노트는 기본 해제 상태다', () {
+    final favorite = NoteDocument(
+      id: 'favorite-note',
+      title: '중요 노트',
+      updatedAt: DateTime.utc(2026, 9, 19),
+      isFavorite: true,
+    );
+    final restored = NoteDocument.fromJson(favorite.toJson());
+    final legacy = NoteDocument.fromJson({
+      'id': 'legacy',
+      'title': '구형 노트',
+      'updatedAt': DateTime.utc(2026, 9, 18).toIso8601String(),
+      'strokes': <Object?>[],
+    });
+
+    expect(restored.isFavorite, isTrue);
+    expect(legacy.isFavorite, isFalse);
+  });
 }

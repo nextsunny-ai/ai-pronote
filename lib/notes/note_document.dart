@@ -93,18 +93,21 @@ class NoteDocument {
     required this.id,
     required this.title,
     required this.updatedAt,
+    this.isFavorite = false,
     List<InkStroke> strokes = const [],
     List<NotePage>? pages,
   }) : pages = pages ?? [NotePage(id: 'page-1', strokes: strokes)];
   final String id;
   final String title;
   final DateTime updatedAt;
+  final bool isFavorite;
   final List<NotePage> pages;
   List<InkStroke> get strokes => pages.first.strokes;
 
   NoteDocument copyWith({
     String? title,
     DateTime? updatedAt,
+    bool? isFavorite,
     List<InkStroke>? strokes,
     List<NotePage>? pages,
   }) {
@@ -120,6 +123,7 @@ class NoteDocument {
       id: id,
       title: title ?? this.title,
       updatedAt: updatedAt ?? this.updatedAt,
+      isFavorite: isFavorite ?? this.isFavorite,
       pages: nextPages,
     );
   }
@@ -129,6 +133,7 @@ class NoteDocument {
     'id': id,
     'title': title,
     'updatedAt': updatedAt.toUtc().toIso8601String(),
+    'isFavorite': isFavorite,
     // 구버전으로 되돌려도 첫 페이지를 열 수 있게 함께 기록한다.
     'strokes': strokes.map((stroke) => stroke.toJson()).toList(),
     'pages': pages.map((page) => page.toJson()).toList(),
@@ -158,6 +163,7 @@ class NoteDocument {
       id: json['id'] as String,
       title: json['title'] as String,
       updatedAt: DateTime.parse(json['updatedAt'] as String),
+      isFavorite: json['isFavorite'] as bool? ?? false,
       pages: pages,
     );
   }
@@ -168,9 +174,11 @@ class NoteDocument {
       id == other.id &&
       title == other.title &&
       updatedAt == other.updatedAt &&
+      isFavorite == other.isFavorite &&
       _listEquals(pages, other.pages);
   @override
-  int get hashCode => Object.hash(id, title, updatedAt, Object.hashAll(pages));
+  int get hashCode =>
+      Object.hash(id, title, updatedAt, isFavorite, Object.hashAll(pages));
 }
 
 bool _listEquals<T>(List<T> left, List<T> right) {

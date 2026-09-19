@@ -177,9 +177,13 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
+enum _NoteSort { updated, title }
+
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<NoteDocument>> _notes = widget.repository.list();
   String _query = '';
+  bool _favoritesOnly = false;
+  _NoteSort _sort = _NoteSort.updated;
 
   Future<void> _newNote() async {
     final note = NoteDocument(
@@ -195,7 +199,11 @@ class _HomeScreenState extends State<HomeScreen> {
             NoteEditor(repository: widget.repository, initialNote: note),
       ),
     );
-    if (mounted) setState(() => _notes = widget.repository.list());
+    if (mounted) {
+      setState(() {
+        _notes = widget.repository.list();
+      });
+    }
   }
 
   Future<void> _openNote(NoteDocument note) async {
@@ -205,7 +213,22 @@ class _HomeScreenState extends State<HomeScreen> {
             NoteEditor(repository: widget.repository, initialNote: note),
       ),
     );
-    if (mounted) setState(() => _notes = widget.repository.list());
+    if (mounted) {
+      setState(() {
+        _notes = widget.repository.list();
+      });
+    }
+  }
+
+  Future<void> _toggleFavorite(NoteDocument note) async {
+    await widget.repository.save(
+      note.copyWith(isFavorite: !note.isFavorite, updatedAt: DateTime.now()),
+    );
+    if (mounted) {
+      setState(() {
+        _notes = widget.repository.list();
+      });
+    }
   }
 
   @override
@@ -281,7 +304,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ];
                 return SizedBox(
-                  height: wide ? 180 : 308,
+                  height: wide ? 120 : 220,
                   child: wide
                       ? Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -309,7 +332,41 @@ class _HomeScreenState extends State<HomeScreen> {
               backgroundColor: const WidgetStatePropertyAll(Colors.white),
               onChanged: (value) => setState(() => _query = value.trim()),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                FilterChip(
+                  key: const ValueKey('favorites-filter'),
+                  selected: _favoritesOnly,
+                  avatar: const Icon(Icons.star_outline_rounded, size: 18),
+                  label: const Text('즐겨찾기'),
+                  onSelected: (selected) =>
+                      setState(() => _favoritesOnly = selected),
+                ),
+                const Spacer(),
+                PopupMenuButton<_NoteSort>(
+                  key: const ValueKey('note-sort'),
+                  tooltip: '노트 정렬',
+                  initialValue: _sort,
+                  onSelected: (value) => setState(() => _sort = value),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: _NoteSort.updated,
+                      child: Text('최근 수정순'),
+                    ),
+                    PopupMenuItem(value: _NoteSort.title, child: Text('제목순')),
+                  ],
+                  child: Row(
+                    children: [
+                      const Icon(Icons.sort_rounded, size: 20),
+                      const SizedBox(width: 5),
+                      Text(_sort == _NoteSort.updated ? '최근 수정순' : '제목순'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             Expanded(
               child: FutureBuilder<List<NoteDocument>>(
                 future: _notes,
@@ -317,11 +374,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   final notes = snapshot.data ?? const [];
                   final visible = notes
                       .where(
-                        (note) => note.title.toLowerCase().contains(
-                          _query.toLowerCase(),
-                        ),
+                        (note) =>
+                            (!_favoritesOnly || note.isFavorite) &&
+                            note.title.toLowerCase().contains(
+                              _query.toLowerCase(),
+                            ),
                       )
                       .toList(growable: false);
+                  visible.sort(
+                    _sort == _NoteSort.updated
+                        ? (a, b) => b.updatedAt.compareTo(a.updatedAt)
+                        : (a, b) => a.title.compareTo(b.title),
+                  );
                   if (notes.isEmpty) {
                     return const Align(
                       alignment: Alignment.topLeft,
@@ -349,6 +413,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     itemBuilder: (context, index) => _NoteLibraryCard(
                       note: visible[index],
                       onTap: () => _openNote(visible[index]),
+                      onFavorite: () => _toggleFavorite(visible[index]),
                     ),
                   );
                 },
@@ -362,10 +427,15 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _NoteLibraryCard extends StatelessWidget {
-  const _NoteLibraryCard({required this.note, required this.onTap});
+  const _NoteLibraryCard({
+    required this.note,
+    required this.onTap,
+    required this.onFavorite,
+  });
 
   final NoteDocument note;
   final VoidCallback onTap;
+  final VoidCallback onFavorite;
 
   @override
   Widget build(BuildContext context) => Material(
@@ -391,6 +461,17 @@ class _NoteLibraryCard extends StatelessWidget {
                   child: const Icon(Icons.edit_note_rounded),
                 ),
                 const Spacer(),
+                IconButton(
+                  key: ValueKey('favorite-note-${note.id}'),
+                  tooltip: note.isFavorite ? '즐겨찾기 해제' : '즐겨찾기',
+                  onPressed: onFavorite,
+                  icon: Icon(
+                    note.isFavorite
+                        ? Icons.star_rounded
+                        : Icons.star_border_rounded,
+                    color: note.isFavorite ? const Color(0xffd79b28) : null,
+                  ),
+                ),
                 Text(
                   '${note.pages.length}페이지',
                   style: Theme.of(context).textTheme.labelMedium
@@ -444,44 +525,60 @@ class _StartCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(22),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: primary ? Colors.white12 : const Color(0xfff1efe8),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Icon(icon, color: foreground, size: 30),
-                ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxHeight < 140;
+            final iconBox = DecoratedBox(
+              decoration: BoxDecoration(
+                color: primary ? Colors.white12 : const Color(0xfff1efe8),
+                borderRadius: BorderRadius.circular(14),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: foreground,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    description,
-                    style: TextStyle(
-                      color: primary ? Colors.white70 : const Color(0xff6b6a65),
-                    ),
-                  ),
-                ],
+              child: Padding(
+                padding: EdgeInsets.all(compact ? 10 : 12),
+                child: Icon(icon, color: foreground, size: compact ? 26 : 30),
               ),
-            ],
-          ),
+            );
+            final copy = Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: compact ? 18 : 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: primary ? Colors.white70 : const Color(0xff6b6a65),
+                  ),
+                ),
+              ],
+            );
+            return Padding(
+              padding: EdgeInsets.all(compact ? 14 : 22),
+              child: compact
+                  ? Row(
+                      children: [
+                        iconBox,
+                        const SizedBox(width: 14),
+                        Expanded(child: copy),
+                        Icon(Icons.chevron_right_rounded, color: foreground),
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [iconBox, copy],
+                    ),
+            );
+          },
         ),
       ),
     );
