@@ -220,6 +220,9 @@ enum _NoteSort { updated, title }
 
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<NoteDocument>> _notes = widget.repository.list();
+  late Future<List<ProcessingJobRecord>> _processingJobs =
+      widget.processingJobRepository?.list() ??
+      Future.value(const <ProcessingJobRecord>[]);
   String _query = '';
   bool _favoritesOnly = false;
   _NoteSort _sort = _NoteSort.updated;
@@ -296,9 +299,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   leading: const Icon(Icons.mic_rounded),
                   title: const Text('음성 녹음'),
                   subtitle: const Text('가볍게 녹음하며 회의 노트 필기'),
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(sheetContext);
-                    Navigator.of(context).push(
+                    await Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => RecordingScreen(
                           recorder: widget.recorder,
@@ -311,6 +314,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     );
+                    if (mounted) {
+                      setState(() {
+                        _processingJobs =
+                            widget.processingJobRepository?.list() ??
+                            Future.value(const <ProcessingJobRecord>[]);
+                      });
+                    }
                   },
                 ),
                 const Divider(),
@@ -319,9 +329,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   leading: const Icon(Icons.videocam_rounded),
                   title: const Text('영상 + 음성 녹화'),
                   subtitle: const Text('카메라로 칠판과 현장을 함께 기록'),
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(sheetContext);
-                    Navigator.of(context).push(
+                    await Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => VideoRecordingScreen(
                           recorder:
@@ -336,6 +346,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     );
+                    if (mounted) {
+                      setState(() {
+                        _processingJobs =
+                            widget.processingJobRepository?.list() ??
+                            Future.value(const <ProcessingJobRecord>[]);
+                      });
+                    }
                   },
                 ),
               ],
@@ -367,8 +384,7 @@ class _HomeScreenState extends State<HomeScreen> {
     body: SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: ListView(
           children: [
             Text(
               '무엇을 기록할까요?',
@@ -424,6 +440,52 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
+            FutureBuilder<List<ProcessingJobRecord>>(
+              future: _processingJobs,
+              builder: (context, snapshot) {
+                final jobs = snapshot.data ?? const <ProcessingJobRecord>[];
+                if (jobs.isEmpty || widget.processingGateway == null) {
+                  return const SizedBox.shrink();
+                }
+                final latest = jobs.first;
+                final filename = latest.recordingPath
+                    .replaceAll('\\', '/')
+                    .split('/')
+                    .last;
+                return Padding(
+                  padding: const EdgeInsets.only(top: 22),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '지난 받아쓰기 작업',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 8),
+                      Card(
+                        margin: EdgeInsets.zero,
+                        child: ListTile(
+                          key: ValueKey('resume-job-${latest.jobId}'),
+                          leading: const Icon(Icons.history_rounded),
+                          title: Text(filename),
+                          subtitle: Text('작업번호 ${latest.jobId}'),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => TranscriptionResultScreen(
+                                gateway: widget.processingGateway!,
+                                jobId: latest.jobId,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
             const SizedBox(height: 28),
             Text(
               '내 노트',
@@ -474,57 +536,56 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            Expanded(
-              child: FutureBuilder<List<NoteDocument>>(
-                future: _notes,
-                builder: (context, snapshot) {
-                  final notes = snapshot.data ?? const [];
-                  final visible = notes
-                      .where(
-                        (note) =>
-                            (!_favoritesOnly || note.isFavorite) &&
-                            note.title.toLowerCase().contains(
-                              _query.toLowerCase(),
-                            ),
-                      )
-                      .toList(growable: false);
-                  visible.sort(
-                    _sort == _NoteSort.updated
-                        ? (a, b) => b.updatedAt.compareTo(a.updatedAt)
-                        : (a, b) => a.title.compareTo(b.title),
+            FutureBuilder<List<NoteDocument>>(
+              future: _notes,
+              builder: (context, snapshot) {
+                final notes = snapshot.data ?? const [];
+                final visible = notes
+                    .where(
+                      (note) =>
+                          (!_favoritesOnly || note.isFavorite) &&
+                          note.title.toLowerCase().contains(
+                            _query.toLowerCase(),
+                          ),
+                    )
+                    .toList(growable: false);
+                visible.sort(
+                  _sort == _NoteSort.updated
+                      ? (a, b) => b.updatedAt.compareTo(a.updatedAt)
+                      : (a, b) => a.title.compareTo(b.title),
+                );
+                if (notes.isEmpty) {
+                  return const Align(
+                    alignment: Alignment.topLeft,
+                    child: Text('아직 저장된 노트가 없습니다.'),
                   );
-                  if (notes.isEmpty) {
-                    return const Align(
-                      alignment: Alignment.topLeft,
-                      child: Text('아직 저장된 노트가 없습니다.'),
-                    );
-                  }
-                  if (visible.isEmpty) {
-                    return const Align(
-                      alignment: Alignment.topLeft,
-                      child: Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Text('검색 결과가 없습니다.'),
-                      ),
-                    );
-                  }
-                  return GridView.builder(
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 330,
-                          mainAxisExtent: 150,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                        ),
-                    itemCount: visible.length,
-                    itemBuilder: (context, index) => _NoteLibraryCard(
-                      note: visible[index],
-                      onTap: () => _openNote(visible[index]),
-                      onFavorite: () => _toggleFavorite(visible[index]),
+                }
+                if (visible.isEmpty) {
+                  return const Align(
+                    alignment: Alignment.topLeft,
+                    child: Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Text('검색 결과가 없습니다.'),
                     ),
                   );
-                },
-              ),
+                }
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 330,
+                    mainAxisExtent: 150,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
+                  itemCount: visible.length,
+                  itemBuilder: (context, index) => _NoteLibraryCard(
+                    note: visible[index],
+                    onTap: () => _openNote(visible[index]),
+                    onFavorite: () => _toggleFavorite(visible[index]),
+                  ),
+                );
+              },
             ),
           ],
         ),
