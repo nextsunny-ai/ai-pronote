@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class LauncherContractTests(unittest.TestCase):
-    EXPECTED_VERSION = "v1.5.0-beta13.20260920"
+    EXPECTED_VERSION = "v1.5.0-beta13.20260920.1"
 
     def test_windows_powershell_entrypoints_are_utf8_bom_and_parse_in_legacy_host(self):
         scripts = (
@@ -106,7 +106,7 @@ class LauncherContractTests(unittest.TestCase):
         for source in (version_source, windows, windows_boot, mac):
             self.assertIn(self.EXPECTED_VERSION, source)
         self.assertIn('BUILD_DATE = "2026-09-20"', metadata)
-        self.assertIn("v1.5.0-beta13-20260920", metadata)
+        self.assertIn("v1.5.0-beta13-20260920.1", metadata)
         self.assertNotIn("releases/tag/v1.0.0-beta", metadata)
 
 

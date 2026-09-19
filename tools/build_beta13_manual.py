@@ -124,7 +124,9 @@ def configure_document(doc: Document) -> None:
     section.page_width = Inches(8.27)
     section.page_height = Inches(11.69)
     section.top_margin = Inches(0.78)
-    section.bottom_margin = Inches(0.72)
+    # Keep flowing body text clear of the footer in both Word and LibreOffice.
+    # The prior 0.72-inch margin let long pages share the page-number baseline.
+    section.bottom_margin = Inches(0.98)
     section.left_margin = Inches(0.82)
     section.right_margin = Inches(0.82)
     section.header_distance = Inches(0.3)
@@ -179,7 +181,7 @@ def add_cover(doc: Document) -> None:
     meta = [
         ("제작", "㈜써니엔터테인먼트"),
         ("제품", "AI PRONOTE v1.5"),
-        ("버전", "v1.5.0-beta13.20260920"),
+        ("버전", "v1.5.0-beta13.20260920.1"),
         ("발행", "2026년 9월 20일"),
         ("대상", "Windows · macOS · iPad · 휴대폰 외부 테스트"),
     ]
