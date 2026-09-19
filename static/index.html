@@ -3243,6 +3243,23 @@ if ('serviceWorker' in navigator) {
             </label>
           </div>
           <div class="form-row" style="margin-top:8px;">
+            <button class="modal-btn" id="meetingDeviceCheck" type="button" style="width:100%;">마이크·카메라 확인</button>
+            <div id="meetingDevicePanel" hidden style="margin-top:10px; padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--surface-secondary);">
+              <div style="display:grid; grid-template-columns:minmax(0,1fr); gap:10px;">
+                <label class="form-label" for="meetingMicDevice">마이크</label>
+                <select class="form-input" id="meetingMicDevice"></select>
+                <label class="form-label" for="meetingMicLevel">입력 음량</label>
+                <progress id="meetingMicLevel" max="100" value="0" style="width:100%; height:10px;"></progress>
+                <div id="meetingCameraDeviceRow">
+                  <label class="form-label" for="meetingCameraDevice">카메라</label>
+                  <select class="form-input" id="meetingCameraDevice"></select>
+                  <video id="meetingCameraPreview" autoplay muted playsinline style="display:none; width:100%; max-height:180px; margin-top:8px; border-radius:10px; background:#171717; object-fit:cover;"></video>
+                </div>
+                <div id="meetingDeviceStatus" role="status" aria-live="polite" style="font-size:12px; color:var(--text-secondary);">장치를 확인하면 선택 목록과 입력 상태가 표시됩니다.</div>
+              </div>
+            </div>
+          </div>
+          <div class="form-row" style="margin-top:8px;">
             <label class="toggle-row" style="margin:0;">
               <span class="toggle-row-text">
                 <span class="toggle-row-title">온라인 회의 소리 포함</span>
@@ -5813,7 +5830,89 @@ if ('serviceWorker' in navigator) {
     const grid = document.getElementById('meetingTypeGrid');
     const titleInput = document.getElementById('newMeetingTitle');
     const attendeesInput = document.getElementById('newMeetingAttendees');
+    const videoToggle = document.getElementById('newMeetingVideo');
+    const deviceCheckBtn = document.getElementById('meetingDeviceCheck');
+    const devicePanel = document.getElementById('meetingDevicePanel');
+    const micSelect = document.getElementById('meetingMicDevice');
+    const cameraSelect = document.getElementById('meetingCameraDevice');
+    const cameraRow = document.getElementById('meetingCameraDeviceRow');
+    const cameraPreview = document.getElementById('meetingCameraPreview');
+    const micLevel = document.getElementById('meetingMicLevel');
+    const deviceStatus = document.getElementById('meetingDeviceStatus');
+    let devicePreviewStream = null;
+    let deviceAudioContext = null;
+    let deviceLevelFrame = 0;
     if (!btn || !modal) return;
+
+    async function stopDevicePreflight() {
+      if (deviceLevelFrame) cancelAnimationFrame(deviceLevelFrame);
+      deviceLevelFrame = 0;
+      devicePreviewStream?.getTracks().forEach(track => track.stop());
+      devicePreviewStream = null;
+      if (cameraPreview) { cameraPreview.pause(); cameraPreview.srcObject = null; cameraPreview.style.display = 'none'; }
+      if (deviceAudioContext) { try { await deviceAudioContext.close(); } catch {} }
+      deviceAudioContext = null;
+      if (micLevel) micLevel.value = 0;
+    }
+
+    function fillDeviceSelect(select, devices, fallbackLabel) {
+      if (!select) return;
+      const previous = select.value;
+      select.replaceChildren(...devices.map((device, index) => {
+        const option = document.createElement('option');
+        option.value = device.deviceId;
+        option.textContent = device.label || `${fallbackLabel} ${index + 1}`;
+        return option;
+      }));
+      if (devices.some(device => device.deviceId === previous)) select.value = previous;
+    }
+
+    async function checkDevices() {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        if (devicePanel) devicePanel.hidden = false;
+        if (deviceStatus) deviceStatus.textContent = '이 브라우저에서는 장치 확인을 지원하지 않습니다.';
+        return;
+      }
+      deviceCheckBtn.disabled = true;
+      deviceCheckBtn.setAttribute('aria-busy', 'true');
+      if (devicePanel) devicePanel.hidden = false;
+      if (deviceStatus) deviceStatus.textContent = '장치를 연결하고 있습니다…';
+      await stopDevicePreflight();
+      try {
+        devicePreviewStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: !!videoToggle?.checked });
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        fillDeviceSelect(micSelect, devices.filter(device => device.kind === 'audioinput'), '마이크');
+        fillDeviceSelect(cameraSelect, devices.filter(device => device.kind === 'videoinput'), '카메라');
+        if (cameraRow) cameraRow.hidden = !videoToggle?.checked;
+        if (videoToggle?.checked && cameraPreview && devicePreviewStream.getVideoTracks().length) {
+          cameraPreview.srcObject = devicePreviewStream;
+          cameraPreview.style.display = 'block';
+          await cameraPreview.play().catch(() => {});
+        }
+        const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextCtor && devicePreviewStream.getAudioTracks().length) {
+          deviceAudioContext = new AudioContextCtor();
+          const analyser = deviceAudioContext.createAnalyser();
+          analyser.fftSize = 256;
+          deviceAudioContext.createMediaStreamSource(devicePreviewStream).connect(analyser);
+          const samples = new Uint8Array(analyser.frequencyBinCount);
+          const updateLevel = () => {
+            analyser.getByteFrequencyData(samples);
+            const peak = samples.reduce((max, value) => Math.max(max, value), 0);
+            if (micLevel) micLevel.value = Math.min(100, Math.round(peak / 2.55));
+            deviceLevelFrame = requestAnimationFrame(updateLevel);
+          };
+          updateLevel();
+        }
+        if (deviceStatus) deviceStatus.textContent = videoToggle?.checked ? '마이크와 카메라가 준비됐습니다.' : '마이크가 준비됐습니다.';
+      } catch (error) {
+        await stopDevicePreflight();
+        if (deviceStatus) deviceStatus.textContent = `장치를 확인하지 못했습니다: ${error?.name === 'NotAllowedError' ? '권한을 허용해 주세요.' : '연결 상태를 확인해 주세요.'}`;
+      } finally {
+        deviceCheckBtn.disabled = false;
+        deviceCheckBtn.removeAttribute('aria-busy');
+      }
+    }
 
     function openModal() {
       // 디폴트 = 주간 선택
@@ -5823,13 +5922,23 @@ if ('serviceWorker' in navigator) {
       modal.classList.add('open');
       setTimeout(() => titleInput?.focus(), 50);
     }
-    function closeModal() {
+    async function closeModal() {
       window.__pronoteRecording?.cancelStart?.();
+      await stopDevicePreflight();
       startBtn.disabled = false;
       startBtn.textContent = '녹음 시작 →';
       modal.classList.remove('open');
       delete modal.dataset.continuationMeetingId;
     }
+
+    deviceCheckBtn?.addEventListener('click', checkDevices);
+    videoToggle?.addEventListener('change', () => {
+      if (cameraRow) cameraRow.hidden = !videoToggle.checked;
+      if (devicePanel && !devicePanel.hidden) {
+        if (deviceStatus) deviceStatus.textContent = '녹화 방식이 바뀌었습니다. 장치를 다시 확인해 주세요.';
+        stopDevicePreflight();
+      }
+    });
 
     btn.addEventListener('click', e => {
       e.preventDefault();
@@ -5861,16 +5970,19 @@ if ('serviceWorker' in navigator) {
       const sysAudioToggle = document.getElementById('newMeetingSysAudio');
       const withSysAudio = !!sysAudioToggle?.checked;
       const recordVideo = !!document.getElementById('newMeetingVideo')?.checked;
+      const micDeviceId = micSelect?.value || '';
+      const cameraDeviceId = recordVideo ? (cameraSelect?.value || '') : '';
       const language = document.getElementById('newMeetingLang')?.value || 'ko';
       const parentMeetingId = modal.dataset.continuationMeetingId || null;
       const originalLabel = startBtn.textContent;
       startBtn.disabled = true;
       startBtn.textContent = recordVideo ? '마이크·카메라 연결 중…' : '마이크 연결 중…';
+      await stopDevicePreflight();
       let recordingStarted = false;
       try {
         recordingStarted = !!(window.__pronoteRecording && !window.__pronoteRecording.isActive()
           && await window.__pronoteRecording.start('realtime', {
-            context: 'live', withSysAudio, recordVideo,
+            context: 'live', withSysAudio, recordVideo, micDeviceId, cameraDeviceId,
             meta: { tag, title: finalTitle, attendees, withSysAudio, language, parentMeetingId }
           }));
       } finally {
@@ -6068,7 +6180,14 @@ if ('serviceWorker' in navigator) {
         if (!await hasRecordingSpace(!!opts.recordVideo)) return false;
         assertCurrent();
         const baseAudio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: baseAudio });
+        const selectedAudio = opts.micDeviceId ? { ...baseAudio, deviceId: { exact: opts.micDeviceId } } : baseAudio;
+        try {
+          micStream = await navigator.mediaDevices.getUserMedia({ audio: selectedAudio });
+        } catch (error) {
+          if (!opts.micDeviceId || !['NotFoundError', 'OverconstrainedError'].includes(error?.name)) throw error;
+          window.showToast?.('선택한 마이크를 찾지 못해 기본 마이크로 연결합니다');
+          micStream = await navigator.mediaDevices.getUserMedia({ audio: baseAudio });
+        }
         assertCurrent();
 
         // 화면 오디오 = 인터뷰 모드 디폴트 ON / 외 모드 = opts.withSysAudio === true 일 때만 (대면 = OFF 기본)
@@ -6099,7 +6218,15 @@ if ('serviceWorker' in navigator) {
         if (opts.recordVideo) {
           try {
             window.showToast?.('카메라 권한을 허용하고 칠판과 참석자가 보이도록 위치를 조정하세요');
-            cameraStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } });
+            const baseVideo = { width: { ideal: 1280 }, height: { ideal: 720 } };
+            const selectedVideo = opts.cameraDeviceId ? { ...baseVideo, deviceId: { exact: opts.cameraDeviceId } } : baseVideo;
+            try {
+              cameraStream = await navigator.mediaDevices.getUserMedia({ video: selectedVideo });
+            } catch (error) {
+              if (!opts.cameraDeviceId || !['NotFoundError', 'OverconstrainedError'].includes(error?.name)) throw error;
+              window.showToast?.('선택한 카메라를 찾지 못해 기본 카메라로 연결합니다');
+              cameraStream = await navigator.mediaDevices.getUserMedia({ video: baseVideo });
+            }
             assertCurrent();
           } catch (e) {
             if (attempt !== startAttempt) throw e;

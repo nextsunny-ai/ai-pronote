@@ -206,6 +206,17 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("div.querySelectorAll('img')", HTML)
         self.assertIn("노트 제목·내용·첨부 파일명 검색", HTML)
 
+    def test_recording_device_preflight_reaches_capture_constraints(self):
+        for control_id in (
+            'meetingDeviceCheck', 'meetingDevicePanel', 'meetingMicDevice',
+            'meetingCameraDevice', 'meetingMicLevel', 'meetingCameraPreview',
+        ):
+            self.assertIn(f'id="{control_id}"', HTML)
+        self.assertIn("navigator.mediaDevices.enumerateDevices()", HTML)
+        self.assertIn("micDeviceId, cameraDeviceId", HTML)
+        self.assertIn("deviceId: { exact: opts.micDeviceId }", HTML)
+        self.assertIn("deviceId: { exact: opts.cameraDeviceId }", HTML)
+
 
 if __name__ == "__main__":
     unittest.main()
