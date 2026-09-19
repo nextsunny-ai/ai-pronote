@@ -22,6 +22,7 @@ $RootFiles = @(
     'start_v15_server_only.ps1', 'start_v15_server_only.vbs', 'start_ipad_companion.ps1',
     'prepare_ipad_certificate.ps1', 'configure_ipad_firewall.ps1',
     'rollback_ipad_test.ps1', 'setup_mac.command', 'start_mac.command', 'updater.py',
+    'uninstall_windows.ps1',
     'uninstall_mac.command', '빠른시작_가이드.md', '상황별_사용가이드.md'
 )
 $Directories = @('static', 'mac')

@@ -166,6 +166,19 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("launch_managed_windows.ps1", installer)
         self.assertNotIn("$shortcut.TargetPath = Join-Path $Root '3_START_AI_PRONOTE.vbs'", installer)
 
+    def test_windows_uninstaller_preserves_data_and_quarantines_owned_files(self):
+        uninstaller = (ROOT / "uninstall_windows.ps1").read_text(encoding="utf-8")
+        packager = (ROOT / "packaging" / "build_release_candidate.ps1").read_text(encoding="utf-8")
+        self.assertIn("uninstall_windows.ps1", packager)
+        self.assertIn("restoration-record.json", uninstaller)
+        self.assertIn("data_preserved", uninstaller)
+        self.assertIn("credentials_preserved = $true", uninstaller)
+        self.assertIn("Move-OwnedShortcut", uninstaller)
+        self.assertIn("Move-Item -LiteralPath $resolvedInstall", uninstaller)
+        self.assertNotIn("Remove-Item -LiteralPath $resolvedInstall", uninstaller)
+        self.assertNotIn("CredDelete", uninstaller)
+        self.assertNotIn("taskkill", uninstaller.lower())
+
     def test_mac_installer_uses_the_locked_python_minor(self):
         setup = (ROOT / "mac" / "1_FIRST_SETUP.command").read_text(encoding="utf-8")
         self.assertIn("sys.version_info[:2] == (3,12)", setup)
