@@ -1572,6 +1572,7 @@ class NoteEditor extends StatefulWidget {
 class _NoteEditorState extends State<NoteEditor> {
   late NoteDocument _note = widget.initialNote;
   late final TextEditingController _titleController;
+  late final TextEditingController _bodyController;
   InkStroke? _active;
   InkTool _tool = InkTool.pen;
   int _inkColor = 0xff1c1d1a;
@@ -1587,11 +1588,14 @@ class _NoteEditorState extends State<NoteEditor> {
   Offset? _dragStart;
   Rect? _dragOriginRect;
   List<InkStroke>? _dragOriginalStrokes;
+  late bool _showTextBody;
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: _note.title);
+    _bodyController = TextEditingController(text: _note.body);
+    _showTextBody = _note.body.isNotEmpty;
   }
 
   List<InkStroke> get _currentStrokes => _note.pages[_currentPageIndex].strokes;
@@ -1902,6 +1906,7 @@ class _NoteEditorState extends State<NoteEditor> {
     _saveTimer?.cancel();
     widget.repository.save(_note);
     _titleController.dispose();
+    _bodyController.dispose();
     super.dispose();
   }
 
@@ -1936,8 +1941,16 @@ class _NoteEditorState extends State<NoteEditor> {
           ),
         ],
       ),
-      actions: const [
-        Padding(
+      actions: [
+        IconButton(
+          key: const ValueKey('note-body-toggle'),
+          tooltip: _showTextBody ? '텍스트 본문 닫기' : '텍스트 본문 열기',
+          onPressed: () => setState(() => _showTextBody = !_showTextBody),
+          icon: Icon(
+            _showTextBody ? Icons.subject_rounded : Icons.subject_outlined,
+          ),
+        ),
+        const Padding(
           padding: EdgeInsets.only(right: 16),
           child: Center(child: Text('자동 저장', style: TextStyle(fontSize: 12))),
         ),
@@ -2122,6 +2135,47 @@ class _NoteEditorState extends State<NoteEditor> {
             ],
           ),
         ),
+        if (_showTextBody)
+          Container(
+            margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xffddd9cf)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('note-body-field'),
+                    controller: _bodyController,
+                    minLines: 3,
+                    maxLines: 6,
+                    decoration: const InputDecoration(
+                      labelText: '텍스트 본문',
+                      hintText: '회의 내용이나 메모를 입력하세요.',
+                      border: InputBorder.none,
+                      alignLabelWithHint: true,
+                    ),
+                    onChanged: (value) {
+                      _note = _note.copyWith(
+                        body: value,
+                        updatedAt: DateTime.now(),
+                      );
+                      _scheduleSave();
+                    },
+                  ),
+                ),
+                IconButton(
+                  tooltip: '텍스트 본문 접기',
+                  onPressed: () => setState(() => _showTextBody = false),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+          ),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
