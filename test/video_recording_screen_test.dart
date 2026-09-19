@@ -91,7 +91,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('회의 시작'));
+    await tester.tap(find.byKey(const ValueKey('start-recording-card')));
     await tester.pumpAndSettle();
     expect(find.text('음성 녹음'), findsOneWidget);
     expect(find.text('영상 + 음성 녹화'), findsOneWidget);

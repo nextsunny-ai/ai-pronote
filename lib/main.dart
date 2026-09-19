@@ -314,6 +314,68 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  String _noteDate(DateTime value) =>
+      '${value.year}.${value.month.toString().padLeft(2, '0')}.${value.day.toString().padLeft(2, '0')}';
+
+  Future<void> _chooseNote() async {
+    final notes = await widget.repository.list();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * .72,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            children: [
+              Text(
+                '노트',
+                style: Theme.of(sheetContext).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                key: const ValueKey('create-note-from-note-menu'),
+                leading: const Icon(Icons.note_add_outlined),
+                title: const Text('새 노트 만들기'),
+                subtitle: const Text('빈 페이지에서 필기 시작'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await _newNote();
+                },
+              ),
+              if (notes.isNotEmpty) ...[
+                const Divider(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Text(
+                    '기존 노트',
+                    style: Theme.of(sheetContext).textTheme.labelLarge,
+                  ),
+                ),
+                for (final note in notes)
+                  ListTile(
+                    leading: const Icon(Icons.description_outlined),
+                    title: Text(note.title),
+                    subtitle: Text(_noteDate(note.updatedAt)),
+                    onTap: () async {
+                      Navigator.pop(sheetContext);
+                      await _openNote(note);
+                    },
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _toggleFavorite(NoteDocument note) async {
     await widget.repository.save(
       note.copyWith(isFavorite: !note.isFavorite, updatedAt: DateTime.now()),
@@ -499,18 +561,61 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       backgroundColor: Colors.transparent,
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      title: Row(
         children: [
-          const Text(
-            'AI PRONOTE',
-            style: TextStyle(fontWeight: FontWeight.w800),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.asset(
+              'assets/branding/ai_pronote_mark.png',
+              width: 38,
+              height: 38,
+              fit: BoxFit.cover,
+              semanticLabel: 'AI PRONOTE 로고',
+            ),
           ),
-          Text(
-            '버전 ${widget.displayVersion}',
-            style: const TextStyle(fontSize: 12),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'AI PRONOTE',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              Text(
+                '버전 ${widget.displayVersion}',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
           ),
         ],
+      ),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(56),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  key: const ValueKey('top-note-navigation'),
+                  onPressed: _chooseNote,
+                  icon: const Icon(Icons.description_outlined),
+                  label: const Text('노트'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  key: const ValueKey('top-meeting-navigation'),
+                  onPressed: _chooseMeetingMode,
+                  icon: const Icon(Icons.mic_none_rounded),
+                  label: const Text('회의'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     ),
     body: SafeArea(
@@ -538,10 +643,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: _StartCard(
                       key: const ValueKey('start-note-card'),
                       icon: Icons.draw_outlined,
-                      title: '새 노트',
-                      description: 'Apple Pencil로 쓰고 그리기',
+                      title: '노트',
+                      description: '새 노트를 만들거나 기존 노트 열기',
                       primary: true,
-                      onTap: _newNote,
+                      onTap: _chooseNote,
                     ),
                   ),
                   if (wide)
@@ -552,7 +657,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: _StartCard(
                       key: const ValueKey('start-recording-card'),
                       icon: Icons.mic_none_rounded,
-                      title: '회의 시작',
+                      title: '회의',
                       description: '음성 또는 영상으로 기록하며 필기',
                       onTap: _chooseMeetingMode,
                     ),

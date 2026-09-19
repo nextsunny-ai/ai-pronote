@@ -23,6 +23,20 @@ class _RecordingNoteExporter extends NoteExporter {
   }
 }
 
+Future<void> _openNewNote(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('start-note-card')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('create-note-from-note-menu')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openExistingNote(WidgetTester tester, String title) async {
+  await tester.tap(find.byKey(const ValueKey('top-note-navigation')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(title).last);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('노트를 다른 앱에서 열 수 있는 문서로 내보낸다', (tester) async {
     final repository = MemoryNoteRepository();
@@ -30,8 +44,7 @@ void main() {
     await tester.pumpWidget(
       PronoteApp(repository: repository, noteExporter: exporter),
     );
-    await tester.tap(find.text('새 노트'));
-    await tester.pumpAndSettle();
+    await _openNewNote(tester);
     await tester.tap(find.byKey(const ValueKey('note-body-toggle')));
     await tester.pump();
     await tester.enterText(
@@ -51,16 +64,17 @@ void main() {
 
     expect(find.text('AI PRONOTE'), findsOneWidget);
     expect(find.text('버전 1.0'), findsOneWidget);
-    expect(find.text('새 노트'), findsOneWidget);
-    expect(find.text('회의 시작'), findsOneWidget);
+    expect(find.byKey(const ValueKey('start-note-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('start-recording-card')), findsOneWidget);
+    expect(find.text('노트'), findsAtLeastNWidgets(2));
+    expect(find.text('회의'), findsAtLeastNWidgets(2));
     expect(find.text('내 노트'), findsOneWidget);
   });
 
   testWidgets('새 노트에서 스타일러스 획을 그리고 자동 저장한다', (tester) async {
     final repository = MemoryNoteRepository();
     await tester.pumpWidget(PronoteApp(repository: repository));
-    await tester.tap(find.text('새 노트'));
-    await tester.pumpAndSettle();
+    await _openNewNote(tester);
 
     expect(find.text('펜'), findsOneWidget);
     expect(find.text('형광펜'), findsOneWidget);
@@ -96,8 +110,7 @@ void main() {
 
     await tester.pumpWidget(PronoteApp(repository: repository));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('제품 회의 노트'));
-    await tester.pumpAndSettle();
+    await _openExistingNote(tester, '제품 회의 노트');
 
     expect(find.byKey(const ValueKey('ink-canvas')), findsOneWidget);
     expect(find.text('제품 회의 노트'), findsOneWidget);
@@ -106,8 +119,7 @@ void main() {
   testWidgets('필기 획을 실행 취소하고 다시 실행한다', (tester) async {
     final repository = MemoryNoteRepository();
     await tester.pumpWidget(PronoteApp(repository: repository));
-    await tester.tap(find.text('새 노트'));
-    await tester.pumpAndSettle();
+    await _openNewNote(tester);
     final canvas = find.byKey(const ValueKey('ink-canvas'));
     final center = tester.getCenter(canvas);
     final gesture = await tester.createGesture(
@@ -131,8 +143,7 @@ void main() {
   testWidgets('지우개로 닿은 필기 획을 삭제한다', (tester) async {
     final repository = MemoryNoteRepository();
     await tester.pumpWidget(PronoteApp(repository: repository));
-    await tester.tap(find.text('새 노트'));
-    await tester.pumpAndSettle();
+    await _openNewNote(tester);
     final canvas = find.byKey(const ValueKey('ink-canvas'));
     final center = tester.getCenter(canvas);
     final pen = await tester.createGesture(
@@ -158,8 +169,7 @@ void main() {
   testWidgets('이동 도구로 바꾸면 터치가 필기 획으로 저장되지 않는다', (tester) async {
     final repository = MemoryNoteRepository();
     await tester.pumpWidget(PronoteApp(repository: repository));
-    await tester.tap(find.text('새 노트'));
-    await tester.pumpAndSettle();
+    await _openNewNote(tester);
     await tester.ensureVisible(
       find.byKey(const ValueKey('finger-drawing-toggle')),
     );
@@ -184,8 +194,7 @@ void main() {
   testWidgets('새 노트는 기본으로 손가락 필기가 된다', (tester) async {
     final repository = MemoryNoteRepository();
     await tester.pumpWidget(PronoteApp(repository: repository));
-    await tester.tap(find.text('새 노트'));
-    await tester.pumpAndSettle();
+    await _openNewNote(tester);
     final canvas = find.byKey(const ValueKey('ink-canvas'));
     final center = tester.getCenter(canvas);
     final touch = await tester.createGesture(
@@ -205,8 +214,7 @@ void main() {
   testWidgets('새 페이지를 추가하고 각 페이지 필기를 따로 저장한다', (tester) async {
     final repository = MemoryNoteRepository();
     await tester.pumpWidget(PronoteApp(repository: repository));
-    await tester.tap(find.text('새 노트'));
-    await tester.pumpAndSettle();
+    await _openNewNote(tester);
 
     await tester.tap(find.byKey(const ValueKey('add-page')));
     await tester.pump();
@@ -290,9 +298,11 @@ void main() {
     await tester.pumpWidget(PronoteApp(repository: repository));
     await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey('favorite-note-favorite-target')),
+    final favoriteButton = find.byKey(
+      const ValueKey('favorite-note-favorite-target'),
     );
+    await tester.ensureVisible(favoriteButton);
+    await tester.tap(favoriteButton);
     await tester.pumpAndSettle();
     expect(
       (await repository.list())
@@ -318,8 +328,7 @@ void main() {
     );
     await tester.pumpWidget(PronoteApp(repository: repository));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('제목 없는 노트'));
-    await tester.pumpAndSettle();
+    await _openExistingNote(tester, '제목 없는 노트');
 
     await tester.enterText(
       find.byKey(const ValueKey('note-title-field')),
@@ -342,8 +351,7 @@ void main() {
     );
     await tester.pumpWidget(PronoteApp(repository: repository));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('받아쓰기 노트'));
-    await tester.pumpAndSettle();
+    await _openExistingNote(tester, '받아쓰기 노트');
 
     expect(find.byKey(const ValueKey('note-body-field')), findsOneWidget);
     await tester.enterText(
@@ -358,8 +366,7 @@ void main() {
   testWidgets('올가미로 필기 획을 선택해 복제하고 삭제한다', (tester) async {
     final repository = MemoryNoteRepository();
     await tester.pumpWidget(PronoteApp(repository: repository));
-    await tester.tap(find.text('새 노트'));
-    await tester.pumpAndSettle();
+    await _openNewNote(tester);
     final canvas = find.byKey(const ValueKey('ink-canvas'));
     final center = tester.getCenter(canvas);
     final pencil = await tester.createGesture(
