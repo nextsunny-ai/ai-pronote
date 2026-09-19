@@ -3698,6 +3698,7 @@ if ('serviceWorker' in navigator) {
                   <div id="mynoteListItems"></div>
                 </div>
               </div>
+              <button class="mynote-tool-btn" id="mynoteFoldersBtn" type="button">폴더·노트 목록</button>
               <button class="mynote-tool-btn" id="mynoteImageBtn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5-11 11"/></svg>
                 이미지 첨부
@@ -7476,6 +7477,15 @@ if ('serviceWorker' in navigator) {
     // 외부 호출 (결과 화면 렌더 시 동기화)
     window.__pronoteNote = { loadCurrent: loadCurrentNote, persist: persistCurrentNote };
     window.__pronoteSwitchMyNoteMeeting = switchNoteMeeting;
+    document.getElementById('mynoteFoldersBtn')?.addEventListener('click', () => {
+      if (noteDirty && !persistCurrentNote()) {
+        showToast('노트를 저장하지 못해 목록 이동을 중단했습니다.');
+        return;
+      }
+      window.__pronoteRefreshNoteFolders?.();
+      window.__pronoteRenderMyNotesList?.();
+      if (typeof switchView === 'function') switchView('mynotes');
+    });
 
     const saveBtn = document.getElementById('mynoteSaveBtn');
     if (saveBtn) {

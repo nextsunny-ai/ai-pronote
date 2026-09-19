@@ -230,6 +230,7 @@ class FrontendContractTests(unittest.TestCase):
         for control_id in (
             'mynotesFolderFilter', 'mynotesNewFolderInput', 'mynotesAddFolderBtn',
             'mynotesBackupFolderBtn', 'mynoteFolderSelect',
+            'mynoteFoldersBtn',
         ):
             self.assertIn(f'id="{control_id}"', HTML)
         self.assertIn("ai_pronote.note_folders.v1", HTML)
