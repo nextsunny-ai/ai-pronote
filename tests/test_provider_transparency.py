@@ -2,9 +2,21 @@ import unittest
 from unittest.mock import patch
 
 import main
+from fastapi import HTTPException
 
 
 class ProviderTransparencyTests(unittest.TestCase):
+    def test_summary_redo_rejects_unknown_provider_before_job_mutation(self):
+        with self.assertRaises(HTTPException) as caught:
+            main.summarize_redo(
+                "missing-job",
+                provider="unknown-provider",
+                external_consent=True,
+            )
+
+        self.assertEqual(caught.exception.status_code, 400)
+        self.assertEqual(caught.exception.detail, "지원하지 않는 AI 연결 방식입니다")
+
     def test_codex_auto_title_and_summary_use_only_codex(self):
         calls = []
 
