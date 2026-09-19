@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import 'notes/note_document.dart';
 import 'notes/file_note_repository.dart';
+import 'notes/note_exporter.dart';
 import 'notes/note_repository.dart';
 
 import 'package:path_provider/path_provider.dart';
@@ -63,6 +64,7 @@ Future<void> main() async {
   runApp(
     PronoteApp(
       repository: FileNoteRepository(documents),
+      noteExporter: const NoteExporter(_defaultExportDirectory),
       recorder: DeviceAudioRecorderGateway(),
       videoRecorderFactory: DeviceVideoRecorderGateway.new,
       processingGateway:
@@ -89,6 +91,7 @@ class PronoteApp extends StatelessWidget {
   const PronoteApp({
     super.key,
     required this.repository,
+    this.noteExporter,
     this.recorder = const DisabledAudioRecorderGateway(),
     this.videoRecorderFactory,
     this.processingGateway,
@@ -103,6 +106,7 @@ class PronoteApp extends StatelessWidget {
   });
 
   final NoteRepository repository;
+  final NoteExporter? noteExporter;
   final AudioRecorderGateway recorder;
   final VideoRecorderGateway Function()? videoRecorderFactory;
   final MeetingProcessingGateway? processingGateway;
@@ -133,6 +137,7 @@ class PronoteApp extends StatelessWidget {
       openExternalUrl: openExternalUrl,
       child: HomeScreen(
         repository: repository,
+        noteExporter: noteExporter,
         recorder: recorder,
         videoRecorderFactory: videoRecorderFactory,
         processingGateway: processingGateway,
@@ -223,6 +228,7 @@ class HomeScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.recorder,
+    this.noteExporter,
     this.videoRecorderFactory,
     this.processingGateway,
     this.processingJobRepository,
@@ -235,6 +241,7 @@ class HomeScreen extends StatefulWidget {
 
   final NoteRepository repository;
   final AudioRecorderGateway recorder;
+  final NoteExporter? noteExporter;
   final VideoRecorderGateway Function()? videoRecorderFactory;
   final MeetingProcessingGateway? processingGateway;
   final ProcessingJobRepository? processingJobRepository;
@@ -270,8 +277,11 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            NoteEditor(repository: widget.repository, initialNote: note),
+        builder: (_) => NoteEditor(
+          repository: widget.repository,
+          initialNote: note,
+          exporter: widget.noteExporter,
+        ),
       ),
     );
     if (mounted) {
@@ -284,8 +294,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openNote(NoteDocument note) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            NoteEditor(repository: widget.repository, initialNote: note),
+        builder: (_) => NoteEditor(
+          repository: widget.repository,
+          initialNote: note,
+          exporter: widget.noteExporter,
+        ),
       ),
     );
     if (mounted) {
@@ -339,6 +352,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         builder: (_) => RecordingScreen(
                           recorder: widget.recorder,
                           repository: widget.repository,
+                          noteExporter: widget.noteExporter,
                           processingGateway: widget.processingGateway,
                           processingJobRepository:
                               widget.processingJobRepository,
@@ -374,6 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           const DisabledVideoRecorderGateway())
                                   .call(),
                           repository: widget.repository,
+                          noteExporter: widget.noteExporter,
                           processingGateway: widget.processingGateway,
                           processingJobRepository:
                               widget.processingJobRepository,
@@ -1247,6 +1262,7 @@ class RecordingScreen extends StatefulWidget {
     super.key,
     required this.recorder,
     required this.repository,
+    this.noteExporter,
     this.processingGateway,
     this.processingJobRepository,
     this.transcriptExporter,
@@ -1256,6 +1272,7 @@ class RecordingScreen extends StatefulWidget {
 
   final AudioRecorderGateway recorder;
   final NoteRepository repository;
+  final NoteExporter? noteExporter;
   final MeetingProcessingGateway? processingGateway;
   final ProcessingJobRepository? processingJobRepository;
   final TranscriptExporter? transcriptExporter;
@@ -1445,8 +1462,11 @@ class _RecordingScreenState extends State<RecordingScreen> {
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            NoteEditor(repository: widget.repository, initialNote: note),
+        builder: (_) => NoteEditor(
+          repository: widget.repository,
+          initialNote: note,
+          exporter: widget.noteExporter,
+        ),
       ),
     );
   }
@@ -1575,6 +1595,7 @@ class VideoRecordingScreen extends StatefulWidget {
     super.key,
     required this.recorder,
     required this.repository,
+    this.noteExporter,
     this.processingGateway,
     this.processingJobRepository,
     this.transcriptExporter,
@@ -1584,6 +1605,7 @@ class VideoRecordingScreen extends StatefulWidget {
 
   final VideoRecorderGateway recorder;
   final NoteRepository repository;
+  final NoteExporter? noteExporter;
   final MeetingProcessingGateway? processingGateway;
   final ProcessingJobRepository? processingJobRepository;
   final TranscriptExporter? transcriptExporter;
@@ -1760,8 +1782,11 @@ class _VideoRecordingScreenState extends State<VideoRecordingScreen> {
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            NoteEditor(repository: widget.repository, initialNote: note),
+        builder: (_) => NoteEditor(
+          repository: widget.repository,
+          initialNote: note,
+          exporter: widget.noteExporter,
+        ),
       ),
     );
   }
@@ -1897,10 +1922,12 @@ class NoteEditor extends StatefulWidget {
     super.key,
     required this.repository,
     required this.initialNote,
+    this.exporter,
   });
 
   final NoteRepository repository;
   final NoteDocument initialNote;
+  final NoteExporter? exporter;
 
   @override
   State<NoteEditor> createState() => _NoteEditorState();
@@ -1926,6 +1953,7 @@ class _NoteEditorState extends State<NoteEditor> {
   Rect? _dragOriginRect;
   List<InkStroke>? _dragOriginalStrokes;
   late bool _showTextBody;
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -2238,6 +2266,26 @@ class _NoteEditorState extends State<NoteEditor> {
     );
   }
 
+  Future<void> _exportNote() async {
+    final exporter = widget.exporter;
+    if (exporter == null || _exporting) return;
+    setState(() => _exporting = true);
+    try {
+      await widget.repository.save(_note);
+      await exporter.export(_note);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('문서 2개를 저장했습니다')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('노트를 내보내지 못했습니다. 다시 시도해 주세요.')),
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   @override
   void dispose() {
     _saveTimer?.cancel();
@@ -2254,7 +2302,7 @@ class _NoteEditorState extends State<NoteEditor> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 240,
+            width: MediaQuery.sizeOf(context).width < 600 ? 130 : 240,
             child: TextField(
               key: const ValueKey('note-title-field'),
               controller: _titleController,
@@ -2279,6 +2327,18 @@ class _NoteEditorState extends State<NoteEditor> {
         ],
       ),
       actions: [
+        if (widget.exporter != null)
+          IconButton(
+            key: const ValueKey('export-note'),
+            tooltip: '문서로 내보내기',
+            onPressed: _exporting ? null : _exportNote,
+            icon: _exporting
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.ios_share_rounded),
+          ),
         IconButton(
           key: const ValueKey('note-body-toggle'),
           tooltip: _showTextBody ? '텍스트 본문 닫기' : '텍스트 본문 열기',

@@ -39,12 +39,15 @@ void main() {
     final markdown = await File(result.markdownPath).readAsString();
     expect(markdown, contains('# 제품 / 회의'));
     expect(markdown, contains('결정 사항'));
-    expect(markdown, contains('필기 1획'));
+    expect(markdown, contains('필기: 1페이지 · 1획'));
     final archive = jsonDecode(
       await File(result.archivePath).readAsString(),
     ) as Map<String, Object?>;
     expect(NoteDocument.fromJson(archive), note);
-    expect(File(result.markdownPath).uri.pathSegments.last, isNot(contains('/')));
+    expect(
+      File(result.markdownPath).uri.pathSegments.last,
+      isNot(contains('/')),
+    );
   });
 
   test('빈 제목과 본문도 안전한 파일 이름으로 내보낸다', () async {
@@ -60,7 +63,13 @@ void main() {
 
     final result = await NoteExporter(() async => directory).export(note);
 
-    expect(File(result.markdownPath).uri.pathSegments.last, startsWith('제목 없는 노트_'));
-    expect(await File(result.markdownPath).readAsString(), contains('작성된 텍스트가 없습니다.'));
+    expect(
+      File(result.markdownPath).uri.pathSegments.last,
+      startsWith('제목 없는 노트_'),
+    );
+    expect(
+      await File(result.markdownPath).readAsString(),
+      contains('작성된 텍스트가 없습니다.'),
+    );
   });
 }

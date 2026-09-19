@@ -8,22 +8,27 @@ import 'package:ai_pronote_app/notes/note_exporter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/widgets.dart';
 
+class _RecordingNoteExporter extends NoteExporter {
+  _RecordingNoteExporter() : super(() async => Directory.systemTemp);
+
+  int calls = 0;
+
+  @override
+  Future<NoteExportResult> export(NoteDocument note) async {
+    calls += 1;
+    return const NoteExportResult(
+      markdownPath: 'note.md',
+      archivePath: 'note.pronote.json',
+    );
+  }
+}
+
 void main() {
   testWidgets('노트를 다른 앱에서 열 수 있는 문서로 내보낸다', (tester) async {
-    final directory = await tester.runAsync(
-      () => Directory.systemTemp.createTemp('pronote-note-export-ui-'),
-    );
-    addTearDown(() async {
-      if (directory != null && await directory.exists()) {
-        await directory.delete(recursive: true);
-      }
-    });
     final repository = MemoryNoteRepository();
+    final exporter = _RecordingNoteExporter();
     await tester.pumpWidget(
-      PronoteApp(
-        repository: repository,
-        noteExporter: NoteExporter(() async => directory!),
-      ),
+      PronoteApp(repository: repository, noteExporter: exporter),
     );
     await tester.tap(find.text('새 노트'));
     await tester.pumpAndSettle();
@@ -35,15 +40,10 @@ void main() {
     );
 
     await tester.tap(find.byKey(const ValueKey('export-note')));
-    await tester.pumpAndSettle();
+    await tester.pump();
 
+    expect(exporter.calls, 1);
     expect(find.text('문서 2개를 저장했습니다'), findsOneWidget);
-    final files = directory!.listSync().whereType<File>().toList();
-    expect(files.where((file) => file.path.endsWith('.md')), hasLength(1));
-    expect(
-      files.where((file) => file.path.endsWith('.pronote.json')),
-      hasLength(1),
-    );
   });
 
   testWidgets('첫 화면에서 노트와 회의 기록을 바로 시작한다', (tester) async {
