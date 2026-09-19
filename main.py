@@ -48,7 +48,7 @@ from pronote_p0 import (
     safe_data_root,
 )
 from provider_api import ProviderRegistry
-from secure_credentials import MemoryCredentialStore, WindowsCredentialStore
+from secure_credentials import CredentialBackendError, MemoryCredentialStore, WindowsCredentialStore
 from updater import (
     UpdateError,
     activate_staged_version,
@@ -490,6 +490,104 @@ def call_codex(system: str, prompt: str, content: str = "", timeout: int = 600) 
     return _run_cli_text(cmd, full, timeout, "codex")
 
 
+OFFICIAL_DEFAULT_MODELS = {
+    "openai": "gpt-5-mini",
+    "gemini": "gemini-2.5-flash",
+    "anthropic": "claude-haiku-4-5-20251001",
+}
+
+
+def _credential_store():
+    try:
+        return WindowsCredentialStore()
+    except RuntimeError:
+        return MemoryCredentialStore()
+
+
+def _official_model(provider: str, requested: str) -> str:
+    known_aliases = {"", "haiku", "sonnet", "fast", "standard"}
+    value = (requested or "").strip()
+    model = OFFICIAL_DEFAULT_MODELS[provider] if value.lower() in known_aliases else value
+    if not re.fullmatch(r"[A-Za-z0-9._:-]{1,100}", model):
+        raise LLMError("AI 모델 설정이 올바르지 않습니다", "policy", "")
+    return model
+
+
+def _post_json(url: str, payload: dict, headers: dict[str, str], timeout: int) -> dict:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json", **headers},
+        method="POST",
+    )
+    try:
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, response_headers, newurl):
+                return None
+        opener = urllib.request.build_opener(NoRedirect)
+        with opener.open(request, timeout=timeout) as response:
+            raw = response.read(8 * 1024 * 1024)
+        return json.loads(raw.decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        kind = "auth" if exc.code in {401, 403} else ("rate" if exc.code == 429 else "provider")
+        raise LLMError(f"공식 AI 제공자 요청 실패 ({exc.code})", kind, "") from exc
+    except urllib.error.URLError as exc:
+        raise LLMError("공식 AI 제공자에 연결하지 못했습니다", "network", "") from exc
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise LLMError("공식 AI 제공자의 응답 형식이 올바르지 않습니다", "provider", "") from exc
+
+
+def call_official_api(provider: str, system: str, prompt: str, content: str,
+                      model_alias: str, timeout: int) -> str:
+    try:
+        key = _credential_store().get(provider)
+    except CredentialBackendError as exc:
+        raise LLMError("Windows 자격 증명 관리자에서 API 키를 읽지 못했습니다", "auth", "") from exc
+    if not key:
+        raise LLMError("설정에서 선택한 AI 제공자의 API 키를 등록해 주세요.", "auth", "")
+    model = _official_model(provider, model_alias)
+    user_text = (prompt + (("\n\n" + content) if content else "")).strip()
+    if provider == "openai":
+        data = _post_json(
+            "https://api.openai.com/v1/responses",
+            {"model": model, "instructions": system, "input": user_text, "store": False},
+            {"Authorization": f"Bearer {key}"}, timeout,
+        )
+        if data.get("output_text"):
+            return str(data["output_text"]).strip()
+        parts = []
+        for item in data.get("output", []):
+            for block in item.get("content", []):
+                if block.get("type") == "output_text" and block.get("text"):
+                    parts.append(str(block["text"]))
+        if parts:
+            return "\n".join(parts).strip()
+    elif provider == "gemini":
+        data = _post_json(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+            {
+                "systemInstruction": {"parts": [{"text": system}]},
+                "contents": [{"role": "user", "parts": [{"text": user_text}]}],
+            },
+            {"x-goog-api-key": key}, timeout,
+        )
+        parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+        text = "\n".join(str(part.get("text", "")) for part in parts if part.get("text")).strip()
+        if text:
+            return text
+    elif provider == "anthropic":
+        data = _post_json(
+            "https://api.anthropic.com/v1/messages",
+            {"model": model, "max_tokens": 4096, "system": system, "messages": [{"role": "user", "content": user_text}]},
+            {"x-api-key": key, "anthropic-version": "2023-06-01"}, timeout,
+        )
+        text = "\n".join(str(block.get("text", "")) for block in data.get("content", [])
+                         if block.get("type") == "text" and block.get("text")).strip()
+        if text:
+            return text
+    raise LLMError("공식 AI 제공자가 빈 응답을 반환했습니다", "provider", "")
+
+
 def call_llm(provider: str, system: str, prompt: str, content: str = "",
              model_alias: str = DEFAULT_LLM_MODEL, timeout: int = 600,
              allowed_tools: Optional[str] = None, retries: int = 2) -> str:
@@ -500,13 +598,15 @@ def call_llm(provider: str, system: str, prompt: str, content: str = "",
     로그인 만료(auth)는 다시 걸어도 같은 결과이므로 즉시 실패시켜 안내로 넘긴다.
     """
     p = (provider or "").strip().lower()
-    if p in {"gemini", "gemini_cli"}:
+    if p == "gemini_cli":
         raise LLMError(
             "Gemini CLI 로그인은 공급자 정책상 앱 연결에 사용할 수 없습니다. 설정에서 공식 Gemini API (BYOK)를 사용해 주세요.",
             "policy", "",
         )
-    if p in {"openai", "openai_api", "gemini_api", "anthropic", "anthropic_api"}:
-        raise LLMError("공식 API 제공자는 공식 BYOK 실행 경로에서만 사용할 수 있습니다.", "policy", "")
+    official = {"openai": "openai", "openai_api": "openai", "gemini": "gemini", "gemini_api": "gemini",
+                "anthropic": "anthropic", "anthropic_api": "anthropic"}
+    if p in official:
+        return call_official_api(official[p], system, prompt, content, model_alias, timeout)
     if p not in {"claude_cli", "codex_cli"}:
         raise LLMError("알 수 없거나 지원하지 않는 AI 제공자입니다. 설정에서 다시 선택해 주세요.", "policy", "")
     if os.environ.get("PRONOTE_EXPERIMENTAL_CLI", "false").lower() != "true":
@@ -909,8 +1009,12 @@ class SummarizeRequest(BaseModel):
 class TitleRequest(BaseModel):
     transcript: str
     model: str = "haiku"  # 제목은 가벼운 작업 = haiku 디폴트
-    provider: Literal["claude_cli", "codex_cli"] = "claude_cli"
+    provider: str = "claude_cli"
     external_consent: bool = False
+
+
+class ProviderCredentialRequest(BaseModel):
+    secret: str
 
 
 class SetupRequest(BaseModel):
@@ -1198,6 +1302,49 @@ def official_provider_status():
         "experimental_cli": allow_cli,
         "ipad_gate": "iPad는 API 키를 직접 저장하지 않고 승인된 백엔드 프록시가 필요합니다.",
     }
+
+
+@app.post("/api/v15/providers/{provider}/credential")
+def save_official_provider_credential(provider: str, payload: ProviderCredentialRequest,
+                                      request: Request):
+    """Store a user-supplied BYOK secret only in the OS credential vault."""
+    if not _local_update_request(request):
+        raise HTTPException(403, "API 키 등록은 이 PC에서만 가능합니다")
+    if request.headers.get("X-Pronote-Credential") != "store":
+        raise HTTPException(403, "명시적인 API 키 저장 요청이 필요합니다")
+    if provider not in OFFICIAL_DEFAULT_MODELS:
+        raise HTTPException(400, "지원하지 않는 AI 제공자입니다")
+    secret = (payload.secret or "").strip()
+    if not 8 <= len(secret) <= 4096 or any(ch in secret for ch in "\r\n\x00"):
+        raise HTTPException(400, "API 키 형식이 올바르지 않습니다")
+    try:
+        store = _credential_store()
+        if isinstance(store, MemoryCredentialStore):
+            raise RuntimeError("secure credential store unavailable")
+        store.set(provider, secret)
+    except Exception as exc:
+        log(f"AI 제공자 자격 증명 저장 실패: {provider} · {type(exc).__name__}", "ERROR")
+        raise HTTPException(503, "Windows 자격 증명 관리자에 API 키를 저장하지 못했습니다") from exc
+    return {"ok": True, "provider": provider, "state": "ready"}
+
+
+@app.delete("/api/v15/providers/{provider}/credential")
+def delete_official_provider_credential(provider: str, request: Request):
+    if not _local_update_request(request):
+        raise HTTPException(403, "API 키 삭제는 이 PC에서만 가능합니다")
+    if request.headers.get("X-Pronote-Credential") != "delete":
+        raise HTTPException(403, "명시적인 API 키 삭제 요청이 필요합니다")
+    if provider not in OFFICIAL_DEFAULT_MODELS:
+        raise HTTPException(400, "지원하지 않는 AI 제공자입니다")
+    try:
+        store = _credential_store()
+        if isinstance(store, MemoryCredentialStore):
+            raise RuntimeError("secure credential store unavailable")
+        store.delete(provider)
+    except Exception as exc:
+        log(f"AI 제공자 자격 증명 삭제 실패: {provider} · {type(exc).__name__}", "ERROR")
+        raise HTTPException(503, "Windows 자격 증명 관리자에서 API 키를 삭제하지 못했습니다") from exc
+    return {"ok": True, "provider": provider, "state": "needs_key"}
 
 
 @app.get("/api/auth/config")
@@ -1551,7 +1698,7 @@ def assistant_chat(req: AssistantRequest):
             "위 입력을 참고해 사용자에게 비서로서 한국어로 답하라."
             + (" 웹 검색 결과를 근거로 핵심을 정리하고 출처를 함께 제시하라." if search_block else ""),
             content,
-            model_alias="haiku",  # 회의 비서 = 빠르고 지시 준수 우수 (검색 요약 포함)
+            model_alias=req.model,
             timeout=180 if search_block else 120,
         )
     except Exception as e:

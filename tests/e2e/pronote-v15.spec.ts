@@ -19,6 +19,7 @@ const syntheticMeeting = {
 };
 
 async function mockBackend(page: Page, options?: { jobs?: unknown[]; providers?: unknown[] }) {
+  const connectedProviders = new Set<string>();
   await page.route('**/api/**', async route => {
     const url = new URL(route.request().url());
     const json = (body: unknown, status = 200) => route.fulfill({
@@ -33,12 +34,21 @@ async function mockBackend(page: Page, options?: { jobs?: unknown[]; providers?:
     if (url.pathname === '/api/pending') return json([]);
     if (url.pathname === '/api/auth/config') return json({ auth_enabled: false });
     if (url.pathname === '/api/llm/status') return json({ available: false, provider: 'none' });
+    const credentialMatch = url.pathname.match(/^\/api\/v15\/providers\/(openai|gemini|anthropic)\/credential$/);
+    if (credentialMatch && route.request().method() === 'POST') {
+      connectedProviders.add(credentialMatch[1]);
+      return json({ ok: true, provider: credentialMatch[1], state: 'ready' });
+    }
+    if (credentialMatch && route.request().method() === 'DELETE') {
+      connectedProviders.delete(credentialMatch[1]);
+      return json({ ok: true, provider: credentialMatch[1], state: 'needs_key' });
+    }
     if (url.pathname === '/api/v15/providers') return json({
       experimental_cli: true,
       providers: options?.providers ?? [
-        { name: 'openai', state: 'needs_key', message: 'API 키가 필요합니다.', models: ['gpt-5-mini'] },
-        { name: 'gemini', state: 'needs_key', message: 'API 키가 필요합니다.', models: ['gemini-2.5-flash'] },
-        { name: 'anthropic', state: 'needs_key', message: 'API 키가 필요합니다.', models: ['claude-haiku'] },
+        { name: 'openai', state: connectedProviders.has('openai') ? 'ready' : 'needs_key', message: connectedProviders.has('openai') ? '연결됨' : 'API 키가 필요합니다.', models: ['gpt-5-mini'] },
+        { name: 'gemini', state: connectedProviders.has('gemini') ? 'ready' : 'needs_key', message: connectedProviders.has('gemini') ? '연결됨' : 'API 키가 필요합니다.', models: ['gemini-2.5-flash'] },
+        { name: 'anthropic', state: connectedProviders.has('anthropic') ? 'ready' : 'needs_key', message: connectedProviders.has('anthropic') ? '연결됨' : 'API 키가 필요합니다.', models: ['claude-haiku'] },
         { name: 'mock', state: 'mock', message: '테스트 전용입니다.', models: ['mock-success'] },
         { name: 'codex_cli', state: 'login_required', message: '로그인이 필요합니다.', models: [] },
         { name: 'claude_cli', state: 'not_installed', message: '설치되지 않았습니다.', models: [] },
@@ -1072,6 +1082,29 @@ test.describe('AI 연결 구분', () => {
     await expect(page.locator('#experimentalCliStatuses')).toContainText('Claude CLI (실험)');
     await expect(page.locator('#experimentalCliStatuses')).not.toContainText('Gemini CLI (실험)');
     await expect(page.locator('#experimentalCliStatuses')).toContainText(/로그인 필요|미설치/);
+  });
+
+  test('공식 AI 선택·동의·키 연결을 저장하되 API 키는 브라우저에 남기지 않는다', async ({ page }) => {
+    await openApp(page);
+    await openNavView(page, 'admin');
+    await page.locator('#officialProviderSelect').selectOption('gemini');
+    await page.locator('#providerConsent').check();
+    await page.locator('#officialApiKey').fill('private-e2e-key-value');
+    await page.locator('#officialCredentialSave').click();
+    await expect(page.locator('#providerStatus')).toContainText('연결 준비됨');
+    await expect(page.locator('#officialApiKey')).toHaveValue('');
+    const state = await page.evaluate(() => ({
+      settings: JSON.parse(localStorage.getItem('ai_pronote.settings.v1') || '{}'),
+      storage: JSON.stringify(localStorage),
+      provider: window.__pronoteGetAIProvider?.(),
+      model: window.__pronoteGetAIModel?.(),
+      consent: window.__pronoteExternalConsent?.(),
+    }));
+    expect(state.settings.ai.provider).toBe('gemini_api');
+    expect(state.provider).toBe('gemini');
+    expect(state.model).toBe('gemini-2.5-flash');
+    expect(state.consent).toBe(true);
+    expect(state.storage).not.toContain('private-e2e-key-value');
   });
 
   test('기존 Gemini CLI 설정은 선택·저장·실행 경계에서 정책 차단한다', async ({ page }) => {

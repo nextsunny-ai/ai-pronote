@@ -57,7 +57,7 @@
 ## P1 AI 연결
 
 - [x] AI 없이 녹음·필기·기본 받아쓰기 사용 가능
-- [x] Claude·OpenAI·Gemini 제공자 구분 UI
+- [x] OpenAI·Gemini·Anthropic 공식 BYOK 선택·보안 저장·실제 API 실행 경로와 실험 CLI 분리
 - [x] 키·토큰을 문서·로그·브라우저 저장소에 노출하지 않는 기본 계약
 - [ ] Claude 실제 계정 전체 흐름 재검증
 - [ ] OpenAI 실제 계정 전체 흐름 재검증

@@ -50,12 +50,12 @@ class OpenAIAdapter(_OfficialAdapter):
 
 class GeminiAdapter(_OfficialAdapter):
     name = "gemini"
-    models = ("gemini-2.5-flash", "gemini-2.5-pro")
+    models = ("gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.5-pro")
 
 
 class AnthropicAdapter(_OfficialAdapter):
     name = "anthropic"
-    models = ("claude-sonnet-5", "claude-haiku-4-5-20251001")
+    models = ("claude-sonnet-4-6", "claude-haiku-4-5-20251001")
 
 
 class MockAdapter:

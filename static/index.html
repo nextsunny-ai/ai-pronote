@@ -3116,6 +3116,12 @@ if ('serviceWorker' in navigator) {
         <label for="officialProviderSelect">AI 제공자</label>
         <select id="officialProviderSelect"><option value="openai">OpenAI (ChatGPT API)</option><option value="gemini">Google Gemini API</option><option value="anthropic">Anthropic (Claude API)</option></select>
         <label for="officialModelSelect">모델</label><select id="officialModelSelect" aria-label="공식 API 모델"></select>
+        <label for="officialApiKey">개인 API 키</label>
+        <input id="officialApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="이 PC의 Windows 자격 증명 관리자에만 저장" />
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button type="button" class="action-btn primary" id="officialCredentialSave">키 저장·연결</button>
+          <button type="button" class="action-btn" id="officialCredentialDelete">저장된 키 연결 해제</button>
+        </div>
         <label class="provider-consent" for="providerConsent"><input type="checkbox" id="providerConsent" /> <span>회의 원문과 선택한 내 노트를 외부 AI 제공자에게 전송하는 데 동의합니다.</span></label>
         <div id="providerStatus" class="provider-status" role="status">상태를 확인하는 중…</div>
         <p class="provider-status">API 키는 Windows 자격 증명 관리자에 안전하게 보관되며 브라우저 저장소에는 남지 않습니다.</p>
@@ -5259,11 +5265,20 @@ if ('serviceWorker' in navigator) {
   window.__pronoteGetAIProvider = function () {
     try {
       const value = loadSettings()?.ai?.provider;
+      if (value === 'openai_api') return 'openai';
+      if (value === 'gemini_api') return 'gemini';
+      if (value === 'anthropic_api') return 'anthropic';
       if (value === 'claude') return 'claude_cli';
       if (value === 'codex') return 'codex_cli';
       if (value === 'claude_cli' || value === 'codex_cli') return value;
       return 'policy_blocked';
     } catch (e) { return 'policy_blocked'; }
+  };
+  window.__pronoteGetAIModel = function () {
+    try { return loadSettings()?.ai?.model || 'haiku'; } catch (e) { return 'haiku'; }
+  };
+  window.__pronoteExternalConsent = function () {
+    try { return loadSettings()?.ai?.externalConsent === true; } catch (e) { return false; }
   };
 
   // ─── 내 계정 모달 ───
@@ -9258,7 +9273,7 @@ if ('serviceWorker' in navigator) {
         // 회의 정보도 함께 = 화면이 꺼져 있어도 서버 혼자 회의록까지 만든다
         fd.append('auto_summarize', r.scenarioKey ? 'true' : 'false');
         fd.append('scenario', r.scenarioKey || 'meeting');
-        fd.append('llm_model', 'haiku');
+        fd.append('llm_model', (window.__pronoteGetAIModel ? window.__pronoteGetAIModel() : 'haiku'));
         fd.append('provider', (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'policy_blocked'));
         fd.append('external_consent', String(window.__pronoteExternalConsent?.() || false));
         fd.append('title', r.title || '');
@@ -9306,7 +9321,7 @@ if ('serviceWorker' in navigator) {
         try {
           const q = new URLSearchParams({
             scenario: r.scenarioKey || 'meeting',
-            llm_model: 'haiku',
+            llm_model: (window.__pronoteGetAIModel ? window.__pronoteGetAIModel() : 'haiku'),
             provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'policy_blocked'),
             external_consent: String(window.__pronoteExternalConsent?.() || false),
           });
@@ -9327,7 +9342,7 @@ if ('serviceWorker' in navigator) {
           body: JSON.stringify({
             transcript: r.transcript,
             scenario: r.scenarioKey || 'meeting',
-            model: 'haiku',  // 디폴트 Haiku (빠름·정확). 사용자 선택 추후.
+            model: (window.__pronoteGetAIModel ? window.__pronoteGetAIModel() : 'haiku'),
             provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'policy_blocked'),
             title: r.title,
             attendees: r.attendees,
@@ -10993,7 +11008,7 @@ if ('serviceWorker' in navigator) {
     hist[key].push({ role: 'user', text: msg });
     fetch(API, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ message: msg, context: withContext ? getContext() : '', history: hist[key].slice(-8), name: asstName(), expertise: (window.__pronoteAgentExpertise || ''), provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'policy_blocked'), external_consent: Boolean(window.__pronoteExternalConsent?.()) })
+      body: JSON.stringify({ message: msg, context: withContext ? getContext() : '', history: hist[key].slice(-8), name: asstName(), expertise: (window.__pronoteAgentExpertise || ''), provider: (window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'policy_blocked'), model: (window.__pronoteGetAIModel ? window.__pronoteGetAIModel() : 'haiku'), external_consent: Boolean(window.__pronoteExternalConsent?.()) })
     }).then(function (res) {
       return res.json().then(function (data) { return { ok: res.ok, data: data }; });
     }).then(function (r) {
@@ -11062,6 +11077,10 @@ if ('serviceWorker' in navigator) {
 (function initProviderContracts() {
   var providerSelect = document.getElementById('officialProviderSelect');
   var modelSelect = document.getElementById('officialModelSelect');
+  var apiKeyInput = document.getElementById('officialApiKey');
+  var credentialSave = document.getElementById('officialCredentialSave');
+  var credentialDelete = document.getElementById('officialCredentialDelete');
+  var consent = document.getElementById('providerConsent');
   var status = document.getElementById('providerStatus');
   var cliPanel = document.getElementById('experimentalCliPanel');
   var cliStatuses = document.getElementById('experimentalCliStatuses');
@@ -11069,19 +11088,39 @@ if ('serviceWorker' in navigator) {
   var providers = [];
   var labels = {openai:'OpenAI API', gemini:'Gemini API', anthropic:'Anthropic API', mock:'Mock', codex_cli:'Codex CLI (실험)', claude_cli:'Claude CLI (실험)', gemini_cli:'Gemini CLI (실험)'};
   var states = {ready:'연결 준비됨', needs_key:'API 키 필요', mock:'테스트 전용', error:'상태 확인 실패', not_installed:'미설치', login_required:'로그인 필요', expired:'로그인 만료', cancelled:'사용자가 취소함', network_error:'네트워크 오류', invalid_key:'API 키 확인 필요'};
+  function storeOfficialSelection() {
+    try {
+      var settings = loadSettings();
+      settings.ai = Object.assign({}, settings.ai || {}, {
+        provider: providerSelect.value + '_api',
+        model: modelSelect.value || '',
+        externalConsent: consent.checked === true,
+      });
+      saveSettings(settings);
+    } catch (e) {}
+  }
   function renderOfficial() {
     var item = providers.find(function (entry) { return entry.name === providerSelect.value; });
     modelSelect.innerHTML = '';
     if (!item) { status.textContent = '상태 정보가 없습니다.'; return; }
     item.models.forEach(function (model) { var option = document.createElement('option'); option.value = model; option.textContent = model; modelSelect.appendChild(option); });
+    try {
+      var savedModel = loadSettings()?.ai?.model;
+      if (savedModel && item.models.indexOf(savedModel) >= 0) modelSelect.value = savedModel;
+    } catch (e) {}
     status.textContent = (labels[item.name] || item.name) + ' · ' + (states[item.state] || item.state) + ' — ' + item.message;
+    credentialDelete.disabled = item.state !== 'ready';
   }
-  providerSelect.addEventListener('change', renderOfficial);
-  fetch('/api/v15/providers').then(function (response) {
+  function refreshProviders() { return fetch('/api/v15/providers').then(function (response) {
     if (!response.ok) throw new Error('상태 조회 실패');
     return response.json();
   }).then(function (payload) {
     providers = payload.providers || [];
+    try {
+      var savedProvider = loadSettings()?.ai?.provider;
+      if (['openai_api','gemini_api','anthropic_api'].includes(savedProvider)) providerSelect.value = savedProvider.replace(/_api$/, '');
+      consent.checked = loadSettings()?.ai?.externalConsent === true;
+    } catch (e) {}
     renderOfficial();
     if (payload.experimental_cli && cliPanel && cliStatuses) {
       cliPanel.hidden = false;
@@ -11098,7 +11137,42 @@ if ('serviceWorker' in navigator) {
         cliStatuses.appendChild(paragraph);
       });
     }
-  }).catch(function () { status.textContent = '제공자 상태를 확인하지 못했습니다. 키나 로그인 세션은 변경되지 않았습니다.'; });
+  }); }
+  providerSelect.addEventListener('change', function () { renderOfficial(); storeOfficialSelection(); });
+  modelSelect.addEventListener('change', storeOfficialSelection);
+  consent.addEventListener('change', storeOfficialSelection);
+  credentialSave.addEventListener('click', function () {
+    var secret = (apiKeyInput.value || '').trim();
+    if (!secret) { status.textContent = 'API 키를 입력하세요.'; apiKeyInput.focus(); return; }
+    credentialSave.disabled = true;
+    status.textContent = 'Windows 자격 증명 관리자에 안전하게 저장하는 중…';
+    fetch('/api/v15/providers/' + encodeURIComponent(providerSelect.value) + '/credential', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'X-Pronote-Credential': 'store' },
+      body: JSON.stringify({ secret: secret }),
+    }).then(function (response) { return response.json().then(function (body) { return { ok: response.ok, body: body }; }); })
+      .then(function (result) {
+        apiKeyInput.value = '';
+        if (!result.ok) throw new Error(result.body?.detail || 'API 키를 저장하지 못했습니다');
+        storeOfficialSelection();
+        return refreshProviders();
+      }).then(function () { window.showToast?.('AI 제공자를 연결했습니다'); })
+      .catch(function (error) { apiKeyInput.value = ''; status.textContent = error.message; })
+      .finally(function () { credentialSave.disabled = false; });
+  });
+  credentialDelete.addEventListener('click', function () {
+    credentialDelete.disabled = true;
+    fetch('/api/v15/providers/' + encodeURIComponent(providerSelect.value) + '/credential', {
+      method: 'DELETE', headers: { 'X-Pronote-Credential': 'delete' },
+    }).then(function (response) { return response.json().then(function (body) { return { ok: response.ok, body: body }; }); })
+      .then(function (result) {
+        if (!result.ok) throw new Error(result.body?.detail || '연결을 해제하지 못했습니다');
+        return refreshProviders();
+      }).then(function () { window.showToast?.('저장된 API 키 연결을 해제했습니다'); })
+      .catch(function (error) { status.textContent = error.message; })
+      .finally(function () { credentialDelete.disabled = false; });
+  });
+  refreshProviders().catch(function () { status.textContent = '제공자 상태를 확인하지 못했습니다. 키나 로그인 세션은 변경되지 않았습니다.'; });
 })();
 </script>
 

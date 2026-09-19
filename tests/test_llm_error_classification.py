@@ -24,11 +24,8 @@ class LlmErrorClassificationTests(unittest.TestCase):
         self.assertEqual(caught.exception.kind, "policy")
         self.assertIn("공식 Gemini API", str(caught.exception))
 
-    def test_cli_router_rejects_api_ids_unknown_and_legacy_aliases(self):
-        providers = (
-            "openai", "openai_api", "gemini_api", "anthropic", "anthropic_api",
-            "gemini", "unknown", "claude", "codex", " gemini_cli ",
-        )
+    def test_router_rejects_unknown_and_legacy_aliases(self):
+        providers = ("unknown", "claude", "codex", " gemini_cli ")
         for provider in providers:
             with self.subTest(provider=provider), self.assertRaises(LLMError) as caught:
                 call_llm(provider, "system", "prompt", "private meeting")
