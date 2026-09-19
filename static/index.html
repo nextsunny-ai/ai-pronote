@@ -1434,7 +1434,8 @@
     margin: 2px 0 var(--space-5);
   }
   .mynote-block.fullpage .mynote-document-head {
-    display: block; margin: 0; padding: 14px 20px 10px; background: #302d2a;
+    display: block; margin: 0; padding: 11px 20px 8px;
+    background:#f4efe9; border-bottom:1px solid #d8cec3;
   }
   .mynote-title-input {
     width: 100%; border: 0; outline: 0; background: transparent;
@@ -1443,9 +1444,9 @@
     letter-spacing: -0.035em; padding: 0; margin: 0 0 8px;
   }
   .mynote-title-input::placeholder { color: var(--text-quaternary); }
-  .mynote-block.fullpage .mynote-title-input { color:#fff; font-size:clamp(20px,2.4vw,28px); margin-bottom:3px; }
-  .mynote-block.fullpage .mynote-title-input::placeholder { color:rgba(255,255,255,.6); }
-  .mynote-block.fullpage .mynote-save-state { color:rgba(255,255,255,.64); }
+  .mynote-block.fullpage .mynote-title-input { color:#302d2a; font-size:clamp(20px,2.4vw,27px); margin-bottom:2px; }
+  .mynote-block.fullpage .mynote-title-input::placeholder { color:#746d66; }
+  .mynote-block.fullpage .mynote-save-state { color:#746d66; }
   .mynote-save-state { font-size: 11.5px; color: var(--text-quaternary); }
   .mynote-save-state[data-state="saving"] { color: var(--accent); }
   .mynote-save-state[data-state="error"] { color: var(--danger); }
@@ -1467,7 +1468,7 @@
   .mynote-block #inkPanel[hidden],
   .mynote-block .mynote-block-content[hidden] { display: none!important; }
   .mynote-block.fullpage .mynote-toolbar {
-    margin:0; padding:8px 16px; border:0; background:#4b433d; gap:6px;
+    margin:0; padding:7px 16px; border:0; border-bottom:1px solid #d8cec3; background:#e9e1d9; gap:6px;
     flex-wrap:nowrap; overflow-x:auto; scrollbar-width:thin;
   }
   .mynote-block.fullpage .mynote-toolbar > * { flex:0 0 auto; }
@@ -2691,13 +2692,13 @@
   #meetingResultTabs { position:sticky; top:0; z-index:10; background:rgba(247,246,242,.96); padding:10px 0; backdrop-filter:blur(8px); }
   #meetingResultTabs .action-btn[aria-pressed="true"] { background:var(--v15-ink); color:#fff; border-color:var(--v15-ink); }
   .note-mode-tabs,.ink-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .note-mode-tabs{padding:6px 16px;border-bottom:1px solid rgba(255,255,255,.18);background:#4b433d;flex-wrap:nowrap}
-  .note-mode-tabs button{color:#fff!important;background:transparent!important;border-color:rgba(255,255,255,.34)!important}
-  .note-mode-tabs button[aria-selected="true"]{background:#f5efe8!important;color:#302d2a!important;border-color:#c7aa91!important}
+  .note-mode-tabs{padding:5px 16px;border-bottom:1px solid #d8cec3;background:#e9e1d9;flex-wrap:nowrap}
+  .note-mode-tabs button{color:#514943!important;background:rgba(255,255,255,.62)!important;border-color:#c9bdb1!important}
+  .note-mode-tabs button[aria-selected="true"]{background:#302d2a!important;color:#fff!important;border-color:#302d2a!important}
   .note-mode-tabs button{min-height:38px}.ink-toolbar button,.ink-toolbar select{min-height:44px}.note-mode-tabs button,.ink-toolbar button,.ink-toolbar select{border:1px solid var(--v15-border);border-radius:8px;padding:8px 12px;background:#fff;color:var(--v15-ink)}
   .note-mode-tabs button[aria-selected="true"],.ink-toolbar button[aria-pressed="true"]{background:var(--v15-ink);color:#fff}
   .ink-panel{padding:0;background:#f7f6f2}
-  .ink-toolbar{position:sticky;top:0;z-index:12;margin:0;padding:8px 16px;background:#4b433d;backdrop-filter:blur(10px);flex-wrap:nowrap;overflow-x:auto;overflow-y:visible;scrollbar-width:none}
+  .ink-toolbar{position:sticky;top:0;z-index:12;margin:0;padding:7px 16px;background:#e9e1d9;border-bottom:1px solid #d8cec3;backdrop-filter:blur(10px);flex-wrap:nowrap;overflow-x:auto;overflow-y:visible;scrollbar-width:none}
   .ink-toolbar::-webkit-scrollbar{display:none}
   .ink-toolbar>*{flex:0 0 auto}
   .ink-toolbar .ink-icon-btn{width:44px;padding:8px;justify-content:center}
@@ -2712,7 +2713,7 @@
   .ink-canvas-pane{min-width:0;background:#fff}
   .ink-toolbar-spacer{flex:1 1 auto!important;min-width:14px}
   .ink-toolbar button[data-zone="right"]{border-color:#c7aa91;background:#f5efe8;color:#302d2a}
-  .ink-right-actions{position:sticky;right:0;z-index:3;display:inline-flex;gap:6px;padding-left:8px;background:#4b433d;box-shadow:-12px 0 14px #4b433d}
+  .ink-right-actions{position:sticky;right:0;z-index:3;display:inline-flex;gap:6px;padding-left:8px;background:#e9e1d9;box-shadow:-12px 0 14px #e9e1d9}
   .ink-canvas-wrap{position:relative;overflow:hidden;border:0;border-radius:0;background-color:var(--paper-color,#fff)}
   .ink-template-image{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none}
   #inkCanvas{position:relative;z-index:1}
@@ -2735,7 +2736,7 @@
   .ink-color-dot[aria-pressed="true"]{outline:3px solid #f5efe8;outline-offset:2px}
   #inkColor{width:38px;height:38px;min-height:38px;padding:3px;border:1px solid #c7aa91;border-radius:50%;background:#fff}
   .ink-page-controls{display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding-left:8px;border-left:1px solid var(--v15-border)}
-  .ink-page-controls #inkPageLabel{min-width:52px;text-align:center;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:#f5efe8}
+  .ink-page-controls #inkPageLabel{min-width:52px;text-align:center;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:#514943}
   .ink-selection-actions{display:inline-flex;align-items:center;gap:6px;padding-left:8px;border-left:1px solid var(--v15-border)}
   .ink-selection-actions[hidden]{display:none}
   #inkCanvas{display:block;width:100%;height:auto;min-height:68vh;aspect-ratio:1200/700;touch-action:none;cursor:crosshair}
@@ -4561,16 +4562,22 @@ if ('serviceWorker' in navigator) {
         const known = new Set(records.filter(r => r.jobId && r.transcribed && r.transcript).map(r => String(r.jobId)));
         let orphans = results.filter(r => !known.has(String(r.job_id)) && (r.char_count || 0) > 0);
         if (!orphans.length) return;
+        const fingerprint = orphans.map(o => String(o.job_id)).sort().join('|');
+        const dismissKey = 'ai_pronote.dismissed_server_results.v1';
+        if (localStorage.getItem(dismissKey) === fingerprint) return;
         const bar = document.createElement('div');
         bar.id = 'serverResultBar';
         bar.style.cssText = 'margin:0 0 14px; padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:var(--bg-elev); display:flex; align-items:center; gap:12px; font-size:13px; line-height:1.5;';
-        bar.innerHTML = '<span id="srvResStatus" style="flex:1;">이 PC에 처리해 둔 받아쓰기 <b>' + orphans.length + '건</b>이 화면에 없습니다 — 가져오면 회의록을 만들 수 있습니다</span>' +
+        bar.innerHTML = '<span id="srvResStatus" style="flex:1;"><b>복구 가능한 받아쓰기 ' + orphans.length + '건</b><br><span style="color:var(--muted);">이 기기에서 완료됐지만 목록에 없는 결과입니다.</span></span>' +
           '<button type="button" id="srvResImport" class="dict-rec-btn" style="white-space:nowrap;">가져오기</button>' +
           '<button type="button" id="srvResSkip" class="dict-rec-btn" style="white-space:nowrap;">닫기</button>';
-        const host = document.querySelector('.view.active') || document.getElementById('view-home');
+        const host = document.getElementById('view-library');
         if (!host) return;
         host.insertBefore(bar, host.firstChild);
-        document.getElementById('srvResSkip').onclick = () => bar.remove();
+        document.getElementById('srvResSkip').onclick = () => {
+          localStorage.setItem(dismissKey, fingerprint);
+          bar.remove();
+        };
         document.getElementById('srvResImport').onclick = async () => {
           const importButton = document.getElementById('srvResImport');
           const status = document.getElementById('srvResStatus');

@@ -353,7 +353,7 @@ test.describe('라이브러리 재열기 회귀', () => {
     await expect(page.locator('#view-result')).toHaveClass(/active/);
   });
 
-  test('구버전 서버 결과를 홈에서 발견하고 가져와 회의록 생성 흐름을 연다', async ({ page }) => {
+  test('구버전 서버 결과를 홈을 가리지 않고 라이브러리에서 복구한다', async ({ page }) => {
     await page.unroute('**/api/**');
     await page.route('**/api/**', async route => {
       const url = new URL(route.request().url());
@@ -380,6 +380,8 @@ test.describe('라이브러리 재열기 회귀', () => {
       return json({ detail: 'not found' }, 404);
     });
     await openApp(page);
+    await expect(page.locator('#serverResultBar')).not.toBeVisible();
+    await openNavView(page, 'library');
     await expect(page.locator('#serverResultBar')).toBeVisible();
     await page.evaluate(async () => {
       await (window as typeof window & { __pronoteDB: { put: (record: unknown) => Promise<string> } }).__pronoteDB.put({
@@ -389,6 +391,7 @@ test.describe('라이브러리 재열기 회귀', () => {
       });
     });
     await page.reload();
+    await openNavView(page, 'library');
     await expect(page.locator('#serverResultBar')).toBeVisible();
     await page.locator('#srvResImport').click();
     await expect(page.locator('#srvResStatus')).toContainText('1건을 가져왔고 1건은 실패했습니다');

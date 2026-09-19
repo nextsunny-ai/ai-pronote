@@ -43,6 +43,11 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("'X-Pronote-Update': 'prepare'", HTML)
         self.assertIn("update.state !== 'available'", HTML)
 
+    def test_server_result_recovery_does_not_cover_the_home_screen(self):
+        self.assertIn("const host = document.getElementById('view-library')", HTML)
+        self.assertIn("ai_pronote.dismissed_server_results.v1", HTML)
+        self.assertNotIn("document.querySelector('.view.active') || document.getElementById('view-home')", HTML)
+
     def test_v15_accessibility_and_responsive_tokens_exist(self):
         self.assertIn('id="v15-design-system"', HTML)
         self.assertIn(":focus-visible", HTML)
