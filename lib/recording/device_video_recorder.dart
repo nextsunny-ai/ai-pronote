@@ -31,7 +31,7 @@ class DeviceVideoRecorderGateway implements VideoRecorderGateway {
     }
     final controller = CameraController(
       cameras.first,
-      ResolutionPreset.high,
+      ResolutionPreset.medium,
       enableAudio: true,
     );
     _controller = controller;

@@ -52,10 +52,9 @@ packages:
   camera_desktop:
     dependency: "direct main"
     description:
-      name: camera_desktop
-      sha256: bea6ba51ecfa1afa24c543f26a66f10ca9f43ce8525207de7675ebcb4402d66f
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/camera_desktop_pronote"
+      relative: true
+    source: path
     version: "1.2.1"
   camera_platform_interface:
     dependency: transitive

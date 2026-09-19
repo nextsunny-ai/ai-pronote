@@ -37,7 +37,8 @@ dependencies:
   path_provider: ^2.1.6
   record: ^7.1.1
   camera: ^0.12.1
-  camera_desktop: ^1.2.1
+  camera_desktop:
+    path: packages/camera_desktop_pronote
   package_info_plus: ^10.2.1
   url_launcher: ^6.3.2
 
