@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:ai_pronote_app/main.dart';
 import 'package:ai_pronote_app/notes/note_repository.dart';
 import 'package:ai_pronote_app/processing/local_meeting_processing_gateway.dart';
+import 'package:ai_pronote_app/processing/file_processing_job_repository.dart';
 import 'package:ai_pronote_app/recording/audio_recorder_gateway.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -64,6 +65,19 @@ class FakeMeetingProcessingGateway implements MeetingProcessingGateway {
         filename: 'meeting.m4a',
         transcript: '테스트 받아쓰기',
       );
+}
+
+class FakeProcessingJobRepository implements ProcessingJobRepository {
+  final List<ProcessingJobRecord> records = [];
+
+  @override
+  Future<List<ProcessingJobRecord>> list() async => List.of(records);
+
+  @override
+  Future<void> save(ProcessingJobRecord record) async {
+    records.removeWhere((item) => item.jobId == record.jobId);
+    records.add(record);
+  }
 }
 
 void main() {
@@ -129,11 +143,13 @@ void main() {
   testWidgets('저장된 녹음을 로그인 없이 받아쓰기 작업으로 보낸다', (tester) async {
     final recorder = FakeAudioRecorderGateway();
     final processing = FakeMeetingProcessingGateway();
+    final jobs = FakeProcessingJobRepository();
     await tester.pumpWidget(
       PronoteApp(
         repository: MemoryNoteRepository(),
         recorder: recorder,
         processingGateway: processing,
+        processingJobRepository: jobs,
         recordingDirectoryProvider: () async => Directory.systemTemp,
         recordingValidator: (_) async => true,
       ),
@@ -155,6 +171,8 @@ void main() {
     expect(processing.submittedPath, recorder.savedPath);
     expect(find.text('받아쓰기 결과'), findsOneWidget);
     expect(find.text('테스트 받아쓰기'), findsOneWidget);
+    expect(jobs.records.single.jobId, 'job-123');
+    expect(jobs.records.single.recordingPath, recorder.savedPath);
   });
 
   testWidgets('녹음 중 회의 노트를 열어 필기를 계속할 수 있다', (tester) async {
