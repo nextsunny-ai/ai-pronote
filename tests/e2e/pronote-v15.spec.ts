@@ -597,6 +597,48 @@ test.describe('필기 저장·복원 계약', () => {
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]').length)).toBe(afterValidRestore);
   });
 
+  test('노트를 폴더로 분류하고 폴더 단위 백업·복원한다', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('ai_pronote.note_folders.v1', JSON.stringify([
+        { id: 'folder-project', name: '프로젝트' }, { id: 'folder-personal', name: '개인' }
+      ]));
+      localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify([
+        { id: 'folder-note-1', title: '프로젝트 기획', tag: '노트', date: '2026-09-20', note: '<p>프로젝트 본문</p>', standalone: true, noteOnly: true, folderId: 'folder-project' },
+        { id: 'folder-note-2', title: '개인 메모', tag: '노트', date: '2026-09-20', note: '<p>개인 본문</p>', standalone: true, noteOnly: true, folderId: 'folder-personal' }
+      ]));
+    });
+    await openApp(page);
+    await page.evaluate(() => window.switchView?.('mynotes'));
+    await expect(page.locator('#view-mynotes')).toHaveClass(/active/);
+    await page.locator('#mynotesFolderFilter').selectOption('folder-project');
+    await expect(page.locator('#mynotesGrid .mynote-card')).toHaveCount(1);
+    await expect(page.locator('#mynotesGrid')).toContainText('프로젝트 기획');
+    await expect(page.locator('#mynotesGrid')).not.toContainText('개인 메모');
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('#mynotesBackupFolderBtn').click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/AI_PRONOTE_폴더_프로젝트_.*\.zip$/);
+    const zipPath = await download.path();
+    const zipBuffer = await fs.promises.readFile(zipPath!);
+
+    await page.evaluate(() => {
+      localStorage.setItem('ai_pronote.note_folders.v1', '[]');
+      localStorage.setItem('ai_pronote.meetings.v1', '[]');
+    });
+    await openNavView(page, 'result-mynote');
+    await page.locator('#mynoteImportInput').setInputFiles({
+      name: '프로젝트_폴더.zip', mimeType: 'application/zip', buffer: zipBuffer
+    });
+    await expect(page.locator('#toast')).toContainText('노트 1개를 새 노트로 복구했습니다');
+    const restored = await page.evaluate(() => ({
+      folders: JSON.parse(localStorage.getItem('ai_pronote.note_folders.v1') || '[]'),
+      notes: JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]')
+    }));
+    expect(restored.folders).toEqual(expect.arrayContaining([expect.objectContaining({ name: '프로젝트' })]));
+    expect(restored.notes).toEqual(expect.arrayContaining([expect.objectContaining({ title: '프로젝트 기획', folderId: expect.any(String) })]));
+  });
+
   test('너무 긴 PNG는 잘린 성공 파일 대신 PDF·HTML 사용을 안내한다', async ({ page }) => {
     await openApp(page);
     await page.locator('#homeNoteOnlyCard').click();
