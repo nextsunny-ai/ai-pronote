@@ -34,7 +34,12 @@ class InkContractTests(unittest.TestCase):
             self.assertIn(token, self.js)
 
     def test_clear_requires_confirmation_and_responsive_controls(self):
-        self.assertIn('confirm(', self.js)
+        self.assertIn('window.__pronoteAskConfirmation', self.js)
+        self.assertIn('window.__pronoteNotify', self.js)
+        self.assertNotIn('confirm(', self.js)
+        self.assertNotIn('alert(', self.js)
+        self.assertIn('window.__pronoteAskConfirmation = askConfirmation', self.html)
+        self.assertIn('window.__pronoteNotify = showToast', self.html)
         self.assertIn('.ink-toolbar', self.html)
         self.assertIn('@media (max-width: 639px)', self.html)
         self.assertIn('.mynote-block.fullpage .mynote-fullpage-meta { display:none; }', self.html)
