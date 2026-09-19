@@ -99,6 +99,43 @@ void main() {
     expect(restored.pages[1].strokes.single.id, 'ink-2');
   });
 
+  test('페이지별 종이 종류와 배경색이 저장되고 구형 노트는 안전한 기본값을 쓴다', () {
+    final note = NoteDocument(
+      id: 'paper-note',
+      title: '종이 설정 노트',
+      updatedAt: DateTime.utc(2026, 9, 19),
+      pages: const [
+        NotePage(
+          id: 'page-1',
+          paperStyle: PaperStyle.grid,
+          paperColor: 0xfff1f7f3,
+        ),
+        NotePage(
+          id: 'page-2',
+          paperStyle: PaperStyle.manuscript,
+          paperColor: 0xfffff7ed,
+        ),
+      ],
+    );
+
+    final restored = NoteDocument.fromJson(note.toJson());
+    final legacy = NoteDocument.fromJson({
+      'schemaVersion': 2,
+      'id': 'legacy-paper-note',
+      'title': '예전 종이 노트',
+      'updatedAt': DateTime.utc(2026, 9, 18).toIso8601String(),
+      'pages': [
+        {'id': 'page-1', 'strokes': <Object?>[]},
+      ],
+    });
+
+    expect(restored, note);
+    expect(restored.pages[0].paperStyle, PaperStyle.grid);
+    expect(restored.pages[1].paperColor, 0xfffff7ed);
+    expect(legacy.pages.single.paperStyle, PaperStyle.blank);
+    expect(legacy.pages.single.paperColor, 0xfffffdf8);
+  });
+
   test('즐겨찾기 상태는 저장되고 구형 노트는 기본 해제 상태다', () {
     final favorite = NoteDocument(
       id: 'favorite-note',

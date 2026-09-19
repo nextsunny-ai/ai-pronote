@@ -1,5 +1,7 @@
 enum InkTool { pen, highlighter, eraser, lasso }
 
+enum PaperStyle { blank, ruled, narrowRuled, grid, dotted, manuscript }
+
 class InkPoint {
   const InkPoint({required this.x, required this.y, required this.pressure});
   final double x;
@@ -64,28 +66,52 @@ class InkStroke {
 }
 
 class NotePage {
-  const NotePage({required this.id, this.strokes = const []});
+  const NotePage({
+    required this.id,
+    this.strokes = const [],
+    this.paperStyle = PaperStyle.blank,
+    this.paperColor = 0xfffffdf8,
+  });
   final String id;
   final List<InkStroke> strokes;
-  NotePage copyWith({List<InkStroke>? strokes}) =>
-      NotePage(id: id, strokes: strokes ?? this.strokes);
+  final PaperStyle paperStyle;
+  final int paperColor;
+  NotePage copyWith({
+    List<InkStroke>? strokes,
+    PaperStyle? paperStyle,
+    int? paperColor,
+  }) => NotePage(
+    id: id,
+    strokes: strokes ?? this.strokes,
+    paperStyle: paperStyle ?? this.paperStyle,
+    paperColor: paperColor ?? this.paperColor,
+  );
   Map<String, Object> toJson() => {
     'id': id,
     'strokes': strokes.map((stroke) => stroke.toJson()).toList(),
+    'paperStyle': paperStyle.name,
+    'paperColor': paperColor,
   };
   factory NotePage.fromJson(Map<String, Object?> json) => NotePage(
     id: json['id'] as String,
     strokes: (json['strokes'] as List<Object?>)
         .map((stroke) => InkStroke.fromJson(stroke as Map<String, Object?>))
         .toList(growable: false),
+    paperStyle: PaperStyle.values.byName(
+      json['paperStyle'] as String? ?? PaperStyle.blank.name,
+    ),
+    paperColor: json['paperColor'] as int? ?? 0xfffffdf8,
   );
   @override
   bool operator ==(Object other) =>
       other is NotePage &&
       id == other.id &&
+      paperStyle == other.paperStyle &&
+      paperColor == other.paperColor &&
       _listEquals(strokes, other.strokes);
   @override
-  int get hashCode => Object.hash(id, Object.hashAll(strokes));
+  int get hashCode =>
+      Object.hash(id, paperStyle, paperColor, Object.hashAll(strokes));
 }
 
 class NoteDocument {
@@ -133,7 +159,7 @@ class NoteDocument {
   }
 
   Map<String, Object> toJson() => {
-    'schemaVersion': 2,
+    'schemaVersion': 3,
     'id': id,
     'title': title,
     'body': body,

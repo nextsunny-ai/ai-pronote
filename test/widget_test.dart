@@ -283,6 +283,37 @@ void main() {
     expect(find.text('1/2 페이지'), findsOneWidget);
   });
 
+  testWidgets('페이지별 종이 배경을 고르고 새 페이지에 이어 쓴다', (tester) async {
+    final repository = MemoryNoteRepository();
+    await tester.pumpWidget(PronoteApp(repository: repository));
+    await _openNewNote(tester);
+
+    final paperMenu = find.byKey(const ValueKey('paper-style-menu'));
+    await tester.ensureVisible(paperMenu);
+    await tester.tap(paperMenu);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('모눈'));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final colorMenu = find.byKey(const ValueKey('paper-color-menu'));
+    await tester.ensureVisible(colorMenu);
+    await tester.tap(colorMenu);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('민트'));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    var saved = (await repository.list()).single;
+    expect(saved.pages.single.paperStyle, PaperStyle.grid);
+    expect(saved.pages.single.paperColor, 0xfff1f7f3);
+
+    await tester.tap(find.byKey(const ValueKey('add-page')));
+    await tester.pump(const Duration(milliseconds: 400));
+    saved = (await repository.list()).single;
+    expect(saved.pages, hasLength(2));
+    expect(saved.pages.last.paperStyle, PaperStyle.grid);
+    expect(saved.pages.last.paperColor, 0xfff1f7f3);
+  });
+
   testWidgets('보관함에서 제목으로 노트를 검색한다', (tester) async {
     final repository = MemoryNoteRepository();
     await repository.save(

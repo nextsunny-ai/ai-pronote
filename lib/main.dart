@@ -2744,7 +2744,12 @@ class _NoteEditorState extends State<NoteEditor> {
   }
 
   void _addPage() {
-    final page = NotePage(id: 'page-${DateTime.now().microsecondsSinceEpoch}');
+    final current = _note.pages[_currentPageIndex];
+    final page = NotePage(
+      id: 'page-${DateTime.now().microsecondsSinceEpoch}',
+      paperStyle: current.paperStyle,
+      paperColor: current.paperColor,
+    );
     setState(() {
       _note = _note.copyWith(
         updatedAt: DateTime.now(),
@@ -2763,6 +2768,8 @@ class _NoteEditorState extends State<NoteEditor> {
     final now = DateTime.now().microsecondsSinceEpoch;
     final duplicate = NotePage(
       id: 'page-$now',
+      paperStyle: source.paperStyle,
+      paperColor: source.paperColor,
       strokes: source.strokes
           .map(
             (stroke) => InkStroke(
@@ -2816,6 +2823,37 @@ class _NoteEditorState extends State<NoteEditor> {
       _selectedStrokeIds = {};
     });
   }
+
+  void _setPaperStyle(PaperStyle style) {
+    final pages = List<NotePage>.of(_note.pages);
+    pages[_currentPageIndex] = pages[_currentPageIndex].copyWith(
+      paperStyle: style,
+    );
+    setState(
+      () => _note = _note.copyWith(updatedAt: DateTime.now(), pages: pages),
+    );
+    _scheduleSave();
+  }
+
+  void _setPaperColor(int color) {
+    final pages = List<NotePage>.of(_note.pages);
+    pages[_currentPageIndex] = pages[_currentPageIndex].copyWith(
+      paperColor: color,
+    );
+    setState(
+      () => _note = _note.copyWith(updatedAt: DateTime.now(), pages: pages),
+    );
+    _scheduleSave();
+  }
+
+  String _paperLabel(PaperStyle style) => switch (style) {
+    PaperStyle.blank => '무지',
+    PaperStyle.ruled => '줄노트',
+    PaperStyle.narrowRuled => '좁은 줄노트',
+    PaperStyle.grid => '모눈',
+    PaperStyle.dotted => '점선',
+    PaperStyle.manuscript => '원고지',
+  };
 
   void _duplicateSelection() {
     if (_selectedStrokeIds.isEmpty) return;
@@ -3063,6 +3101,46 @@ class _NoteEditorState extends State<NoteEditor> {
                 icon: const Icon(Icons.redo_rounded),
               ),
               const SizedBox(width: 8),
+              PopupMenuButton<PaperStyle>(
+                key: const ValueKey('paper-style-menu'),
+                tooltip: '종이 배경',
+                initialValue: _note.pages[_currentPageIndex].paperStyle,
+                onSelected: _setPaperStyle,
+                itemBuilder: (_) => PaperStyle.values
+                    .map(
+                      (style) => PopupMenuItem(
+                        value: style,
+                        child: Row(
+                          children: [
+                            Icon(
+                              style == _note.pages[_currentPageIndex].paperStyle
+                                  ? Icons.check_rounded
+                                  : Icons.description_outlined,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(_paperLabel(style)),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+                icon: const Icon(Icons.grid_4x4_rounded),
+              ),
+              PopupMenuButton<int>(
+                key: const ValueKey('paper-color-menu'),
+                tooltip: '종이 색상',
+                initialValue: _note.pages[_currentPageIndex].paperColor,
+                onSelected: _setPaperColor,
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 0xfffffdf8, child: Text('아이보리')),
+                  PopupMenuItem(value: 0xffffffff, child: Text('흰색')),
+                  PopupMenuItem(value: 0xfffff7ed, child: Text('크림')),
+                  PopupMenuItem(value: 0xfff1f7f3, child: Text('민트')),
+                  PopupMenuItem(value: 0xfff3f2fa, child: Text('라벤더')),
+                ],
+                icon: const Icon(Icons.palette_outlined),
+              ),
+              const SizedBox(width: 8),
               for (final color in const [0xff1c1d1a, 0xff315f83, 0xffa8433e])
                 Padding(
                   padding: const EdgeInsets.only(right: 6),
@@ -3200,6 +3278,7 @@ class _NoteEditorState extends State<NoteEditor> {
                   onPointerCancel: (_) => setState(() => _active = null),
                   child: CustomPaint(
                     painter: InkPainter(
+                      page: _note.pages[_currentPageIndex],
                       strokes: _currentStrokes,
                       active: _active,
                       selectionRect: _selectionRect,
@@ -3217,14 +3296,25 @@ class _NoteEditorState extends State<NoteEditor> {
 }
 
 class InkPainter extends CustomPainter {
-  const InkPainter({required this.strokes, this.active, this.selectionRect});
+  const InkPainter({
+    required this.page,
+    required this.strokes,
+    this.active,
+    this.selectionRect,
+  });
 
+  final NotePage page;
   final List<InkStroke> strokes;
   final InkStroke? active;
   final Rect? selectionRect;
 
   @override
   void paint(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = Color(page.paperColor),
+    );
+    _paintPaper(canvas, size);
     for (final stroke in [...strokes, ?active]) {
       if (stroke.points.isEmpty) continue;
       final color = Color(stroke.color)
@@ -3267,8 +3357,56 @@ class InkPainter extends CustomPainter {
     }
   }
 
+  void _paintPaper(Canvas canvas, Size size) {
+    if (page.paperStyle == PaperStyle.blank) return;
+    final fine = Paint()
+      ..color = const Color(0x24315f83)
+      ..strokeWidth = 1;
+    final accent = Paint()
+      ..color = const Color(0x305f8974)
+      ..strokeWidth = 1;
+    switch (page.paperStyle) {
+      case PaperStyle.blank:
+        return;
+      case PaperStyle.ruled:
+      case PaperStyle.narrowRuled:
+        final step = page.paperStyle == PaperStyle.ruled ? 36.0 : 24.0;
+        for (var y = step; y < size.height; y += step) {
+          canvas.drawLine(Offset(0, y), Offset(size.width, y), fine);
+        }
+        break;
+      case PaperStyle.grid:
+      case PaperStyle.manuscript:
+        final step = page.paperStyle == PaperStyle.grid ? 28.0 : 34.0;
+        for (var x = step; x < size.width; x += step) {
+          canvas.drawLine(Offset(x, 0), Offset(x, size.height), fine);
+        }
+        for (var y = step; y < size.height; y += step) {
+          canvas.drawLine(Offset(0, y), Offset(size.width, y), fine);
+        }
+        if (page.paperStyle == PaperStyle.manuscript) {
+          for (var y = step; y < size.height; y += step * 5) {
+            canvas.drawLine(Offset(0, y), Offset(size.width, y), accent);
+          }
+        }
+        break;
+      case PaperStyle.dotted:
+        for (var x = 20.0; x < size.width; x += 24) {
+          for (var y = 20.0; y < size.height; y += 24) {
+            canvas.drawCircle(
+              Offset(x, y),
+              1.1,
+              fine..style = PaintingStyle.fill,
+            );
+          }
+        }
+        break;
+    }
+  }
+
   @override
   bool shouldRepaint(covariant InkPainter oldDelegate) =>
+      oldDelegate.page != page ||
       oldDelegate.strokes != strokes ||
       oldDelegate.active != active ||
       oldDelegate.selectionRect != selectionRect;
