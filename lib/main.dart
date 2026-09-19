@@ -831,6 +831,52 @@ class _NoteEditorState extends State<NoteEditor> {
     _scheduleSave();
   }
 
+  void _duplicatePage() {
+    final source = _note.pages[_currentPageIndex];
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final duplicate = NotePage(
+      id: 'page-$now',
+      strokes: source.strokes
+          .map(
+            (stroke) => InkStroke(
+              id: '${stroke.id}-page-copy-$now',
+              tool: stroke.tool,
+              color: stroke.color,
+              width: stroke.width,
+              points: List<InkPoint>.of(stroke.points),
+            ),
+          )
+          .toList(growable: false),
+    );
+    final pages = List<NotePage>.of(_note.pages)
+      ..insert(_currentPageIndex + 1, duplicate);
+    setState(() {
+      _note = _note.copyWith(updatedAt: DateTime.now(), pages: pages);
+      _currentPageIndex += 1;
+      _selectionRect = null;
+      _selectedStrokeIds = {};
+      _undoHistory.clear();
+      _redoHistory.clear();
+    });
+    _scheduleSave();
+  }
+
+  void _deletePage() {
+    if (_note.pages.length == 1) return;
+    final pages = List<NotePage>.of(_note.pages)..removeAt(_currentPageIndex);
+    setState(() {
+      _note = _note.copyWith(updatedAt: DateTime.now(), pages: pages);
+      if (_currentPageIndex >= pages.length) {
+        _currentPageIndex = pages.length - 1;
+      }
+      _selectionRect = null;
+      _selectedStrokeIds = {};
+      _undoHistory.clear();
+      _redoHistory.clear();
+    });
+    _scheduleSave();
+  }
+
   void _deleteSelection() {
     if (_selectedStrokeIds.isEmpty) return;
     _commitStrokes(
@@ -936,10 +982,15 @@ class _NoteEditorState extends State<NoteEditor> {
     ),
     body: Column(
       children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        Container(
+          height: 46,
+          margin: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+          ),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
                 key: const ValueKey('previous-page'),
@@ -949,6 +1000,10 @@ class _NoteEditorState extends State<NoteEditor> {
                     : () => _goToPage(_currentPageIndex - 1),
                 icon: const Icon(Icons.chevron_left_rounded),
               ),
+              Text(
+                '${_currentPageIndex + 1} / ${_note.pages.length}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
               IconButton(
                 key: const ValueKey('next-page'),
                 tooltip: '다음 페이지',
@@ -957,13 +1012,33 @@ class _NoteEditorState extends State<NoteEditor> {
                     : () => _goToPage(_currentPageIndex + 1),
                 icon: const Icon(Icons.chevron_right_rounded),
               ),
-              IconButton.filledTonal(
+              const VerticalDivider(indent: 10, endIndent: 10),
+              IconButton(
                 key: const ValueKey('add-page'),
                 tooltip: '새 페이지',
                 onPressed: _addPage,
                 icon: const Icon(Icons.note_add_outlined),
               ),
-              const SizedBox(width: 8),
+              IconButton(
+                key: const ValueKey('duplicate-page'),
+                tooltip: '현재 페이지 복제',
+                onPressed: _duplicatePage,
+                icon: const Icon(Icons.copy_all_rounded),
+              ),
+              IconButton(
+                key: const ValueKey('delete-page'),
+                tooltip: '현재 페이지 삭제',
+                onPressed: _note.pages.length == 1 ? null : _deletePage,
+                icon: const Icon(Icons.delete_sweep_outlined),
+              ),
+            ],
+          ),
+        ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
               SegmentedButton<InkTool>(
                 segments: const [
                   ButtonSegment(

@@ -189,6 +189,18 @@ void main() {
     expect(saved.pages.first.strokes, isEmpty);
     expect(saved.pages.last.strokes, hasLength(1));
 
+    await tester.tap(find.byKey(const ValueKey('duplicate-page')));
+    await tester.pump(const Duration(milliseconds: 400));
+    final duplicated = (await repository.list()).single;
+    expect(duplicated.pages, hasLength(3));
+    expect(duplicated.pages.last.strokes, hasLength(1));
+    expect(find.text('3/3 페이지'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('delete-page')));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect((await repository.list()).single.pages, hasLength(2));
+    expect(find.text('2/2 페이지'), findsOneWidget);
+
     await tester.tap(find.byKey(const ValueKey('previous-page')));
     await tester.pump();
     expect(find.text('1/2 페이지'), findsOneWidget);
