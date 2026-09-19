@@ -100,7 +100,7 @@ class PronoteApp extends StatelessWidget {
     this.importRecordingPicker,
     this.recordingDirectoryProvider,
     this.recordingValidator,
-    this.currentVersion = '1.0.0',
+    this.currentVersion = '1.0.1',
     this.updateChecker,
     this.openExternalUrl,
   });
