@@ -476,6 +476,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               builder: (_) => TranscriptionResultScreen(
                                 gateway: widget.processingGateway!,
                                 jobId: latest.jobId,
+                                noteRepository: widget.repository,
                               ),
                             ),
                           ),
@@ -758,10 +759,12 @@ class TranscriptionResultScreen extends StatefulWidget {
     super.key,
     required this.gateway,
     required this.jobId,
+    required this.noteRepository,
   });
 
   final MeetingProcessingGateway gateway;
   final String jobId;
+  final NoteRepository noteRepository;
 
   @override
   State<TranscriptionResultScreen> createState() =>
@@ -774,6 +777,8 @@ class _TranscriptionResultScreenState extends State<TranscriptionResultScreen> {
   String? _error;
   Timer? _pollTimer;
   bool _loading = true;
+  bool _savingNote = false;
+  bool _savedAsNote = false;
 
   @override
   void initState() {
@@ -829,6 +834,43 @@ class _TranscriptionResultScreenState extends State<TranscriptionResultScreen> {
         _error = '받아쓰기 상태를 확인하지 못했습니다. 작업 결과는 삭제되지 않습니다.';
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _saveAsNote() async {
+    final result = _result;
+    if (result == null || _savingNote || _savedAsNote) return;
+    setState(() => _savingNote = true);
+    final filename = result.filename.replaceAll('\\', '/').split('/').last;
+    final dot = filename.lastIndexOf('.');
+    final fallbackTitle = dot > 0 ? filename.substring(0, dot) : filename;
+    final title = result.summaryTitle.trim().isNotEmpty
+        ? result.summaryTitle.trim()
+        : (fallbackTitle.trim().isEmpty ? '받아쓰기 노트' : fallbackTitle);
+    final body = result.summary.trim().isEmpty
+        ? result.transcript
+        : '${result.summary.trim()}\n\n---\n\n받아쓰기\n${result.transcript.trim()}';
+    try {
+      final now = DateTime.now();
+      await widget.noteRepository.save(
+        NoteDocument(
+          id: now.microsecondsSinceEpoch.toString(),
+          title: title,
+          body: body,
+          updatedAt: now,
+        ),
+      );
+      if (!mounted) return;
+      setState(() => _savedAsNote = true);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('받아쓰기 내용을 노트에 저장했습니다.')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('노트를 저장하지 못했습니다. 다시 시도해 주세요.')),
+      );
+    } finally {
+      if (mounted) setState(() => _savingNote = false);
     }
   }
 
@@ -898,6 +940,15 @@ class _TranscriptionResultScreenState extends State<TranscriptionResultScreen> {
                 result.transcript.isEmpty
                     ? '인식된 말소리가 없습니다.'
                     : result.transcript,
+              ),
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                key: const ValueKey('save-transcript-as-note'),
+                onPressed: _savingNote || _savedAsNote ? null : _saveAsNote,
+                icon: Icon(
+                  _savedAsNote ? Icons.check_rounded : Icons.note_add_outlined,
+                ),
+                label: Text(_savedAsNote ? '노트에 저장됨' : '노트로 저장'),
               ),
               if (result.summary.isNotEmpty) ...[
                 const SizedBox(height: 28),
@@ -1062,8 +1113,11 @@ class _RecordingScreenState extends State<RecordingScreen> {
       });
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) =>
-              TranscriptionResultScreen(gateway: gateway, jobId: job.id),
+          builder: (_) => TranscriptionResultScreen(
+            gateway: gateway,
+            jobId: job.id,
+            noteRepository: widget.repository,
+          ),
         ),
       );
     } on MeetingProcessingException catch (error) {
@@ -1396,8 +1450,11 @@ class _VideoRecordingScreenState extends State<VideoRecordingScreen> {
       });
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) =>
-              TranscriptionResultScreen(gateway: gateway, jobId: job.id),
+          builder: (_) => TranscriptionResultScreen(
+            gateway: gateway,
+            jobId: job.id,
+            noteRepository: widget.repository,
+          ),
         ),
       );
     } on MeetingProcessingException catch (error) {
