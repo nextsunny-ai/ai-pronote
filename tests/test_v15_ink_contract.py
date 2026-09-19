@@ -37,6 +37,7 @@ class InkContractTests(unittest.TestCase):
         self.assertIn('confirm(', self.js)
         self.assertIn('.ink-toolbar', self.html)
         self.assertIn('@media (max-width: 639px)', self.html)
+        self.assertIn('.mynote-block.fullpage .mynote-fullpage-meta { display:none; }', self.html)
 
     def test_meeting_switch_and_pointer_are_guarded(self):
         for token in ('structuredClone(doc.strokes)', 'loadGeneration', 'loadedMeetingId',
