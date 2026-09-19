@@ -9,11 +9,6 @@
       "url": "https://github.com/nextsunny-ai/ai-pronote/releases/download/v1.5.0-beta11-20260919/AI_PRONOTE_1.5.0-beta11_desktop_full_candidate_e954193.zip",
       "sha256": "6bb61a7a3bf8a012c33f68bb53eb310c867edc9f9082fc369d3215e06d23b58d",
       "size": 13976068
-    },
-    "mac": {
-      "url": "https://github.com/nextsunny-ai/ai-pronote/releases/download/v1.5.0-beta11-20260919/AI_PRONOTE_1.5.0-beta11_desktop_full_candidate_e954193.zip",
-      "sha256": "6bb61a7a3bf8a012c33f68bb53eb310c867edc9f9082fc369d3215e06d23b58d",
-      "size": 13976068
     }
   }
 }
