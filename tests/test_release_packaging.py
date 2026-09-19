@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "packaging" / "build_release_candidate.ps1"
+MAC_FINALIZER = ROOT / "packaging" / "finalize_macos_candidate.command"
 
 
 class ReleasePackagingContractTests(unittest.TestCase):
@@ -45,6 +46,14 @@ class ReleasePackagingContractTests(unittest.TestCase):
         self.assertIn("Probable secret found in release file", source)
         self.assertIn("'sk-ant-[A-Za-z0-9_-]{20,}'", source)
         self.assertIn("'AIza[0-9A-Za-z_-]{30,}'", source)
+
+    def test_macos_finalizer_preserves_clickable_script_permissions(self):
+        source = MAC_FINALIZER.read_text(encoding="utf-8")
+        self.assertIn("ditto -c -k --sequesterRsrc --keepParent", source)
+        self.assertIn('chmod 755 "$SCRIPT"', source)
+        self.assertIn("MAC", source.upper())
+        self.assertIn("stat -f '%Lp'", source)
+        self.assertNotIn("mapfile", source)
 
 
 if __name__ == "__main__":

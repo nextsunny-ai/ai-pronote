@@ -1,3 +1,8 @@
+param(
+    [switch]$SkipShortcut,
+    [string]$ShortcutDirectory = [Environment]::GetFolderPath('Desktop')
+)
+
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Write-Host 'AI PRONOTE v1.5 비공개 베타 설치 점검' -ForegroundColor Cyan
@@ -35,13 +40,21 @@ if ($LASTEXITCODE -ne 0) { throw 'pip 준비에 실패했습니다.' }
 if ($LASTEXITCODE -ne 0) { throw '필수 구성요소 설치에 실패했습니다.' }
 & $venvPython -c "import fastapi, uvicorn, multipart, faster_whisper, requests; print('핵심 구성요소 확인 완료')"
 if ($LASTEXITCODE -ne 0) { throw '설치 후 구성요소 확인에 실패했습니다.' }
-$shortcutPath = Join-Path ([Environment]::GetFolderPath('Desktop')) 'AI PRONOTE.lnk'
-$shortcutShell = New-Object -ComObject WScript.Shell
-$shortcut = $shortcutShell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = Join-Path $Root '3_START_AI_PRONOTE.vbs'
-$shortcut.WorkingDirectory = $Root
-$shortcut.IconLocation = (Join-Path $Root 'icon_v15_pro_note.ico') + ',0'
-$shortcut.Description = 'AI PRONOTE — 노트와 녹음을 함께'
-$shortcut.Save()
-Write-Host ''
-Write-Host '1단계 완료. 바탕화면 단축아이콘을 만들었습니다. 다음으로 2_AI_LOGIN.cmd를 실행하세요.' -ForegroundColor Green
+if (-not $SkipShortcut) {
+    if (-not (Test-Path -LiteralPath $ShortcutDirectory -PathType Container)) {
+        throw "단축아이콘 폴더를 찾을 수 없습니다: $ShortcutDirectory"
+    }
+    $shortcutPath = Join-Path $ShortcutDirectory 'AI PRONOTE.lnk'
+    $shortcutShell = New-Object -ComObject WScript.Shell
+    $shortcut = $shortcutShell.CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = Join-Path $Root '3_START_AI_PRONOTE.vbs'
+    $shortcut.WorkingDirectory = $Root
+    $shortcut.IconLocation = (Join-Path $Root 'icon_v15_pro_note.ico') + ',0'
+    $shortcut.Description = 'AI PRONOTE — 노트와 녹음을 함께'
+    $shortcut.Save()
+    Write-Host ''
+    Write-Host '1단계 완료. 바탕화면 단축아이콘을 만들었습니다. 다음으로 2_AI_LOGIN.cmd를 실행하세요.' -ForegroundColor Green
+} else {
+    Write-Host ''
+    Write-Host '격리 설치 점검 완료. 단축아이콘은 만들지 않았습니다.' -ForegroundColor Green
+}

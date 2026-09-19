@@ -135,6 +135,8 @@ class FrontendContractTests(unittest.TestCase):
         self.assertNotIn("2_CLAUDE_LOGIN.cmd", installer)
         self.assertIn("64비트 Python", installer)
         self.assertIn("-gt 12", installer)
+        self.assertIn("[switch]$SkipShortcut", installer)
+        self.assertIn("if (-not $SkipShortcut)", installer)
 
     def test_permanent_delete_clears_server_and_browser_namespaces(self):
         self.assertIn("fetch('/api/data/purge'", HTML)
