@@ -118,6 +118,14 @@
     const cssRadius=18*canvas.width/canvas.getBoundingClientRect().width;
     for(let i=doc.strokes.length-1;i>=0;i--){if((doc.strokes[i].pageIndex||0)===currentPage&&itemHit(doc.strokes[i],p,cssRadius)){redoStack=[];doc.strokes.splice(i,1);render();scheduleSave();break;}}
   }
+  function openStickyEditor(p) {
+    const overlay=document.createElement('div');overlay.className='modal-overlay open';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-labelledby','inkStickyTitle');
+    overlay.innerHTML='<div class="modal-card" style="max-width:440px"><div class="modal-head"><div><div class="modal-eyebrow">필기 도구</div><h2 class="modal-title" id="inkStickyTitle">포스트잇 내용</h2></div><button type="button" class="modal-close" aria-label="닫기">×</button></div><div class="modal-body"><label for="inkStickyText" style="display:block;font-weight:700;margin-bottom:8px">메모</label><textarea id="inkStickyText" maxlength="500" rows="6" placeholder="포스트잇에 남길 내용을 입력하세요" style="width:100%;resize:vertical;min-height:132px;padding:12px;border:1px solid #cfc8bd;border-radius:10px;font:inherit;line-height:1.55"></textarea><p style="margin:8px 0 0;color:#777;font-size:12px">최대 500자</p></div><div class="modal-foot"><button type="button" class="modal-btn" data-sticky-cancel>취소</button><button type="button" class="modal-btn primary" data-sticky-save>포스트잇 추가</button></div></div>';
+    const input=overlay.querySelector('#inkStickyText');
+    const close=()=>{overlay.remove();canvas.focus();};
+    const save=()=>{const text=input.value.trim();if(!text){input.focus();return;}doc.strokes.push({id:crypto.randomUUID?.()||String(Date.now()),tool:'sticky',color:'#fff1a8',width:2,text:text.slice(0,500),pageIndex:currentPage,startMs:audioMs(),endMs:audioMs(),pointerType:'ui',points:[p,{...p,x:p.x+220,y:p.y+150}]});redoStack=[];selectedIds.clear();render();scheduleSave();close();};
+    overlay.querySelector('.modal-close').onclick=close;overlay.querySelector('[data-sticky-cancel]').onclick=close;overlay.querySelector('[data-sticky-save]').onclick=save;overlay.addEventListener('click',event=>{if(event.target===overlay)close();});overlay.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();close();}else if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();save();}});document.body.appendChild(overlay);input.focus();
+  }
   canvas.addEventListener('pointerdown', event => {
     if(activePointerId!==null||event.button>0)return;event.preventDefault();activePointerId=event.pointerId;canvas.setPointerCapture(event.pointerId); const p=point(event);
     if(tool==='eraser'){eraseAt(p);activePointerId=null;return;}
@@ -127,7 +135,7 @@
       if(selected.some(item=>itemHit(item,p,radius))){lassoMoveStart=p;lassoOriginalPoints=new Map(selected.map(item=>[item.id,structuredClone(item.points)]));render();return;}
       lassoStart=p;lassoRect={x:p.x,y:p.y,w:0,h:0};selectedIds.clear();render();return;
     }
-    if(tool==='sticky'){const text=prompt('포스트잇 내용을 입력하세요.','');activePointerId=null;if(text?.trim()){doc.strokes.push({id:crypto.randomUUID?.()||String(Date.now()),tool:'sticky',color:'#fff1a8',width:2,text:text.trim().slice(0,500),pageIndex:currentPage,startMs:audioMs(),endMs:audioMs(),pointerType:event.pointerType,points:[p,{...p,x:p.x+220,y:p.y+150}]});redoStack=[];render();scheduleSave();}return;}
+    if(tool==='sticky'){activePointerId=null;openStickyEditor(p);return;}
     active={id:crypto.randomUUID?.()||String(Date.now()),tool,color:document.getElementById('inkColor').value,width:tool==='highlighter'?Math.max(14,Number(document.getElementById('inkWidth').value)*3):Number(document.getElementById('inkWidth').value),pageIndex:currentPage,startMs:audioMs(),endMs:audioMs(),pointerType:event.pointerType,points:[p]};
   });
   canvas.addEventListener('pointermove', event => {if(event.pointerId!==activePointerId)return;const p=point(event);if(tool==='lasso'&&lassoMoveStart&&lassoOriginalPoints){const dx=p.x-lassoMoveStart.x,dy=p.y-lassoMoveStart.y;doc.strokes.forEach(item=>{const original=lassoOriginalPoints.get(item.id);if(original)item.points=original.map(q=>({...q,x:q.x+dx,y:q.y+dy}));});render();return;}if(tool==='lasso'&&lassoStart){lassoRect=rectFrom(lassoStart,p);render();return;}if(!active)return;active.points.push(p);active.endMs=audioMs();render();});

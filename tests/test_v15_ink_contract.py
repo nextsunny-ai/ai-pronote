@@ -55,6 +55,11 @@ class InkContractTests(unittest.TestCase):
         for token in ("'highlighter'", "item.tool==='highlighter'", 'globalAlpha=.28'):
             self.assertIn(token, self.js)
 
+    def test_sticky_notes_use_an_in_app_editor(self):
+        self.assertIn("function openStickyEditor", self.js)
+        self.assertIn("data-sticky-save", self.js)
+        self.assertNotIn("prompt('포스트잇", self.js)
+
     def test_multi_page_notes_preserve_legacy_strokes(self):
         for token in (
             'id="inkPageLabel"', 'id="inkAddPage"', 'id="inkDeletePage"',

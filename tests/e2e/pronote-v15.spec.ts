@@ -826,6 +826,34 @@ test.describe('필기 저장·복원 계약', () => {
     await page.locator('#noteModeInk').click();
     await expect(page.locator('#inkCanvas')).toBeVisible();
   });
+
+  test('포스트잇은 브라우저 prompt 없이 앱 안에서 작성하고 저장한다', async ({ page }) => {
+    await openApp(page);
+    await openNavView(page, 'result-mynote');
+    await page.locator('#noteModeInk').click();
+    await page.locator('[data-ink-tool="sticky"]').click();
+    await page.locator('#inkCanvas').click({ position: { x: 240, y: 180 } });
+
+    const editor = page.getByRole('dialog', { name: '포스트잇 내용' });
+    await expect(editor).toBeVisible();
+    await editor.locator('#inkStickyText').fill('출시 점검 포스트잇');
+    await editor.getByRole('button', { name: '포스트잇 추가' }).click();
+    await expect(editor).toBeHidden();
+
+    await expect.poll(() => page.evaluate(async () => {
+      const request = indexedDB.open('pronote-ink-v1', 1);
+      const db: IDBDatabase = await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      return await new Promise<string>((resolve, reject) => {
+        const tx = db.transaction('documents', 'readonly');
+        const get = tx.objectStore('documents').get('e2e-meeting-001');
+        get.onsuccess = () => resolve(get.result?.strokes?.find((item: { tool?: string }) => item.tool === 'sticky')?.text || '');
+        get.onerror = () => reject(get.error);
+      });
+    })).toBe('출시 점검 포스트잇');
+  });
 });
 
 test.describe('AI 연결 구분', () => {
