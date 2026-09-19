@@ -268,7 +268,9 @@ def prepare_version_runtime(
     if target.exists():
         raise UpdateError("완료되지 않은 업데이트 실행환경이 이미 있습니다")
     runtimes_root.mkdir(parents=True, exist_ok=True)
-    temporary = Path(tempfile.mkdtemp(prefix=f".{version}-", dir=runtimes_root))
+    # Keep this directory name short: wheels such as lxml contain deep resource
+    # paths and can otherwise exceed the legacy Windows MAX_PATH limit.
+    temporary = Path(tempfile.mkdtemp(prefix=".rt-", dir=runtimes_root))
     try:
         runner([str(python_executable), "-m", "venv", str(temporary)], check=True)
         runtime_python = temporary / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
