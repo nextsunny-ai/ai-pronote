@@ -4,7 +4,7 @@ import 'audio_recorder_gateway.dart';
 
 class DeviceAudioRecorderGateway implements AudioRecorderGateway {
   DeviceAudioRecorderGateway({AudioRecorder? recorder})
-      : _recorder = recorder ?? AudioRecorder();
+    : _recorder = recorder ?? AudioRecorder();
 
   final AudioRecorder _recorder;
 
@@ -13,9 +13,15 @@ class DeviceAudioRecorderGateway implements AudioRecorderGateway {
 
   @override
   Future<void> start(String path) => _recorder.start(
-        const RecordConfig(encoder: AudioEncoder.aacLc),
-        path: path,
-      );
+    const RecordConfig(encoder: AudioEncoder.aacLc),
+    path: path,
+  );
+
+  @override
+  Future<void> pause() => _recorder.pause();
+
+  @override
+  Future<void> resume() => _recorder.resume();
 
   @override
   Future<String?> stop() => _recorder.stop();

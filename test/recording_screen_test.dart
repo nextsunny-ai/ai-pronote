@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:ai_pronote_app/main.dart';
 import 'package:ai_pronote_app/notes/note_repository.dart';
 import 'package:ai_pronote_app/recording/audio_recorder_gateway.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeAudioRecorderGateway implements AudioRecorderGateway {
   bool recording = false;
+  bool paused = false;
   String? savedPath;
 
   @override
@@ -16,6 +18,17 @@ class FakeAudioRecorderGateway implements AudioRecorderGateway {
   Future<void> start(String path) async {
     recording = true;
     savedPath = path;
+    File(path).writeAsBytesSync([1, 2, 3]);
+  }
+
+  @override
+  Future<void> pause() async {
+    paused = true;
+  }
+
+  @override
+  Future<void> resume() async {
+    paused = false;
   }
 
   @override
@@ -33,6 +46,7 @@ void main() {
         repository: MemoryNoteRepository(),
         recorder: recorder,
         recordingDirectoryProvider: () async => Directory.systemTemp,
+        recordingValidator: (_) async => true,
       ),
     );
 
@@ -46,8 +60,59 @@ void main() {
     expect(find.text('녹음 중'), findsOneWidget);
 
     await tester.tap(find.text('녹음 정지'));
-    await tester.pumpAndSettle();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
     expect(recorder.recording, isFalse);
-    expect(find.text('녹음이 기기에 저장되었습니다.'), findsOneWidget);
+    expect(find.textContaining('녹음이 기기에 저장되었습니다.'), findsOneWidget);
+  });
+
+  testWidgets('회의 녹음을 일시정지하고 다시 이어서 녹음한다', (tester) async {
+    final recorder = FakeAudioRecorderGateway();
+    await tester.pumpWidget(
+      PronoteApp(
+        repository: MemoryNoteRepository(),
+        recorder: recorder,
+        recordingDirectoryProvider: () async => Directory.systemTemp,
+        recordingValidator: (_) async => true,
+      ),
+    );
+
+    await tester.tap(find.text('회의 녹음'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('녹음 시작'));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('pause-recording')));
+    await tester.pump();
+    expect(recorder.paused, isTrue);
+    expect(find.text('계속 녹음'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('pause-recording')));
+    await tester.pump();
+    expect(recorder.paused, isFalse);
+    expect(find.text('일시정지'), findsOneWidget);
+  });
+
+  testWidgets('녹음 중 회의 노트를 열어 필기를 계속할 수 있다', (tester) async {
+    final recorder = FakeAudioRecorderGateway();
+    await tester.pumpWidget(
+      PronoteApp(
+        repository: MemoryNoteRepository(),
+        recorder: recorder,
+        recordingDirectoryProvider: () async => Directory.systemTemp,
+        recordingValidator: (_) async => true,
+      ),
+    );
+
+    await tester.tap(find.text('회의 녹음'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('녹음 시작'));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('open-meeting-note')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('회의 노트 '), findsOneWidget);
+    expect(recorder.recording, isTrue);
   });
 }
