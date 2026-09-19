@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:ai_pronote_app/main.dart';
 import 'package:ai_pronote_app/notes/note_repository.dart';
+import 'package:ai_pronote_app/notes/note_document.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/widgets.dart';
 
@@ -38,5 +39,22 @@ void main() {
     expect(notes, hasLength(1));
     expect(notes.single.strokes, hasLength(1));
     expect(notes.single.strokes.single.points.length, greaterThanOrEqualTo(2));
+  });
+
+  testWidgets('최근 노트를 눌러 저장된 노트를 다시 연다', (tester) async {
+    final repository = MemoryNoteRepository();
+    await repository.save(NoteDocument(
+      id: 'saved-note',
+      title: '제품 회의 노트',
+      updatedAt: DateTime(2026, 9, 19),
+    ));
+
+    await tester.pumpWidget(PronoteApp(repository: repository));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('제품 회의 노트'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('ink-canvas')), findsOneWidget);
+    expect(find.text('제품 회의 노트'), findsOneWidget);
   });
 }

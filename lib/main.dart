@@ -94,6 +94,18 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _notes = widget.repository.list());
   }
 
+  Future<void> _openNote(NoteDocument note) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => NoteEditor(
+          repository: widget.repository,
+          initialNote: note,
+        ),
+      ),
+    );
+    if (mounted) setState(() => _notes = widget.repository.list());
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
@@ -148,6 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, index) => Card(
                           child: ListTile(
+                            onTap: () => _openNote(notes[index]),
                             leading: const Icon(Icons.description_outlined),
                             title: Text(notes[index].title),
                             subtitle: Text('${notes[index].strokes.length}개 필기 획'),
