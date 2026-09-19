@@ -1,12 +1,51 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:ai_pronote_app/main.dart';
 import 'package:ai_pronote_app/notes/note_repository.dart';
 import 'package:ai_pronote_app/notes/note_document.dart';
+import 'package:ai_pronote_app/notes/note_exporter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/widgets.dart';
 
 void main() {
+  testWidgets('노트를 다른 앱에서 열 수 있는 문서로 내보낸다', (tester) async {
+    final directory = await tester.runAsync(
+      () => Directory.systemTemp.createTemp('pronote-note-export-ui-'),
+    );
+    addTearDown(() async {
+      if (directory != null && await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    });
+    final repository = MemoryNoteRepository();
+    await tester.pumpWidget(
+      PronoteApp(
+        repository: repository,
+        noteExporter: NoteExporter(() async => directory!),
+      ),
+    );
+    await tester.tap(find.text('새 노트'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-body-toggle')));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey('note-body-field')),
+      '공유할 회의 메모',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('export-note')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('문서 2개를 저장했습니다'), findsOneWidget);
+    final files = directory!.listSync().whereType<File>().toList();
+    expect(files.where((file) => file.path.endsWith('.md')), hasLength(1));
+    expect(
+      files.where((file) => file.path.endsWith('.pronote.json')),
+      hasLength(1),
+    );
+  });
+
   testWidgets('첫 화면에서 노트와 회의 기록을 바로 시작한다', (tester) async {
     await tester.pumpWidget(PronoteApp(repository: MemoryNoteRepository()));
 
