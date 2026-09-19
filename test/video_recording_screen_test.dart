@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:ai_pronote_app/main.dart';
 import 'package:ai_pronote_app/notes/note_repository.dart';
+import 'package:ai_pronote_app/processing/local_meeting_processing_gateway.dart';
 import 'package:ai_pronote_app/recording/video_recorder_gateway.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,6 +42,33 @@ class FakeVideoRecorderGateway implements VideoRecorderGateway {
   Future<void> dispose() async {
     disposed = true;
   }
+}
+
+class FakeVideoProcessingGateway implements MeetingProcessingGateway {
+  String? submittedPath;
+
+  @override
+  Future<MeetingProcessingJob> submitTranscription(String recordingPath) async {
+    submittedPath = recordingPath;
+    return const MeetingProcessingJob(id: 'video-job', status: 'queued');
+  }
+
+  @override
+  Future<MeetingProcessingJob> readJob(String jobId) async =>
+      const MeetingProcessingJob(
+        id: 'video-job',
+        status: 'done',
+        phase: '완료',
+        progress: 100,
+      );
+
+  @override
+  Future<MeetingProcessingResult> readResult(String jobId) async =>
+      const MeetingProcessingResult(
+        id: 'video-job',
+        filename: 'meeting.mp4',
+        transcript: '영상 회의 받아쓰기',
+      );
 }
 
 void main() {
@@ -109,5 +137,34 @@ void main() {
 
     expect(recorder.recording, isFalse);
     expect(find.textContaining('영상과 음성이 기기에 저장되었습니다.'), findsOneWidget);
+  });
+
+  testWidgets('저장된 영상과 음성을 받아쓰기 작업으로 보낸다', (tester) async {
+    final recorder = FakeVideoRecorderGateway();
+    final processing = FakeVideoProcessingGateway();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: VideoRecordingScreen(
+          recorder: recorder,
+          repository: MemoryNoteRepository(),
+          processingGateway: processing,
+          directoryProvider: () async => Directory.systemTemp,
+          recordingValidator: (_) async => true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('toggle-video-recording')));
+    await tester.pump();
+    await tester.tap(find.text('녹화 정지'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('받아쓰기 시작'), findsOneWidget);
+    await tester.tap(find.text('받아쓰기 시작'));
+    await tester.pumpAndSettle();
+
+    expect(processing.submittedPath, isNotNull);
+    expect(find.text('받아쓰기 결과'), findsOneWidget);
+    expect(find.text('영상 회의 받아쓰기'), findsOneWidget);
   });
 }
