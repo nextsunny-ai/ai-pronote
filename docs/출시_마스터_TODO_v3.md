@@ -7,8 +7,8 @@ Windows 후보: `v1.5.0-beta13.20260920.3` / `fc4ea9f`
 ## 증명된 최신 상태
 
 - [x] Windows 관리형 설치·바탕화면 실행·단일 서버 재실행
-- [x] `.2 → .1 → .2` 실제 롤백과 데이터 분리
-- [x] Python `156/156`, Playwright `75/75`
+- [x] `.3` 활성화와 `.2` 롤백 포인터 보존
+- [x] Python `156/156`, Playwright `76/76`
 - [x] 노트 전체화면에서 홈 복귀 시 빈 화면 회귀 수정
 - [x] 노트 저장·검색·폴더·ZIP/JSON 백업·복원·내보내기
 - [x] 녹음·영상 저장 실패와 중단 복구 자동검증
@@ -17,6 +17,7 @@ Windows 후보: `v1.5.0-beta13.20260920.3` / `fc4ea9f`
 - [x] Python·웹 production 알려진 취약점 0건, 실제 비밀정보 0건
 - [x] 16쪽 사용설명서 DOCX/PDF 전 페이지 렌더 검수
 - [x] Windows 후보 ZIP·SHA-256·manifest 생성
+- [x] PLAUD·Goodnotes·Notability·Otter 최신 공식 가격·포지셔닝 재검증
 
 ## 대표 확인 뒤 진행할 P0
 
