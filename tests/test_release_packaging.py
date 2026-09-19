@@ -29,6 +29,12 @@ class ReleasePackagingContractTests(unittest.TestCase):
         self.assertIn("Required release file is missing", source)
         self.assertIn("Required release directory is missing", source)
 
+    def test_package_provides_platform_lock_files_for_managed_updates(self):
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("'requirements-lock-windows.txt'", source)
+        self.assertIn("'requirements-lock-mac.txt'", source)
+        self.assertGreaterEqual(source.count("$SharedLock"), 3)
+
     def test_packager_rejects_private_paths_addresses_and_private_keys(self):
         source = SCRIPT.read_text(encoding="utf-8")
         for forbidden in (

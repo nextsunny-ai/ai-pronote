@@ -47,6 +47,9 @@ try {
         }
         Copy-Item -LiteralPath $Source -Destination (Join-Path $PackageRoot $Relative)
     }
+    $SharedLock = Join-Path $Root 'requirements-lock.txt'
+    Copy-Item -LiteralPath $SharedLock -Destination (Join-Path $PackageRoot 'requirements-lock-windows.txt')
+    Copy-Item -LiteralPath $SharedLock -Destination (Join-Path $PackageRoot 'requirements-lock-mac.txt')
     foreach ($Relative in $Directories) {
         $Source = Join-Path $Root $Relative
         if (-not (Test-Path -LiteralPath $Source -PathType Container)) {
