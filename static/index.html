@@ -4571,6 +4571,7 @@ if ('serviceWorker' in navigator) {
         const s = JSON.parse(localStorage.getItem('ai_pronote.settings.v1') || '{}');
         if (s?.transcribe?.model) fd.append('model', s.transcribe.model);
         if (s?.transcribe?.diarize) fd.append('diarize', 'true');
+        if (s?.transcribe?.glossary) fd.append('glossary', s.transcribe.glossary);
       } catch {}
       await runTranscribeRequest('/api/transcribe', fd,
         file.name + ' · ' + (file.size/1024/1024).toFixed(1) + ' MB');
@@ -4641,6 +4642,9 @@ if ('serviceWorker' in navigator) {
                 startedAt: existing?.startedAt || (o.saved_at ? o.saved_at * 1000 : Date.now()),
                 transcribed: true,
                 transcript,
+                rawTranscript: (typeof full.raw_speaker_text === 'string' && full.raw_speaker_text.trim())
+                  ? full.raw_speaker_text : (full.raw_full_text || transcript),
+                glossaryApplied: Number(full.glossary_applied || 0),
                 transcriptSegments: Array.isArray(full.segments) ? full.segments : [],
                 transcriptModel: full.model || existing?.transcriptModel || '',
                 transcriptedAt: Date.now(),
@@ -5118,6 +5122,11 @@ if ('serviceWorker' in navigator) {
         <div class="form-hint">여러 명이 말하는 회의에서 발언자를 구분해 줍니다. 처리 시간이 더 걸립니다.</div>
       </div>
       <div class="form-row">
+        <label class="form-label" for="transcribeGlossary">전문용어 사전</label>
+        <textarea id="transcribeGlossary" rows="5" maxlength="16200" placeholder="잘못 들린 말=바른 말&#10;프로 노트=AI PRONOTE&#10;클로 드=Claude" style="width:100%;resize:vertical;padding:10px 12px;border:1px solid var(--border-strong);border-radius:8px;background:var(--bg-elev);color:var(--text-primary);font:inherit;line-height:1.55;"></textarea>
+        <div class="form-hint">회사명·제품명·개발 용어처럼 자주 틀리는 말을 한 줄에 하나씩 등록합니다. 받아쓰기 원본은 복구용으로 함께 보존합니다. 최대 100개.</div>
+      </div>
+      <div class="form-row">
         <label class="form-label">AI 엔진 (회의록 정리·AI 비서)</label>
         <div class="form-chip-row" id="aiProviderRow" style="flex-wrap:wrap; gap:10px;">
           <button type="button" class="form-chip experimental-cli-choice" data-provider="claude_cli">Claude CLI (실험)</button>
@@ -5186,6 +5195,8 @@ if ('serviceWorker' in navigator) {
       });
     });
     const curDiarize = !!(s.transcribe && s.transcribe.diarize);
+    const glossaryInput = adminBody.querySelector('#transcribeGlossary');
+    if (glossaryInput) glossaryInput.value = (s.transcribe && s.transcribe.glossary) || '';
     adminBody.querySelectorAll('#transcribeDiarizeRow .form-chip').forEach(chip => {
       if ((chip.dataset.diarize === 'on') === curDiarize) chip.classList.add('active');
       chip.addEventListener('click', () => {
@@ -5199,9 +5210,15 @@ if ('serviceWorker' in navigator) {
     adminSave.onclick = () => {
       const model = adminBody.querySelector('#transcribeModelRow .form-chip.active')?.dataset.model || 'medium';
       const diarize = adminBody.querySelector('#transcribeDiarizeRow .form-chip.active')?.dataset.diarize === 'on';
+      const glossary = (adminBody.querySelector('#transcribeGlossary')?.value || '').trim();
+      const glossaryLines = glossary.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'));
+      if (glossaryLines.length > 100 || glossaryLines.some(line => !line.includes('=') && !line.includes('->'))) {
+        showToast('전문용어 사전은 최대 100개, 한 줄에 “잘못 들린 말=바른 말” 형식으로 입력하세요');
+        return;
+      }
       const provider = adminBody.querySelector('#aiProviderRow .form-chip.active:not([hidden])')?.dataset.provider || null;
       const next = loadSettings();
-      next.transcribe = { model, diarize };
+      next.transcribe = { ...(next.transcribe || {}), model, diarize, glossary };
       if (provider) next.ai = { provider };
       else if (next.ai && !['claude', 'codex', 'claude_cli', 'codex_cli'].includes(next.ai.provider)) delete next.ai;
       saveSettings(next);
@@ -5219,11 +5236,12 @@ if ('serviceWorker' in navigator) {
     const s = loadSettings();
     const m = (s.transcribe && s.transcribe.model) || 'medium';
     const dz = (s.transcribe && s.transcribe.diarize) ? ' · 화자 분리 켬' : '';
+    const glossaryCount = String((s.transcribe && s.transcribe.glossary) || '').split(/\r?\n/).filter(line => line.trim() && !line.trim().startsWith('#')).length;
     const el = document.getElementById('adminCurrentTranscribe');
     if (el) {
       el.textContent = (m === 'small'
         ? '빠르게 (small · 8분/시간)'
-        : '표준 (medium · 19분/시간)') + dz;
+        : '표준 (medium · 19분/시간)') + dz + (glossaryCount ? ` · 전문용어 ${glossaryCount}개` : '');
     }
   }
   refreshTranscribeDisplay();
@@ -9005,6 +9023,8 @@ if ('serviceWorker' in navigator) {
       if (!rec) return null;
       rec.transcribed = true;
       rec.transcript = data.speaker_text || data.full_text || '';
+      rec.rawTranscript = data.raw_speaker_text || data.raw_full_text || rec.transcript;
+      rec.glossaryApplied = Number(data.glossary_applied || 0);
       rec.transcriptSegments = data.segments;
       rec.transcriptModel = data.model;
       rec.transcriptDiarization = data.diarization;
@@ -9014,6 +9034,7 @@ if ('serviceWorker' in navigator) {
       try {
         await updateMeetingFromLatest(recId, (meeting, records) => {
           meeting.transcript = joinMeetingSections(records, 'transcript', '녹음 구간');
+          meeting.rawTranscript = joinMeetingSections(records, 'rawTranscript', '녹음 구간');
           meeting.transcriptPendingCount = records.filter(record => !record.transcribed).length;
         });
       } catch (e) { console.error('[Transcript] meeting merge', e); }
@@ -9210,6 +9231,10 @@ if ('serviceWorker' in navigator) {
         fd.append('language', langChoice);
         fd.append('model', modelChoice);
         if (diarizeOn) fd.append('diarize', 'true');
+        try {
+          const glossary = JSON.parse(localStorage.getItem('ai_pronote.settings.v1') || '{}')?.transcribe?.glossary;
+          if (glossary) fd.append('glossary', glossary);
+        } catch {}
         // 회의 정보도 함께 = 화면이 꺼져 있어도 서버 혼자 회의록까지 만든다
         fd.append('auto_summarize', r.scenarioKey ? 'true' : 'false');
         fd.append('scenario', r.scenarioKey || 'meeting');
@@ -9255,7 +9280,9 @@ if ('serviceWorker' in navigator) {
       if (!r || !r.transcript) { window.showToast?.('받아쓰기 텍스트가 없습니다'); return; }
 
       // 서버에 남아 있는 작업이면 서버에 맡긴다 = 창을 닫아도 계속되고, 실패해도 대기열에 남는다
-      if (r.jobId) {
+      // 화자 이름을 사용자가 고친 경우에는 수정된 로컬 원문을 AI에 보낸다.
+      // 서버 재실행은 서버에 보존된 원래 화자 라벨을 다시 사용하기 때문이다.
+      if (r.jobId && !r.speakerNames) {
         try {
           const q = new URLSearchParams({
             scenario: r.scenarioKey || 'meeting',
@@ -9791,6 +9818,23 @@ if ('serviceWorker' in navigator) {
       return null;
     }
 
+    function transcriptSpeakerLabels(text) {
+      const labels = new Set();
+      String(text || '').split(/\r?\n/).forEach(line => {
+        const match = line.match(/^\s*((?:화자|참석자)\s*(?:\d+|\?)|SPEAKER_\d+)\s*:/i);
+        if (match) labels.add(match[1]);
+      });
+      return Array.from(labels);
+    }
+
+    function applySpeakerNames(text, names) {
+      if (!text || !names) return text || '';
+      return String(text).split(/\r?\n/).map(line => line.replace(
+        /^(\s*)((?:화자|참석자)\s*(?:\d+|\?)|SPEAKER_\d+)(\s*:)/i,
+        (whole, lead, label, colon) => lead + (names[label] || label) + colon,
+      )).join('\n');
+    }
+
     // 샘플(데모) 섹션 = 한눈 요약·다음 준비·AI 제안. 진짜 회의록은 AI 정리 본문에 전부 포함됨.
     function setSampleSectionsVisible(show) {
       ['#summary', '#next', '#ai'].forEach(sel => {
@@ -10179,14 +10223,25 @@ if ('serviceWorker' in navigator) {
         panel.title = '클릭해서 받아쓰기 오타를 직접 고칠 수 있습니다';
         panel.style.cssText = 'margin-top:10px; padding:10px; background:var(--bg-elev); border:1px solid var(--border); border-radius:8px; max-height:340px; overflow-y:auto; font-size:11.5px; line-height:1.6; color:var(--text-secondary); white-space:pre-wrap;';
         sideCard.appendChild(panel);
+        const speakerTools = document.createElement('div');
+        speakerTools.id = 'speakerNameTools';
+        speakerTools.hidden = true;
+        speakerTools.style.cssText = 'margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-elev);';
+        sideCard.insertBefore(speakerTools, panel);
         // ★ v1.4 — 받아쓰기 수정 시 회의에 저장
         panel.addEventListener('blur', () => {
           try {
+            if (panel.getAttribute('contenteditable') !== 'true') return;
             const cm = getCurrentMeeting(); if (!cm) return;
             const KEY = 'ai_pronote.meetings.v1';
             const arr = JSON.parse(localStorage.getItem(KEY) || '[]');
             const mm = arr.find(x => x.id === cm.id);
-            if (mm) { mm.transcript = panel.innerText; localStorage.setItem(KEY, JSON.stringify(arr)); window.showToast?.('받아쓰기 수정 저장됨'); }
+            if (mm) {
+              if (!mm.rawTranscript) mm.rawTranscript = mm.transcript || '';
+              mm.transcript = panel.innerText;
+              localStorage.setItem(KEY, JSON.stringify(arr));
+              window.showToast?.('받아쓰기 수정 저장됨');
+            }
           } catch (e) {}
         });
       }
@@ -10203,13 +10258,50 @@ if ('serviceWorker' in navigator) {
           if (!panel.hidden) { panel.hidden = true; return; }
           // ★ v1.4 타임싱크 — segments 있으면 줄 클릭 시 그 대목 재생. 없으면 통텍스트(편집 가능).
           let segs = null;
+          let rec = null;
           try {
             const all = await window.__pronoteDB.getAll();
             const ids = Array.isArray(m.recordingIds) && m.recordingIds.length ? m.recordingIds : (m.recordingId ? [m.recordingId] : []);
             const selectedId = document.getElementById('sideAudioSegmentSelect')?.value;
-            const rec = all.find(r => r.id === (ids.includes(selectedId) ? selectedId : ids[ids.length - 1])) || all.find(r => r.filename === m.recordingFilename);
+            rec = all.find(r => r.id === (ids.includes(selectedId) ? selectedId : ids[ids.length - 1])) || all.find(r => r.filename === m.recordingFilename);
             segs = rec && rec.transcriptSegments;
           } catch (e2) {}
+          const speakerTools = document.getElementById('speakerNameTools');
+          const labels = Array.from(new Set([
+            ...transcriptSpeakerLabels(m.rawTranscript || tx),
+            ...((segs || []).map(s => s.speaker).filter(Boolean)),
+          ])).filter(label => /^(?:화자|참석자)\s*(?:\d+|\?)$|^SPEAKER_\d+$/i.test(label));
+          if (speakerTools) {
+            speakerTools.hidden = labels.length === 0;
+            speakerTools.innerHTML = labels.length ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><strong style="font-size:12px">화자 이름</strong><button type="button" id="speakerNamesEdit" class="action-btn" style="padding:5px 9px">이름 수정</button></div><div id="speakerNamesForm" hidden></div>' : '';
+            speakerTools.querySelector('#speakerNamesEdit')?.addEventListener('click', () => {
+              const form = speakerTools.querySelector('#speakerNamesForm');
+              form.hidden = !form.hidden;
+              if (form.hidden) return;
+              form.innerHTML = labels.map(label => '<label style="display:grid;grid-template-columns:74px 1fr;align-items:center;gap:8px;margin-top:8px;font-size:11.5px"><span>' + escHtml(label) + '</span><input data-speaker-label="' + escHtml(label) + '" value="' + escHtml((m.speakerNames || {})[label] || '') + '" placeholder="예: 김민지" maxlength="40" style="min-width:0;padding:6px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg);color:var(--text-primary)"></label>').join('') + '<button type="button" id="speakerNamesSave" class="action-btn primary" style="margin-top:10px;padding:6px 10px">저장하고 반영</button>';
+              form.querySelector('#speakerNamesSave').onclick = async () => {
+                const names = {};
+                form.querySelectorAll('[data-speaker-label]').forEach(input => { if (input.value.trim()) names[input.dataset.speakerLabel] = input.value.trim(); });
+                const KEY = 'ai_pronote.meetings.v1';
+                const arr = JSON.parse(localStorage.getItem(KEY) || '[]');
+                const stored = arr.find(item => item.id === m.id);
+                if (!stored) return;
+                if (!stored.rawTranscript) stored.rawTranscript = stored.transcript || '';
+                stored.speakerNames = names;
+                stored.transcript = applySpeakerNames(stored.rawTranscript, names);
+                localStorage.setItem(KEY, JSON.stringify(arr));
+                if (rec) {
+                  if (!rec.rawTranscript) rec.rawTranscript = rec.transcript || '';
+                  rec.speakerNames = names;
+                  rec.transcript = applySpeakerNames(rec.rawTranscript, names);
+                  await window.__pronoteDB.put(rec);
+                }
+                panel.hidden = true;
+                speakerTools.hidden = true;
+                window.showToast?.('화자 이름을 저장하고 받아쓰기에 반영했습니다');
+              };
+            });
+          }
           if (segs && segs.length) {
             panel.setAttribute('contenteditable', 'false');
             panel.innerHTML = '';
@@ -10226,7 +10318,9 @@ if ('serviceWorker' in navigator) {
               const mm = String(Math.floor((s.start || 0) / 60)).padStart(2, '0'), ss = String(Math.floor((s.start || 0) % 60)).padStart(2, '0');
               tspan.textContent = mm + ':' + ss;
               tspan.style.cssText = 'color:var(--text-tertiary,#888);font-size:10.5px;font-variant-numeric:tabular-nums;flex-shrink:0;';
-              const xspan = document.createElement('span'); xspan.textContent = s.text || '';
+              const xspan = document.createElement('span');
+              const speakerName = (m.speakerNames || {})[s.speaker] || s.speaker || '';
+              xspan.textContent = (speakerName ? speakerName + ': ' : '') + (s.text || '');
               row.appendChild(tspan); row.appendChild(xspan);
               row.addEventListener('click', function () {
                 const a = document.getElementById('sideAudioPlayerAudio');
@@ -10236,7 +10330,7 @@ if ('serviceWorker' in navigator) {
             });
           } else {
             panel.setAttribute('contenteditable', 'true');
-            panel.textContent = tx;
+            panel.textContent = applySpeakerNames(m.rawTranscript || tx, m.speakerNames || {});
           }
           panel.hidden = false;
         });

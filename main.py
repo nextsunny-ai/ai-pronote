@@ -787,6 +787,68 @@ TITLE_SYSTEM = """당신은 회의록 제목 전문가입니다. 받아쓰기 �
 [나쁜 예] 11월 팝업스토어 성수동 개설 결정, 신규 굿즈 라인업 출시 확정 (← 너무 길고 주제가 둘)"""
 
 
+MAX_GLOSSARY_PAIRS = 100
+MAX_GLOSSARY_TERM_LENGTH = 80
+
+
+def parse_glossary(value: str) -> list[tuple[str, str]]:
+    """Parse user-owned transcription replacements without executing patterns.
+
+    One literal replacement is accepted per line using ``source=target`` or
+    ``source -> target``.  The limits keep job files and replacement work
+    bounded; replacements are literal so a term cannot become a regex.
+    """
+    pairs: list[tuple[str, str]] = []
+    for line_no, raw_line in enumerate((value or "").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "->" in line:
+            source, target = line.split("->", 1)
+        elif "=" in line:
+            source, target = line.split("=", 1)
+        else:
+            raise ValueError(f"전문용어 사전 {line_no}번째 줄은 '잘못 들린 말=바른 말' 형식이어야 합니다")
+        source, target = source.strip(), target.strip()
+        if not source:
+            raise ValueError(f"전문용어 사전 {line_no}번째 줄의 바꿀 말이 비어 있습니다")
+        if not target:
+            raise ValueError(f"전문용어 사전 {line_no}번째 줄의 바른 말이 비어 있습니다")
+        if len(source) > MAX_GLOSSARY_TERM_LENGTH or len(target) > MAX_GLOSSARY_TERM_LENGTH:
+            raise ValueError(f"전문용어 사전 한 항목은 {MAX_GLOSSARY_TERM_LENGTH}자 이하여야 합니다")
+        pairs.append((source, target))
+        if len(pairs) > MAX_GLOSSARY_PAIRS:
+            raise ValueError(f"전문용어 사전은 최대 {MAX_GLOSSARY_PAIRS}개까지 저장할 수 있습니다")
+    return sorted(pairs, key=lambda pair: len(pair[0]), reverse=True)
+
+
+def _apply_glossary_text(text: Optional[str], pairs: list[tuple[str, str]]) -> Optional[str]:
+    if text is None:
+        return None
+    corrected = text
+    for source, target in pairs:
+        corrected = corrected.replace(source, target)
+    return corrected
+
+
+def apply_glossary_to_result(result: dict, glossary: str) -> dict:
+    """Return a corrected transcription result while retaining the raw text."""
+    pairs = parse_glossary(glossary)
+    if not pairs:
+        return result
+    corrected = dict(result)
+    corrected["raw_full_text"] = result.get("full_text")
+    corrected["raw_speaker_text"] = result.get("speaker_text")
+    corrected["full_text"] = _apply_glossary_text(result.get("full_text"), pairs)
+    corrected["speaker_text"] = _apply_glossary_text(result.get("speaker_text"), pairs)
+    corrected["segments"] = [
+        {**segment, "text": _apply_glossary_text(segment.get("text"), pairs)}
+        for segment in (result.get("segments") or [])
+    ]
+    corrected["glossary_applied"] = len(pairs)
+    return corrected
+
+
 class SummarizeRequest(BaseModel):
     transcript: str
     scenario: str = "meeting"  # meeting | lecture | interview | ideation | memo | free
@@ -1646,6 +1708,17 @@ def _job_worker(job_id: str, upload_path: Path, filename: str,
 
             result = _run_transcription(upload_path, filename, job_id, language,
                                         model, beam_size, diarize, on_progress=on_progress)
+            glossary = str((_job_read(job_id) or {}).get("glossary") or "")
+            if glossary.strip():
+                result = apply_glossary_to_result(result, glossary)
+                _atomic_text_write(
+                    RESULT_DIR / f"{job_id}.json",
+                    json.dumps(result, ensure_ascii=False, indent=2),
+                )
+                _atomic_text_write(
+                    RESULT_DIR / f"{job_id}.txt",
+                    result.get("speaker_text") or result.get("full_text") or "",
+                )
             _job_write(job_id, status="done", phase="완료", progress=100,
                        finished_at=time.time(),
                        duration=result.get("duration"),
@@ -2390,6 +2463,7 @@ async def transcribe(
     attendees: str = Form(""),
     tag: str = Form(""),
     date: str = Form(""),
+    glossary: str = Form(""),
 ):
     """음성 파일 받아쓰기 시작 — 즉시 job_id 를 돌려주고 실제 처리는 뒤에서 한다.
 
@@ -2400,6 +2474,10 @@ async def transcribe(
         raise HTTPException(400, "파일 이름이 없습니다")
     if auto_summarize and not external_consent:
         raise HTTPException(403, "회의록 생성을 위한 외부 AI 전송 동의가 필요합니다")
+    try:
+        parse_glossary(glossary)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
     declared_size = getattr(file, "size", None)
     if declared_size is not None:
@@ -2438,6 +2516,7 @@ async def transcribe(
                    auto_summarize=bool(auto_summarize), scenario=scenario,
                    llm_model=llm_model, provider=provider, title=title,
                    attendees=attendees, tag=tag, date=date or time.strftime("%Y-%m-%d"),
+                   glossary=glossary,
                    external_consent=bool(external_consent),
                    summary_status="none", summary_attempts=0)
         registered = True

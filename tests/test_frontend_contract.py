@@ -238,6 +238,15 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("folder: folders.find", HTML)
         self.assertIn("folderId: importedFolderIds.get", HTML)
 
+    def test_transcription_glossary_and_speaker_names_are_editable(self):
+        self.assertIn('id="transcribeGlossary"', HTML)
+        self.assertIn("fd.append('glossary', glossary)", HTML)
+        self.assertIn("function applySpeakerNames", HTML)
+        self.assertIn("id = 'speakerNameTools'", HTML)
+        self.assertIn('저장하고 반영', HTML)
+        self.assertIn('rawTranscript', HTML)
+        self.assertIn("panel.getAttribute('contenteditable') !== 'true'", HTML)
+
 
 if __name__ == "__main__":
     unittest.main()

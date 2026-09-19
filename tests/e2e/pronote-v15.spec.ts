@@ -356,6 +356,27 @@ test.describe('라이브러리 재열기 회귀', () => {
     await expect(page.locator('#view-result')).toHaveClass(/active/);
   });
 
+  test('화자 번호를 실제 이름으로 바꾸고 원문과 함께 저장한다', async ({ page }) => {
+    await page.addInitScript(() => {
+      const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+      if (meetings[0]) meetings[0].transcript = '화자 1: 첫 번째 발언\n화자 2: 두 번째 발언';
+      localStorage.setItem('ai_pronote.meetings.v1', JSON.stringify(meetings));
+    });
+    await openApp(page);
+    await openNavView(page, 'library');
+    await page.locator('.library-card[data-item-id="e2e-meeting-001"]').click({ position: { x: 120, y: 30 } });
+    await page.locator('[data-result-target="transcript"]').click();
+    await expect(page.locator('#speakerNameTools')).toBeVisible();
+    await page.locator('#speakerNamesEdit').click();
+    await page.locator('[data-speaker-label="화자 1"]').fill('김민지');
+    await page.locator('[data-speaker-label="화자 2"]').fill('이준호');
+    await page.locator('#speakerNamesSave').click();
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]')[0]);
+    expect(stored.rawTranscript).toContain('화자 1:');
+    expect(stored.transcript).toContain('김민지: 첫 번째 발언');
+    expect(stored.transcript).toContain('이준호: 두 번째 발언');
+  });
+
   test('구버전 서버 결과를 홈을 가리지 않고 라이브러리에서 복구한다', async ({ page }) => {
     await page.unroute('**/api/**');
     await page.route('**/api/**', async route => {
