@@ -44,6 +44,19 @@ test.describe('WCAG 2.1 AA 출시 스모크', () => {
     await expect(trigger).toBeFocused();
   });
 
+  test('새 회의 시작창은 대화상자로 노출되고 닫힌 뒤 호출 버튼으로 초점을 돌려준다', async ({ page }) => {
+    await page.goto('/');
+    const trigger = page.locator('#navStartMeeting');
+    await trigger.focus();
+    await trigger.press('Enter');
+    const dialog = page.getByRole('dialog', { name: '회의 종류를 먼저 선택하세요' });
+    await expect(dialog).toBeVisible();
+    await expect(page.locator('#newMeetingTitle')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+  });
+
   for (const size of [
     { name: '휴대폰 세로', width: 390, height: 844 },
     { name: '아이패드 세로', width: 768, height: 1024 },
