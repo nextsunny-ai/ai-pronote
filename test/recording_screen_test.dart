@@ -50,7 +50,12 @@ class FakeMeetingProcessingGateway implements MeetingProcessingGateway {
 
   @override
   Future<MeetingProcessingJob> readJob(String jobId) async =>
-      const MeetingProcessingJob(id: 'job-123', status: 'queued');
+      const MeetingProcessingJob(
+        id: 'job-123',
+        status: 'done',
+        phase: '완료',
+        progress: 100,
+      );
 
   @override
   Future<MeetingProcessingResult> readResult(String jobId) async =>
@@ -148,7 +153,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(processing.submittedPath, recorder.savedPath);
-    expect(find.textContaining('받아쓰기 작업을 시작했습니다.'), findsOneWidget);
+    expect(find.text('받아쓰기 결과'), findsOneWidget);
+    expect(find.text('테스트 받아쓰기'), findsOneWidget);
   });
 
   testWidgets('녹음 중 회의 노트를 열어 필기를 계속할 수 있다', (tester) async {
