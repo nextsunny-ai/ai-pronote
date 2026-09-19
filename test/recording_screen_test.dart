@@ -51,6 +51,14 @@ class FakeMeetingProcessingGateway implements MeetingProcessingGateway {
   @override
   Future<MeetingProcessingJob> readJob(String jobId) async =>
       const MeetingProcessingJob(id: 'job-123', status: 'queued');
+
+  @override
+  Future<MeetingProcessingResult> readResult(String jobId) async =>
+      const MeetingProcessingResult(
+        id: 'job-123',
+        filename: 'meeting.m4a',
+        transcript: '테스트 받아쓰기',
+      );
 }
 
 void main() {

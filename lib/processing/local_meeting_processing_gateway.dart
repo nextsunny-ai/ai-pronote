@@ -35,6 +35,42 @@ class MeetingProcessingJob {
   final String summaryStatus;
 }
 
+class MeetingProcessingResult {
+  const MeetingProcessingResult({
+    required this.id,
+    required this.filename,
+    required this.transcript,
+    this.summaryTitle = '',
+    this.summary = '',
+  });
+
+  factory MeetingProcessingResult.fromJson(
+    Map<String, dynamic> json, {
+    required String fallbackId,
+  }) {
+    final summaryResult = json['summary_result'];
+    final summaryMap = summaryResult is Map<String, dynamic>
+        ? summaryResult
+        : const <String, dynamic>{};
+    return MeetingProcessingResult(
+      id: json['job_id']?.toString() ?? fallbackId,
+      filename: json['filename']?.toString() ?? '',
+      transcript:
+          json['speaker_text']?.toString() ??
+          json['full_text']?.toString() ??
+          '',
+      summaryTitle: summaryMap['title']?.toString() ?? '',
+      summary: summaryMap['summary']?.toString() ?? '',
+    );
+  }
+
+  final String id;
+  final String filename;
+  final String transcript;
+  final String summaryTitle;
+  final String summary;
+}
+
 class MeetingProcessingException implements Exception {
   const MeetingProcessingException(this.message, {this.statusCode});
 
@@ -49,6 +85,8 @@ abstract interface class MeetingProcessingGateway {
   Future<MeetingProcessingJob> submitTranscription(String recordingPath);
 
   Future<MeetingProcessingJob> readJob(String jobId);
+
+  Future<MeetingProcessingResult> readResult(String jobId);
 }
 
 class LocalMeetingProcessingGateway implements MeetingProcessingGateway {
@@ -120,6 +158,30 @@ class LocalMeetingProcessingGateway implements MeetingProcessingGateway {
       );
     } on http.ClientException {
       throw const MeetingProcessingException('받아쓰기 진행 상태를 확인하지 못했습니다.');
+    }
+  }
+
+  @override
+  Future<MeetingProcessingResult> readResult(String jobId) async {
+    final safeId = Uri.encodeComponent(jobId);
+    try {
+      final response = await _client
+          .get(baseUri.resolve('/api/results/$safeId'))
+          .timeout(timeout);
+      return MeetingProcessingResult.fromJson(
+        _decodeResponse(response),
+        fallbackId: jobId,
+      );
+    } on MeetingProcessingException {
+      rethrow;
+    } on TimeoutException {
+      throw const MeetingProcessingException('받아쓰기 결과 확인 시간이 초과되었습니다.');
+    } on SocketException {
+      throw const MeetingProcessingException(
+        '받아쓰기 엔진에 연결할 수 없습니다. 완성된 결과는 삭제되지 않습니다.',
+      );
+    } on http.ClientException {
+      throw const MeetingProcessingException('받아쓰기 결과를 불러오지 못했습니다.');
     }
   }
 
