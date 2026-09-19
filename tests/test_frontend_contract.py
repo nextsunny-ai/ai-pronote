@@ -201,6 +201,11 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("document.querySelector('main.main')?.scrollTo", HTML)
         self.assertIn("view?.scrollTo?.({ top: 0", HTML)
 
+    def test_note_search_includes_attachment_names(self):
+        self.assertIn("function noteSearchText", HTML)
+        self.assertIn("div.querySelectorAll('img')", HTML)
+        self.assertIn("노트 제목·내용·첨부 파일명 검색", HTML)
+
 
 if __name__ == "__main__":
     unittest.main()

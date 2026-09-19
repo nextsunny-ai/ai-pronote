@@ -3480,7 +3480,7 @@ if ('serviceWorker' in navigator) {
         <div class="list-toolbar">
           <div class="list-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
-            <input type="search" id="mynotesSearchInput" placeholder="노트 내용·회의 제목 검색" autocomplete="off" />
+            <input type="search" id="mynotesSearchInput" placeholder="노트 제목·내용·첨부 파일명 검색" autocomplete="off" />
           </div>
           <div class="list-filter-row" id="mynotesFilterRow">
             <button class="list-filter-chip active" data-filter="all">전체</button>
@@ -3666,7 +3666,7 @@ if ('serviceWorker' in navigator) {
                 <div class="mynote-list-menu" id="mynoteListMenu" role="dialog" aria-label="다른 노트 선택">
                   <div class="mynote-list-search">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
-                    <input type="search" id="mynoteListSearchInput" placeholder="노트 제목·내용 검색" autocomplete="off" />
+                    <input type="search" id="mynoteListSearchInput" placeholder="노트 제목·내용·첨부 파일명 검색" autocomplete="off" />
                   </div>
                   <div id="mynoteListItems"></div>
                 </div>
@@ -5479,6 +5479,12 @@ if ('serviceWorker' in navigator) {
     div.innerHTML = s || '';
     return div.textContent || '';
   }
+  function noteSearchText(noteHtml) {
+    const div = document.createElement('div');
+    div.innerHTML = noteHtml || '';
+    const attachmentNames = Array.from(div.querySelectorAll('img')).flatMap(img => [img.alt, img.title]).filter(Boolean);
+    return [div.textContent || '', ...attachmentNames].join(' ');
+  }
 
   function renderMeetingsGrid(filterTag, q) {
     const grid = document.getElementById('meetingsGrid');
@@ -5534,7 +5540,7 @@ if ('serviceWorker' in navigator) {
       if (filterMode === '회의록 작성에 참고' && !m.noteUsedForMeeting) return false;
       if (filterMode === '개인용' && m.noteUsedForMeeting) return false;
       if (needle) {
-        const hay = (m.title + ' ' + stripHtml(m.note)).toLowerCase();
+        const hay = (m.title + ' ' + noteSearchText(m.note)).toLowerCase();
         if (hay.indexOf(needle) === -1) return false;
       }
       return true;
@@ -7715,7 +7721,7 @@ if ('serviceWorker' in navigator) {
       const currentId = localStorage.getItem('ai_pronote.current_view_meeting.v1');
       const filtered = all.filter(m => {
         if (!needle) return true;
-        return (m.title + ' ' + (m.note || '')).toLowerCase().indexOf(needle) !== -1;
+        return (m.title + ' ' + noteSearchText(m.note)).toLowerCase().indexOf(needle) !== -1;
       });
       if (!filtered.length) {
         listItems.innerHTML = `<div style="padding: 16px; text-align:center; font-size:12px; color:var(--text-tertiary);">노트 없음</div>`;
