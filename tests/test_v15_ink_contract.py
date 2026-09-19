@@ -48,6 +48,54 @@ class InkContractTests(unittest.TestCase):
         for token in ('segmentDistance', "item.tool==='rect'", 'clearAll', '.objectStore(STORE).clear()'):
             self.assertIn(token, self.js)
 
+    def test_highlighter_is_saved_rendered_and_restorable(self):
+        self.assertIn('data-ink-tool="highlighter"', self.html)
+        for token in ("'highlighter'", "item.tool==='highlighter'", 'globalAlpha=.28'):
+            self.assertIn(token, self.js)
+
+    def test_multi_page_notes_preserve_legacy_strokes(self):
+        for token in (
+            'id="inkPageLabel"', 'id="inkAddPage"', 'id="inkDeletePage"',
+        ):
+            self.assertIn(token, self.html)
+        for token in (
+            'pageCount', 'pageIndex:currentPage', '(item.pageIndex||0)===currentPage',
+            'Number.isInteger(stroke.pageIndex)',
+        ):
+            self.assertIn(token, self.js)
+
+    def test_lasso_selection_can_duplicate_and_delete_strokes(self):
+        self.assertIn('data-ink-tool="lasso"', self.html)
+        for token in (
+            'selectedIds', 'inkDuplicateSelection', 'inkDeleteSelection',
+            'boundsFor', 'intersects',
+        ):
+            self.assertIn(token, self.js)
+
+    def test_split_reference_and_sticky_note_tools_are_available(self):
+        for token in ('id="inkSourceToggle"', 'id="inkSourceInput"', 'id="inkExportPng"', 'data-ink-tool="sticky"'):
+            self.assertIn(token, self.html)
+        for token in ("tool==='sticky'", "file.type==='application/pdf'", "workspace?.classList.toggle('split'", "AI_PRONOTE_${currentPage+1}.png"):
+            self.assertIn(token, self.js)
+
+    def test_each_page_can_keep_a_paper_background(self):
+        self.assertIn('id="inkPaper"', self.html)
+        for token in ('value="ruled"', 'value="ruled-wide"', 'value="grid"', 'value="dot"', 'value="manuscript"', 'pageBackgrounds', 'pageColors', "wrap.dataset.paper=paperValue"):
+            self.assertIn(token, self.html + self.js)
+
+    def test_pen_and_highlighter_offer_palette_and_custom_color(self):
+        self.assertIn('aria-label="빠른 색상"', self.html)
+        self.assertIn('type="color" id="inkColor"', self.html)
+        self.assertIn("document.querySelectorAll('[data-ink-color]')", self.js)
+
+    def test_page_template_image_can_be_annotated_and_saved(self):
+        for token in ('id="inkTemplateOpen"', 'id="inkTemplateInput"', 'id="inkTemplateImage"'):
+            self.assertIn(token, self.html)
+        for token in ('pageTemplates', "file.size>5*1024*1024", 'reader.readAsDataURL(file)'):
+            self.assertIn(token, self.js)
+        for token in ('drawPaper(target)', 'target.drawImage(canvas,0,0)', 'await image.decode()'):
+            self.assertIn(token, self.js)
+
     def test_every_current_meeting_change_has_sync_ink_switch(self):
         self.assertEqual(
             self.html.count("localStorage.setItem('ai_pronote.current_view_meeting.v1'"),

@@ -35,7 +35,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('id="v15-design-system"', HTML)
         self.assertIn(":focus-visible", HTML)
         self.assertIn("prefers-reduced-motion", HTML)
-        self.assertIn("max-width: 1023px", HTML)
+        self.assertIn("max-width: 1180px", HTML)
 
     def test_wave_note_is_used_only_by_v15_web_assets(self):
         manifest = (ROOT / "static" / "manifest.webmanifest").read_text(encoding="utf-8")
