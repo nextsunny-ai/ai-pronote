@@ -5228,7 +5228,7 @@ if ('serviceWorker' in navigator) {
       <div class="form-row" style="border-top:1px solid var(--border); padding-top:var(--space-3); margin-top:var(--space-3);">
         <label class="form-label" style="color:var(--rec-red);">위험 영역</label>
         <button type="button" class="modal-btn" id="acctDelete" style="width:100%; justify-content:center; color:var(--rec-red); border-color:var(--rec-red);">🗑️ 계정 영구 삭제</button>
-        <div class="form-hint">버튼: 이 설치본 데이터 영구 삭제. 회의록·노트·녹음·작업 파일과 공식 API 키를 지우며, 외부 CLI 로그인은 별도로 로그아웃해야 합니다. 온라인 계정 자체는 삭제하지 않습니다.</div>
+        <div class="form-hint">버튼: 이 기기의 AI PRONOTE 데이터 영구 삭제. 회의록·노트·녹음·작업 파일과 공식 API 키를 지우며, 외부 CLI 로그인은 별도로 로그아웃해야 합니다. 온라인 계정 자체는 삭제하지 않습니다.</div>
       </div>
     `;
     adminBody.querySelector('#acctResetPw')?.addEventListener('click', async () => {
@@ -5250,7 +5250,7 @@ if ('serviceWorker' in navigator) {
       } catch (e) { showToast('실패: ' + e.message); }
     });
     const accountDeleteButton = adminBody.querySelector('#acctDelete');
-    if (accountDeleteButton) accountDeleteButton.textContent = '이 설치본 데이터 영구 삭제';
+    if (accountDeleteButton) accountDeleteButton.textContent = '이 기기의 AI PRONOTE 데이터 영구 삭제';
     accountDeleteButton?.addEventListener('click', async () => {
       if (window.__pronoteDeletionInProgress) {
         showToast('데이터 삭제가 이미 진행 중입니다');

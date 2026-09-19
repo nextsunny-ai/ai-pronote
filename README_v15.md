@@ -4,11 +4,11 @@
 
 ## 안전한 실행
 
-1. Windows는 `3_START_AI_PRONOTE.vbs`, Mac은 `mac/AI PRONOTE.app` 또는 `mac/3_START_AI_PRONOTE.command`를 실행합니다.
+1. Windows는 첫 설정이 만든 바탕화면 `AI PRONOTE` 아이콘, Mac은 `mac/AI PRONOTE.app` 또는 `mac/3_START_AI_PRONOTE.command`를 실행합니다.
 2. 준비 화면 뒤 `http://127.0.0.1:8795` 앱 창이 열립니다.
 3. 다시 실행하면 기존 v1.5 서버와 창을 재사용하며 다른 프로세스를 강제 종료하지 않습니다.
 
-데이터는 기본적으로 이 폴더의 `data_v15`에만 저장됩니다. 기존 v1.3/v1.4의 포트 8771과 데이터 폴더, 바탕화면 바로가기, 시작프로그램은 건드리지 않습니다.
+Windows 데이터는 `%LOCALAPPDATA%\AI_PRONOTE\v1.5\data`, Mac 데이터는 프로그램 폴더의 `data_v15`에 저장됩니다. 프로그램을 새 폴더에 설치해도 Windows의 녹음·받아쓰기·회의록 작업 파일은 이어집니다.
 
 ## 현재 지원
 
@@ -27,7 +27,7 @@
 - 이 배포본은 코드 서명 전 지정 사용자용 비공개 베타입니다.
 - iPad는 승인 후 실행하는 HTTPS companion과 설치형 PWA로 시험할 수 있습니다. Pointer Events 기반 필기 캔버스는 구현됐지만 실제 Safari·Apple Pencil·palm rejection·VoiceOver 검증은 남아 있습니다.
 - AI 로그인 상태와 사용량은 각 AI 제공사의 계정 정책을 따릅니다.
-- 설치 프로그램·코드 서명·자동 업데이트는 아직 없습니다.
+- 단일 실행 설치 프로그램·코드 서명·백그라운드 자동 교체는 아직 없습니다. 새 버전 안내와 사용자가 선택하는 검증 다운로드는 제공합니다.
 - 녹음·녹화 및 외부 AI 사용 기준은 사용 지역의 법규와 조직 정책을 확인하세요.
 
 ## 중지·롤백

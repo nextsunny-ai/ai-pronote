@@ -275,7 +275,7 @@ test.describe('v1.5 핵심 발견성과 반응형', () => {
     await openNavView(page, 'admin');
     await page.locator('#view-admin .admin-card[data-admin="account"]').click();
     const deleteButton = page.locator('#acctDelete');
-    await expect(deleteButton).toHaveText('이 설치본 데이터 영구 삭제');
+    await expect(deleteButton).toHaveText('이 기기의 AI PRONOTE 데이터 영구 삭제');
     let dialogCount = 0;
     page.on('dialog', async dialog => { dialogCount += 1; await dialog.accept(); });
     await deleteButton.click();
