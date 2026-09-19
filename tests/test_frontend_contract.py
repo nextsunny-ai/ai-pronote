@@ -166,6 +166,15 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('if (diagnosticExportInProgress) return;', HTML)
         self.assertIn('setTimeout(() => URL.revokeObjectURL(url), 60000)', HTML)
 
+    def test_standalone_notes_are_not_rendered_as_meeting_minutes(self):
+        self.assertIn("loadMeetings().filter(m => !m.standalone)", HTML)
+        self.assertIn("if (m?.standalone)", HTML)
+        self.assertIn("meetings.find(item => item && !item.standalone) || null", HTML)
+
+    def test_view_navigation_resets_stale_scroll_position(self):
+        self.assertIn("document.querySelector('main.main')?.scrollTo", HTML)
+        self.assertIn("view?.scrollTo?.({ top: 0", HTML)
+
 
 if __name__ == "__main__":
     unittest.main()

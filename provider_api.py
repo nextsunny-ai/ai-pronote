@@ -38,7 +38,7 @@ class _OfficialAdapter:
             return ProviderStatus(self.name, "error", self.models, "Windows 자격 증명 상태를 확인하지 못했습니다.", True)
         return ProviderStatus(
             self.name, "ready" if ready else "needs_key", self.models,
-            "Windows 자격 증명에 키가 있습니다." if ready else "대표님 승인 후 API 키 등록이 필요합니다.",
+            "Windows 자격 증명에 키가 있습니다." if ready else "AI 기능을 사용하려면 API 키를 등록하세요.",
             True,
         )
 

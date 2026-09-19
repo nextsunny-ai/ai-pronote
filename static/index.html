@@ -736,6 +736,7 @@
     font-size: 11.5px; color: var(--text-secondary);
   }
   .admin-card-current b { color: var(--text-primary); }
+  .admin-card.planned{display:none}
 
   .modal-overlay {
     position: fixed; inset: 0;
@@ -1021,14 +1022,15 @@
   .privacy-note svg { width: 13px; height: 13px; color: var(--accent-warm); flex-shrink: 0; }
 
   /* ─── 회의 종류 선택 모달 (새 회의 시작) ─── */
+  #meetingTypeModal .modal-card{max-width:720px}
   .meeting-type-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3,minmax(0,1fr));
     gap: 8px;
     margin-bottom: var(--space-4);
   }
   .type-card {
-    padding: 14px;
+    padding: 11px 12px;
     border: 1px solid var(--border);
     border-radius: 10px;
     text-align: left;
@@ -1398,6 +1400,7 @@
   #view-result.mynote-fullpage .result-actionbar {
     display: none;
   }
+  @media(max-width:640px){.meeting-type-grid{grid-template-columns:1fr 1fr}.type-card{padding:10px}}
   #view-result.standalone-note #meetingResultTabs { display: none !important; }
   /* 풀 페이지 = 우상단 데모 스위처도 숨김 */
   body.mynote-fullpage-active .demo-switcher { display: none; }
@@ -2694,7 +2697,8 @@
   .note-mode-tabs button{min-height:38px}.ink-toolbar button,.ink-toolbar select{min-height:44px}.note-mode-tabs button,.ink-toolbar button,.ink-toolbar select{border:1px solid var(--v15-border);border-radius:8px;padding:8px 12px;background:#fff;color:var(--v15-ink)}
   .note-mode-tabs button[aria-selected="true"],.ink-toolbar button[aria-pressed="true"]{background:var(--v15-ink);color:#fff}
   .ink-panel{padding:0;background:#f7f6f2}
-  .ink-toolbar{position:sticky;top:0;z-index:12;margin:0;padding:8px 16px;background:#4b433d;backdrop-filter:blur(10px);flex-wrap:nowrap;overflow-x:auto;overflow-y:visible;scrollbar-width:thin}
+  .ink-toolbar{position:sticky;top:0;z-index:12;margin:0;padding:8px 16px;background:#4b433d;backdrop-filter:blur(10px);flex-wrap:nowrap;overflow-x:auto;overflow-y:visible;scrollbar-width:none}
+  .ink-toolbar::-webkit-scrollbar{display:none}
   .ink-toolbar>*{flex:0 0 auto}
   .ink-toolbar .ink-icon-btn{width:44px;padding:8px;justify-content:center}
   .ink-toolbar .ink-icon-btn svg{width:22px;height:22px;display:block}
@@ -2721,6 +2725,9 @@
   .ink-more-tools summary{display:flex;align-items:center;min-height:44px;padding:8px 12px;border:1px solid var(--v15-border);border-radius:8px;background:#fff;color:var(--v15-ink);cursor:pointer;list-style:none}
   .ink-more-tools summary::-webkit-details-marker{display:none}
   .ink-more-menu{display:inline-flex;gap:6px}
+  .ink-more-tools[open] :is(.ink-more-menu,.ink-paper-menu),.ink-floating-menu{position:fixed;z-index:420;padding:8px;border:1px solid #d4cec4;border-radius:12px;background:#fff;box-shadow:0 14px 36px rgba(34,31,28,.18)}
+  .ink-floating-menu{display:inline-flex;align-items:center;gap:7px;max-width:calc(100vw - 16px)}
+  .ink-floating-menu button,.ink-floating-menu select{min-height:38px;padding:7px 10px;border:1px solid #d4cec4;border-radius:8px;background:#fff;color:#302d2a;font:inherit;white-space:nowrap}
   .ink-paper-menu{display:inline-flex;align-items:center;gap:7px;padding:6px;border-radius:9px;background:#f5efe8}
   .ink-paper-menu input[type="color"]{width:38px;height:38px;padding:3px;border:1px solid #c7aa91;border-radius:8px;background:#fff}
   .ink-color-palette{display:inline-flex;align-items:center;gap:5px;padding:0 5px}
@@ -2728,7 +2735,7 @@
   .ink-color-dot[aria-pressed="true"]{outline:3px solid #f5efe8;outline-offset:2px}
   #inkColor{width:38px;height:38px;min-height:38px;padding:3px;border:1px solid #c7aa91;border-radius:50%;background:#fff}
   .ink-page-controls{display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding-left:8px;border-left:1px solid var(--v15-border)}
-  .ink-page-controls #inkPageLabel{min-width:52px;text-align:center;font-size:12px;font-variant-numeric:tabular-nums;color:var(--text-secondary)}
+  .ink-page-controls #inkPageLabel{min-width:52px;text-align:center;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:#f5efe8}
   .ink-selection-actions{display:inline-flex;align-items:center;gap:6px;padding-left:8px;border-left:1px solid var(--v15-border)}
   .ink-selection-actions[hidden]{display:none}
   #inkCanvas{display:block;width:100%;height:auto;min-height:68vh;aspect-ratio:1200/700;touch-action:none;cursor:crosshair}
@@ -2745,7 +2752,15 @@
     .app { display:block; }
     main.main { width:100%; padding-top:56px; }
     #view-result.view.active { left:0!important; }
-    .mobile-menu-btn { display:flex!important; position:fixed; top:8px; left:8px; z-index:260; width:44px; height:44px; }
+    .mobile-menu-btn {
+      display:flex!important; position:fixed; top:10px; left:12px; z-index:260;
+      width:42px; height:42px; padding:0; align-items:center; justify-content:center;
+      color:#302d2a; background:rgba(255,255,255,.94); border:1px solid rgba(48,45,42,.18);
+      border-radius:10px; box-shadow:0 6px 18px rgba(34,31,28,.13); cursor:pointer;
+    }
+    .mobile-menu-btn svg{width:20px;height:20px;display:block}
+    .mynote-block.fullpage .mynote-document-head{padding-top:10px;padding-bottom:8px}
+    .mynote-block.fullpage .mynote-title-input{font-size:clamp(20px,2vw,25px)}
     #view-home { padding:32px 24px 64px!important; }
     #view-home > div[style*="grid-template-columns:1.4fr"] { grid-template-columns:1fr!important; max-width:none!important; }
     #view-home .quick-card { min-height:150px!important; }
@@ -2754,6 +2769,7 @@
     .result-shell { grid-template-columns:1fr!important; }
     #view-result, .result-shell, .result-main { width:100%!important; max-width:100%!important; min-width:0!important; }
     .result-main { padding:24px!important; overflow-x:hidden; }
+    #view-result .result-main{padding-left:72px!important}
     .result-side { margin-top:24px; }
     .mynote-block.fullpage .mynote-fullpage-meta { display:none; }
     .mynote-block.fullpage .mynote-document-head { padding-left:64px; }
@@ -3008,8 +3024,8 @@ if ('serviceWorker' in navigator) {
 
     <!-- ━━━ ADMIN (간단 — V2에서 풀세트) ━━━ -->
     <section class="view" id="view-admin" style="padding: 64px 64px 96px;">
-      <h1 style="font-size:36px; font-weight:800; letter-spacing:-0.028em; margin-bottom:12px;">설정 · 어드민</h1>
-      <p style="font-size:14.5px; color:var(--text-secondary); line-height:1.6; margin-bottom:32px;">AI 비서 이름·팀원·회의 종류·저장 위치·통합 등 모든 설정을 한 곳에서 관리합니다. 카드를 클릭해서 설정하세요.</p>
+      <h1 style="font-size:36px; font-weight:800; letter-spacing:-0.028em; margin-bottom:12px;">설정</h1>
+      <p style="font-size:14.5px; color:var(--text-secondary); line-height:1.6; margin-bottom:32px;">AI 연결, 받아쓰기, 계정과 고객지원 설정을 관리합니다.</p>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:16px; max-width:880px;">
         <button type="button" class="admin-card" data-admin="assistant">
           <span class="admin-card-tag ready">사용 가능</span>
@@ -3039,31 +3055,31 @@ if ('serviceWorker' in navigator) {
           <div class="admin-card-desc">오류 확인에 필요한 버전·환경·작업 개수·상태만 JSON으로 저장합니다.</div>
           <div class="admin-card-current"><b>회의 내용·제목·파일명·키는 제외</b></div>
         </button>
-        <button class="admin-card" data-admin="team">
+        <button class="admin-card planned" data-admin="team">
           <span class="admin-card-tag soon">V1 출시 예정</span>
           <div class="admin-card-eyebrow">팀원 등록</div>
           <div class="admin-card-title">실행 과제 분배 매핑</div>
           <div class="admin-card-desc">@담당자 자동 매핑 + 음성 등록</div>
         </button>
-        <button class="admin-card" data-admin="meeting-type">
+        <button class="admin-card planned" data-admin="meeting-type">
           <span class="admin-card-tag soon">V1 출시 예정</span>
           <div class="admin-card-eyebrow">회의 종류</div>
           <div class="admin-card-title">템플릿 사용자 정의</div>
           <div class="admin-card-desc">주간·임원·외부·시나리오 등</div>
         </button>
-        <button class="admin-card" data-admin="storage">
+        <button class="admin-card planned" data-admin="storage">
           <span class="admin-card-tag soon">V1 출시 예정</span>
           <div class="admin-card-eyebrow">저장 위치</div>
           <div class="admin-card-title">폴더 지정 + 파일명 패턴</div>
           <div class="admin-card-desc">로컬·Drive·Dropbox 등</div>
         </button>
-        <button class="admin-card" data-admin="integration">
+        <button class="admin-card planned" data-admin="integration">
           <span class="admin-card-tag soon">V1 출시 예정</span>
           <div class="admin-card-eyebrow">통합</div>
           <div class="admin-card-title">캘린더·Slack·Notion·Email</div>
           <div class="admin-card-desc">자동 분배·발송</div>
         </button>
-        <button class="admin-card" data-admin="engine">
+        <button class="admin-card planned" data-admin="engine">
           <span class="admin-card-tag soon">V1 출시 예정</span>
           <div class="admin-card-eyebrow">엔진</div>
           <div class="admin-card-title">Whisper · 공식 API (BYOK)</div>
@@ -3071,14 +3087,14 @@ if ('serviceWorker' in navigator) {
         </button>
       </div>
       <section class="provider-panel" aria-labelledby="providerPanelTitle">
-        <h2 id="providerPanelTitle">공식 API · BYOK</h2>
-        <p>정식 공개 연결은 사용자가 직접 키를 준비하는 공식 API입니다. API 키는 이 브라우저에 저장하지 않습니다.</p>
+        <h2 id="providerPanelTitle">AI 연결 · 개인 API 키</h2>
+        <p>OpenAI(ChatGPT), Gemini 또는 Anthropic(Claude)의 개인 키로 연결합니다. API 키는 이 브라우저에 저장하지 않습니다.</p>
         <label for="officialProviderSelect">AI 제공자</label>
-        <select id="officialProviderSelect"><option value="openai">OpenAI API (BYOK)</option><option value="gemini">Gemini API (BYOK)</option><option value="anthropic">Anthropic API (BYOK)</option><option value="mock">Mock 테스트</option></select>
+        <select id="officialProviderSelect"><option value="openai">OpenAI (ChatGPT API)</option><option value="gemini">Google Gemini API</option><option value="anthropic">Anthropic (Claude API)</option></select>
         <label for="officialModelSelect">모델</label><select id="officialModelSelect" aria-label="공식 API 모델"></select>
         <label class="provider-consent" for="providerConsent"><input type="checkbox" id="providerConsent" /> <span>회의 원문과 선택한 내 노트를 외부 AI 제공자에게 전송하는 데 동의합니다.</span></label>
         <div id="providerStatus" class="provider-status" role="status">상태를 확인하는 중…</div>
-        <p class="provider-status">키 등록은 대표님 승인 후 Windows 자격 증명 관리자에서만 진행합니다. iPad는 승인된 백엔드 프록시가 필요합니다.</p>
+        <p class="provider-status">API 키는 Windows 자격 증명 관리자에 안전하게 보관되며 브라우저 저장소에는 남지 않습니다.</p>
         <div id="experimentalCliPanel" hidden>
           <h3>실험적 계정 연결 · 내부 Windows 테스트판</h3>
           <p class="provider-status">CLI 소비자 계정 연결은 공식 API BYOK와 별개이며 약관·배포 제한 검토가 필요합니다. 공개판에는 표시되지 않습니다.</p>
@@ -3193,24 +3209,24 @@ if ('serviceWorker' in navigator) {
           <div class="form-row" style="margin-top:8px;">
             <label class="toggle-row" style="margin:0;">
               <span class="toggle-row-text">
-                <span class="toggle-row-title">💻 화면 오디오 함께 녹음</span>
-                <span class="toggle-row-desc">Zoom·Google Meet·Teams 같은 원격 회의 시만 켜세요. 대면 회의 = OFF (마이크만).</span>
+                <span class="toggle-row-title">영상 녹화</span>
+                <span class="toggle-row-desc">끄면 음성만 녹음합니다. 켜면 카메라와 마이크로 참석자·칠판까지 기록합니다.</span>
               </span>
               <span class="toggle-switch">
-                <input type="checkbox" id="newMeetingSysAudio" />
-                <span class="toggle-slider"></span>
+                <input type="checkbox" id="newMeetingVideo" />
+                <span class="toggle-track"></span><span class="toggle-thumb"></span>
               </span>
             </label>
           </div>
           <div class="form-row" style="margin-top:8px;">
             <label class="toggle-row" style="margin:0;">
               <span class="toggle-row-text">
-                <span class="toggle-row-title">🎥 카메라 영상 함께 녹화</span>
-                <span class="toggle-row-desc">회의실·참석자·칠판을 카메라로 촬영합니다. 영상은 이 기기의 라이브러리에 저장됩니다.</span>
+                <span class="toggle-row-title">온라인 회의 소리 포함</span>
+                <span class="toggle-row-desc">Zoom·Google Meet·Teams의 상대방 소리까지 녹음할 때만 켭니다.</span>
               </span>
               <span class="toggle-switch">
-                <input type="checkbox" id="newMeetingVideo" />
-                <span class="toggle-slider"></span>
+                <input type="checkbox" id="newMeetingSysAudio" />
+                <span class="toggle-track"></span><span class="toggle-thumb"></span>
               </span>
             </label>
           </div>
@@ -3719,7 +3735,7 @@ if ('serviceWorker' in navigator) {
             <div class="ink-panel" id="inkPanel" role="tabpanel" aria-labelledby="noteModeInk" hidden>
               <div class="ink-toolbar" aria-label="필기 도구">
                 <button type="button" class="ink-icon-btn" data-ink-tool="pen" aria-label="펜" title="펜" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-4 1 1-4zM4 20l8-8M14 5l5 5"/></svg><span class="ink-tool-label">펜</span></button><button type="button" class="ink-icon-btn" data-ink-tool="highlighter" aria-label="형광펜" title="형광펜" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l6 6M4 20h7l9-9-7-7-9 9v7zM14 18l2 2"/></svg><span class="ink-tool-label">형광펜</span></button><button type="button" class="ink-icon-btn" data-ink-tool="eraser" aria-label="지우개" title="지우개" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7l-4-4L15 4l6 6-9 9M6 13l5 5"/></svg><span class="ink-tool-label">지우개</span></button><button type="button" class="ink-icon-btn" data-ink-tool="lasso" aria-label="올가미" title="올가미" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"><path d="M20 11c0 4-4 7-9 7s-8-2-8-6 4-7 9-7 8 2 8 6zM11 18c0 3 1 4 3 4"/></svg><span class="ink-tool-label">올가미</span></button><button type="button" class="ink-icon-btn" data-ink-tool="sticky" aria-label="포스트잇" title="포스트잇" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h14a2 2 0 012 2v10l-6 6H5a2 2 0 01-2-2V5a2 2 0 012-2zM15 21v-6h6"/></svg><span class="ink-tool-label">포스트잇</span></button>
-                <details class="ink-more-tools"><summary title="도형"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="4"/><rect x="11" y="11" width="9" height="9" rx="1"/></svg><span class="ink-tool-label">도형</span></summary><div class="ink-more-menu"><button type="button" data-ink-tool="line" aria-pressed="false">선</button><button type="button" data-ink-tool="arrow" aria-pressed="false">화살표</button><button type="button" data-ink-tool="rect" aria-pressed="false">사각형</button><button type="button" data-ink-tool="ellipse" aria-pressed="false">원</button></div></details>
+                <details class="ink-more-tools"><summary title="도형" aria-label="도형 도구 열기"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="4"/><rect x="11" y="11" width="9" height="9" rx="1"/></svg><span class="ink-tool-label">도형</span></summary><div class="ink-more-menu"><button type="button" data-ink-tool="line" aria-pressed="false">선</button><button type="button" data-ink-tool="arrow" aria-pressed="false">화살표</button><button type="button" data-ink-tool="rect" aria-pressed="false">사각형</button><button type="button" data-ink-tool="ellipse" aria-pressed="false">원</button></div></details>
                 <span class="ink-color-palette" aria-label="빠른 색상"><button type="button" class="ink-color-dot" data-ink-color="#1c1d1a" style="--ink-dot:#1c1d1a" aria-label="검정" aria-pressed="true"></button><button type="button" class="ink-color-dot" data-ink-color="#b13e3e" style="--ink-dot:#b13e3e" aria-label="빨강" aria-pressed="false"></button><button type="button" class="ink-color-dot" data-ink-color="#376a8a" style="--ink-dot:#376a8a" aria-label="파랑" aria-pressed="false"></button><button type="button" class="ink-color-dot" data-ink-color="#8f6ac8" style="--ink-dot:#8f6ac8" aria-label="보라" aria-pressed="false"></button><button type="button" class="ink-color-dot" data-ink-color="#e9c94c" style="--ink-dot:#e9c94c" aria-label="노랑" aria-pressed="false"></button></span><input type="color" id="inkColor" value="#1c1d1a" aria-label="사용자 지정 펜 색" title="사용자 지정 색" />
                 <select id="inkWidth" aria-label="펜 굵기"><option value="2">얇게</option><option value="5" selected>보통</option><option value="9">굵게</option></select>
                 <button type="button" class="ink-icon-btn" id="inkUndo" aria-label="실행 취소" title="실행 취소"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 7l-5 5 5 5M5 12h8a6 6 0 016 6"/></svg></button><button type="button" class="ink-icon-btn" id="inkRedo" aria-label="다시 실행" title="다시 실행"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 7l5 5-5 5M19 12h-8a6 6 0 00-6 6"/></svg></button><button type="button" class="ink-icon-btn" id="inkClear" aria-label="현재 노트 전체 삭제" title="현재 노트 전체 삭제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14"/></svg></button>
@@ -3731,7 +3747,7 @@ if ('serviceWorker' in navigator) {
                   <button type="button" id="inkNextPage" aria-label="다음 페이지">›</button>
                   <button type="button" class="ink-icon-btn" id="inkAddPage" aria-label="페이지 추가" title="페이지 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6zM15 3v5h5M9 14h6M12 11v6"/></svg></button>
                   <button type="button" class="ink-icon-btn" id="inkDeletePage" aria-label="현재 페이지 삭제" title="현재 페이지 삭제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 7h14M9 7V4h6v3M8 7l1 14h6l1-14"/></svg></button>
-                  <details class="ink-more-tools"><summary title="용지"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h14v18H5zM5 8h14M10 8v13"/></svg><span class="ink-tool-label">용지</span></summary><span class="ink-paper-menu"><select id="inkPaper" aria-label="용지 배경"><option value="blank">무지</option><option value="dot">점선지</option><option value="grid">모눈 종이</option><option value="ruled">줄노트 · 좁게</option><option value="ruled-wide">줄노트 · 넓게</option><option value="manuscript">원고지</option></select><input type="color" id="inkPaperColor" value="#ffffff" aria-label="용지 배경색" title="용지 배경색" /><button type="button" id="inkTemplateOpen">템플릿 이미지</button><button type="button" id="inkTemplateClear">템플릿 제거</button><input type="file" id="inkTemplateInput" accept="image/png,image/jpeg,image/webp" hidden /></span></details>
+                  <details class="ink-more-tools"><summary title="용지" aria-label="용지 설정 열기"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h14v18H5zM5 8h14M10 8v13"/></svg><span class="ink-tool-label">용지</span></summary><span class="ink-paper-menu"><select id="inkPaper" aria-label="용지 배경"><option value="blank">무지</option><option value="dot">점선지</option><option value="grid">모눈 종이</option><option value="ruled">줄노트 · 좁게</option><option value="ruled-wide">줄노트 · 넓게</option><option value="manuscript">원고지</option></select><input type="color" id="inkPaperColor" value="#ffffff" aria-label="용지 배경색" title="용지 배경색" /><button type="button" id="inkTemplateOpen" aria-label="템플릿 이미지 불러오기">템플릿 이미지</button><button type="button" id="inkTemplateClear" aria-label="템플릿 이미지 제거">템플릿 제거</button><input type="file" id="inkTemplateInput" accept="image/png,image/jpeg,image/webp" hidden /></span></details>
                 </span>
                 <span class="ink-right-actions"><button type="button" class="ink-icon-btn" id="inkSourceToggle" data-zone="right" aria-label="자료와 노트 분할 보기" title="자료와 노트 분할 보기" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg></button><button type="button" class="ink-icon-btn" id="inkSourceOpen" data-zone="right" aria-label="PDF 또는 이미지 자료 열기" title="PDF 또는 이미지 자료 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h7l2 2h9v11H3z"/></svg></button><input type="file" id="inkSourceInput" accept="application/pdf,image/*" hidden /><button type="button" class="ink-icon-btn" id="inkExportPng" data-zone="right" aria-label="현재 페이지 내보내기" title="현재 페이지 내보내기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M8 7l4-4 4 4M5 13v8h14v-8"/></svg></button></span>
               </div>
@@ -4357,6 +4373,11 @@ if ('serviceWorker' in navigator) {
     if (target === 'meetings') setTimeout(() => window.__pronoteRenderMeetingsList?.(), 0);
     else if (target === 'mynotes') setTimeout(() => window.__pronoteRenderMyNotesList?.(), 0);
     try { if (typeof renderSidebarMeetingHistory === 'function') renderSidebarMeetingHistory(); } catch {}
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.querySelector('main.main')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      view?.scrollTo?.({ top: 0, left: 0, behavior: 'auto' });
+    });
   }
 
   document.querySelectorAll('[data-demo]').forEach(el => {
@@ -5421,7 +5442,7 @@ if ('serviceWorker' in navigator) {
   function renderMeetingsGrid(filterTag, q) {
     const grid = document.getElementById('meetingsGrid');
     if (!grid) return;
-    const all = loadMeetings();
+    const all = loadMeetings().filter(m => !m.standalone);
     const needle = (q || '').trim().toLowerCase();
     const filtered = all.filter(m => {
       if (filterTag && filterTag !== 'all' && m.tag !== filterTag) return false;
@@ -9481,6 +9502,7 @@ if ('serviceWorker' in navigator) {
 
     function setResultEmptyState(empty) {
       ['#meetingResultTabs', '#view-result .result-tag-row', '#view-result .result-actionbar',
+       '#view-result .notes-box-head',
        '#view-result .actionbar-note', '#view-result #info', '#view-result .result-side']
         .forEach(sel => document.querySelectorAll(sel).forEach(el => {
           if (el.dataset.pronoteDisplay === undefined) {
@@ -9500,7 +9522,17 @@ if ('serviceWorker' in navigator) {
 
     // 진짜 회의 데이터 binding
     function renderRealMeeting() {
-      const m = getCurrentMeeting();
+      let m = getCurrentMeeting();
+      if (m?.standalone) {
+        try {
+          const meetings = JSON.parse(localStorage.getItem('ai_pronote.meetings.v1') || '[]');
+          m = meetings.find(item => item && !item.standalone) || null;
+          if (m?.id) {
+            localStorage.setItem('ai_pronote.current_view_meeting.v1', m.id);
+            window.PronoteInk?.switchMeeting?.(m.id).catch(() => {});
+          }
+        } catch { m = null; }
+      }
       if (!m) {
         // 실사용 = 아직 회의 없음 → 샘플 대신 빈 상태 안내 (데모 모드에서는 샘플 유지)
         if (!isDemoOn()) {
@@ -10202,7 +10234,7 @@ if ('serviceWorker' in navigator) {
   }
   function openSetup() {
     if (selectedProvider() !== 'claude_cli') {
-      window.showToast && window.showToast('설정 · 어드민에서 사용할 AI를 연결하세요');
+      window.showToast && window.showToast('설정에서 사용할 AI를 연결하세요');
       return;
     }
     if (!modal) build();
@@ -10452,7 +10484,7 @@ if ('serviceWorker' in navigator) {
     var msg = (input.value || '').trim(); if (!msg) return;
     var provider = window.__pronoteGetAIProvider ? window.__pronoteGetAIProvider() : 'policy_blocked';
     if (provider === 'policy_blocked') {
-      bubble(chat, 'AI 연결 없이도 녹음·영상·받아쓰기·필기를 사용할 수 있어요. AI 회의록·정확도 향상·에이전트 기능을 쓰려면 설정 · 어드민에서 Claude, ChatGPT 또는 Gemini를 연결해 주세요.', false, false);
+      bubble(chat, 'AI 연결 없이도 녹음·영상·받아쓰기·필기를 사용할 수 있어요. AI 회의록·정확도 향상·에이전트 기능을 쓰려면 설정에서 OpenAI(ChatGPT), Gemini 또는 Anthropic(Claude)을 연결해 주세요.', false, false);
       return;
     }
     // Claude CLI를 선택한 경우에만 Claude 로그인 상태로 요청을 막는다.

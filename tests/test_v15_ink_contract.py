@@ -74,6 +74,18 @@ class InkContractTests(unittest.TestCase):
         ):
             self.assertIn(token, self.js)
 
+    def test_lasso_selection_can_move_strokes_and_cancel_safely(self):
+        for token in ('lassoMoveStart', 'lassoOriginalPoints', 'x:q.x+dx', 'y:q.y+dy'):
+            self.assertIn(token, self.js)
+        self.assertIn('if(lassoOriginalPoints)doc.strokes.forEach', self.js)
+
+    def test_shape_and_paper_menus_open_as_visible_popovers(self):
+        self.assertIn('positionInkMenu', self.js)
+        self.assertIn("window.innerWidth-box.width-8", self.js)
+        self.assertIn('.ink-more-tools[open] :is(.ink-more-menu,.ink-paper-menu)', self.html)
+        for label in ('도형 도구 열기', '용지 설정 열기', '템플릿 이미지 불러오기', '템플릿 이미지 제거'):
+            self.assertIn(f'aria-label="{label}"', self.html)
+
     def test_split_reference_and_sticky_note_tools_are_available(self):
         for token in ('id="inkSourceToggle"', 'id="inkSourceInput"', 'id="inkExportPng"', 'data-ink-tool="sticky"'):
             self.assertIn(token, self.html)
