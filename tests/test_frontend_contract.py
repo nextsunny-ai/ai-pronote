@@ -35,6 +35,14 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("const resultViewActive = document.getElementById('view-result')?.classList.contains('active')", HTML)
         self.assertIn("if (!resultViewActive) return;", HTML)
 
+    def test_version_display_and_update_popup_are_wired_to_safe_api(self):
+        self.assertIn('id="appVersionLabel"', HTML)
+        self.assertIn('id="updateAvailableModal"', HTML)
+        self.assertIn("fetch('/api/update/status'", HTML)
+        self.assertIn("fetch('/api/update/prepare'", HTML)
+        self.assertIn("'X-Pronote-Update': 'prepare'", HTML)
+        self.assertIn("update.state !== 'available'", HTML)
+
     def test_v15_accessibility_and_responsive_tokens_exist(self):
         self.assertIn('id="v15-design-system"', HTML)
         self.assertIn(":focus-visible", HTML)

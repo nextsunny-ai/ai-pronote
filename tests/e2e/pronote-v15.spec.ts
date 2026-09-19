@@ -880,6 +880,36 @@ test.describe('PWA 설치 준비 계약', () => {
   });
 });
 
+test.describe('버전 표시와 자동 업데이트 안내', () => {
+  test('새 버전이 있으면 팝업을 띄우고 명시적 선택 뒤에만 준비한다', async ({ page }) => {
+    await mockBackend(page);
+    let prepared = false;
+    await page.route('**/api/health', route => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok', version: 'v1.5.0-beta12.20260919' })
+    }));
+    await page.route('**/api/update/status', route => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify({
+        state: 'available', version: 'v1.5.0-beta13.20260920', prepare_allowed: true,
+        release_notes_url: 'https://example.com/release-notes'
+      })
+    }));
+    await page.route('**/api/update/prepare', route => {
+      prepared = true;
+      return route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify({ state: 'prepared', restart_required: true })
+      });
+    });
+    await openApp(page);
+    await expect(page.locator('#appVersionLabel')).toContainText('v1.5.0-beta12.20260919');
+    await expect(page.locator('#updateAvailableModal')).toHaveClass(/open/);
+    await expect(page.locator('#updateAvailableVersion')).toContainText('1.5.0-beta13.20260920');
+    expect(prepared).toBeFalsy();
+    await page.locator('#updateAvailablePrepare').click();
+    await expect(page.locator('#updateAvailableTitle')).toHaveText('업데이트 준비가 끝났습니다');
+    expect(prepared).toBeTruthy();
+  });
+});
+
 test.describe('카메라 회의 녹화·보존 계약', () => {
   test('마이크 권한이 거부되면 가짜 녹음 화면으로 전환하지 않는다', async ({ page }) => {
     await page.addInitScript(() => {

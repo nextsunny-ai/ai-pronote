@@ -2978,11 +2978,34 @@ if ('serviceWorker' in navigator) {
         <div class="avatar">U</div>
         <div>
           <div class="user-name">사용자</div>
-          <div class="user-role">관리자</div>
+          <div class="user-role">내 기기 · <span id="appVersionLabel">버전 확인 중</span></div>
         </div>
       </div>
     </div>
   </aside>
+
+  <div class="modal-overlay" id="updateAvailableModal" role="dialog" aria-modal="true" aria-labelledby="updateAvailableTitle">
+    <div class="modal-card" style="max-width:500px;">
+      <div class="modal-head">
+        <div>
+          <div class="modal-eyebrow">AI PRONOTE 업데이트</div>
+          <h2 class="modal-title" id="updateAvailableTitle">새 버전이 준비되었습니다</h2>
+        </div>
+        <button type="button" class="modal-close" id="updateAvailableClose" aria-label="나중에 확인">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="updateAvailableMessage" style="font-size:14px;line-height:1.7;color:var(--text-secondary);margin:0;">업데이트 정보를 확인했습니다.</p>
+        <p id="updateAvailableVersion" style="font-size:13px;font-weight:650;margin:14px 0 0;"></p>
+        <a id="updateReleaseNotes" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:12px;font-size:13px;">이번 업데이트 내용 보기</a>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="modal-btn" id="updateAvailableLater">나중에</button>
+        <button type="button" class="modal-btn primary" id="updateAvailablePrepare">업데이트 준비</button>
+      </div>
+    </div>
+  </div>
 
   <main class="main">
 
@@ -10800,6 +10823,85 @@ document.getElementById('homeNoteOnlyCard')?.addEventListener('click', function 
   if (typeof switchView === 'function') switchView('mynotes');
   window.setTimeout(function () { document.getElementById('newStandaloneNoteBtn')?.click(); }, 80);
 });
+</script>
+<script>
+(function initAppVersionAndUpdates() {
+  const versionLabel = document.getElementById('appVersionLabel');
+  const modal = document.getElementById('updateAvailableModal');
+  const title = document.getElementById('updateAvailableTitle');
+  const message = document.getElementById('updateAvailableMessage');
+  const versionText = document.getElementById('updateAvailableVersion');
+  const releaseNotes = document.getElementById('updateReleaseNotes');
+  const prepareButton = document.getElementById('updateAvailablePrepare');
+  const laterButton = document.getElementById('updateAvailableLater');
+  const closeButton = document.getElementById('updateAvailableClose');
+  let availableVersion = '';
+
+  function displayVersion(raw) {
+    const value = String(raw || '').replace(/^v/, '');
+    if (versionLabel) versionLabel.textContent = value ? `v${value}` : '버전 정보 없음';
+  }
+  function closeUpdate(remember) {
+    modal?.classList.remove('open');
+    if (remember && availableVersion) {
+      try { localStorage.setItem('ai_pronote.update_dismissed.v1', availableVersion); } catch {}
+    }
+  }
+  async function checkUpdate() {
+    try {
+      const [healthResponse, updateResponse] = await Promise.all([
+        fetch('/api/health', { cache: 'no-store' }),
+        fetch('/api/update/status', { cache: 'no-store' })
+      ]);
+      if (healthResponse.ok) displayVersion((await healthResponse.json()).version);
+      if (!updateResponse.ok) return;
+      const update = await updateResponse.json();
+      if (update.state !== 'available' || !update.version) return;
+      availableVersion = String(update.version);
+      let dismissed = '';
+      try { dismissed = localStorage.getItem('ai_pronote.update_dismissed.v1') || ''; } catch {}
+      if (dismissed === availableVersion) return;
+      if (versionText) versionText.textContent = `새 버전 ${availableVersion.replace(/^v/, '')}`;
+      if (releaseNotes) {
+        releaseNotes.href = update.release_notes_url || '#';
+        releaseNotes.hidden = !update.release_notes_url;
+      }
+      if (prepareButton) prepareButton.hidden = !update.prepare_allowed;
+      modal?.classList.add('open');
+    } catch {
+      if (versionLabel?.textContent === '버전 확인 중') versionLabel.textContent = '오프라인';
+    }
+  }
+  async function prepareUpdate() {
+    if (!prepareButton || prepareButton.disabled) return;
+    prepareButton.disabled = true;
+    prepareButton.textContent = '안전하게 준비 중…';
+    try {
+      const response = await fetch('/api/update/prepare', {
+        method: 'POST', headers: { 'X-Pronote-Update': 'prepare' }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail?.message || data?.detail || '업데이트 준비에 실패했습니다.');
+      if (title) title.textContent = '업데이트 준비가 끝났습니다';
+      if (message) message.textContent = data.restart_required
+        ? '현재 작업을 저장한 뒤 AI PRONOTE를 닫고 바탕화면 아이콘으로 다시 열면 새 버전이 적용됩니다.'
+        : '업데이트 파일을 안전하게 확인했습니다. 이번 업데이트 내용에서 설치 안내를 확인해 주세요.';
+      prepareButton.textContent = '확인';
+      prepareButton.disabled = false;
+      prepareButton.onclick = () => closeUpdate(true);
+      if (laterButton) laterButton.hidden = true;
+    } catch (error) {
+      if (message) message.textContent = error?.message || '업데이트를 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+      prepareButton.textContent = '다시 시도';
+      prepareButton.disabled = false;
+    }
+  }
+  laterButton?.addEventListener('click', () => closeUpdate(true));
+  closeButton?.addEventListener('click', () => closeUpdate(true));
+  prepareButton?.addEventListener('click', prepareUpdate);
+  window.setTimeout(checkUpdate, 1200);
+  window.__pronoteUpdate = { check: checkUpdate };
+})();
 </script>
 <script src="/static/v15-ink.js"></script>
 </body>
