@@ -21,10 +21,16 @@ import 'recording/audio_recorder_gateway.dart';
 import 'recording/device_audio_recorder.dart';
 import 'recording/device_video_recorder.dart';
 import 'recording/video_recorder_gateway.dart';
+import 'storage/application_storage.dart';
 import 'update/update_checker.dart';
 
-Future<Directory> _defaultRecordingDirectory() async {
+Future<Directory> _defaultApplicationDirectory() async {
   final documents = await getApplicationDocumentsDirectory();
+  return ApplicationStorage(documents).prepare();
+}
+
+Future<Directory> _defaultRecordingDirectory() async {
+  final documents = await _defaultApplicationDirectory();
   final recordings = Directory(
     '${documents.path}${Platform.pathSeparator}recordings',
   );
@@ -33,14 +39,14 @@ Future<Directory> _defaultRecordingDirectory() async {
 }
 
 Future<Directory> _defaultVideoDirectory() async {
-  final documents = await getApplicationDocumentsDirectory();
+  final documents = await _defaultApplicationDirectory();
   final videos = Directory('${documents.path}${Platform.pathSeparator}videos');
   await videos.create(recursive: true);
   return videos;
 }
 
 Future<Directory> _defaultExportDirectory() async {
-  final documents = await getApplicationDocumentsDirectory();
+  final documents = await _defaultApplicationDirectory();
   final exports = Directory(
     '${documents.path}${Platform.pathSeparator}AI_PRONOTE_exports',
   );
@@ -59,7 +65,7 @@ Future<String?> _pickExistingMeetingMedia() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final documents = await getApplicationDocumentsDirectory();
+  final documents = await _defaultApplicationDirectory();
   final packageInfo = await PackageInfo.fromPlatform();
   runApp(
     PronoteApp(

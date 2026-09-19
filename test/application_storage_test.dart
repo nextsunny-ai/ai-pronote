@@ -9,7 +9,9 @@ void main() {
       'pronote-storage-migration-',
     );
     addTearDown(() => documents.delete(recursive: true));
-    final legacyNotes = File('${documents.path}${Platform.pathSeparator}notes.json');
+    final legacyNotes = File(
+      '${documents.path}${Platform.pathSeparator}notes.json',
+    );
     final legacyJobs = File(
       '${documents.path}${Platform.pathSeparator}processing_jobs.json',
     );
@@ -18,7 +20,9 @@ void main() {
     final recordings = Directory(
       '${documents.path}${Platform.pathSeparator}recordings',
     );
-    final videos = Directory('${documents.path}${Platform.pathSeparator}videos');
+    final videos = Directory(
+      '${documents.path}${Platform.pathSeparator}videos',
+    );
     final exports = Directory(
       '${documents.path}${Platform.pathSeparator}AI_PRONOTE_exports',
     );
@@ -46,9 +50,13 @@ void main() {
     final root = await storage.prepare();
 
     expect(root.path, '${documents.path}${Platform.pathSeparator}AI PRONOTE');
-    expect(await File('${root.path}${Platform.pathSeparator}notes.json').exists(), isTrue);
     expect(
-      await File('${root.path}${Platform.pathSeparator}processing_jobs.json').exists(),
+      await File('${root.path}${Platform.pathSeparator}notes.json').exists(),
+      isTrue,
+    );
+    expect(
+      await File('${root.path}${Platform.pathSeparator}processing_jobs.json')
+          .exists(),
       isTrue,
     );
     expect(
@@ -86,7 +94,9 @@ void main() {
       'pronote-storage-safety-',
     );
     addTearDown(() => documents.delete(recursive: true));
-    final legacyNotes = File('${documents.path}${Platform.pathSeparator}notes.json');
+    final legacyNotes = File(
+      '${documents.path}${Platform.pathSeparator}notes.json',
+    );
     await legacyNotes.writeAsString('{"private":"unrelated"}');
     final storage = ApplicationStorage(documents);
     await storage.root.create(recursive: true);
@@ -94,14 +104,14 @@ void main() {
       '${storage.root.path}${Platform.pathSeparator}processing_jobs.json',
     );
     await destinationJobs.writeAsString('newer-data');
-    await File(
-      '${documents.path}${Platform.pathSeparator}processing_jobs.json',
-    ).writeAsString('{"schemaVersion":1,"jobs":[]}');
+    await File('${documents.path}${Platform.pathSeparator}processing_jobs.json')
+        .writeAsString('{"schemaVersion":1,"jobs":[]}');
 
     await storage.prepare();
 
     expect(
-      await File('${storage.root.path}${Platform.pathSeparator}notes.json').exists(),
+      await File('${storage.root.path}${Platform.pathSeparator}notes.json')
+          .exists(),
       isFalse,
     );
     expect(await destinationJobs.readAsString(), 'newer-data');
