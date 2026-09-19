@@ -1,9 +1,25 @@
 import unittest
+from unittest.mock import patch
 
 import main
 
 
 class TranscriptCorrectionTests(unittest.TestCase):
+    def test_model_cache_shares_raw_model_and_selects_accuracy_engine(self):
+        raw_model = object()
+        batched_model = object()
+        original_cache = main._model_cache
+        main._model_cache = {}
+        try:
+            with patch.object(main, "WhisperModel", return_value=raw_model) as whisper_model, \
+                    patch.object(main, "BatchedInferencePipeline", return_value=batched_model) as pipeline:
+                self.assertIs(main.get_model("medium"), batched_model)
+                self.assertIs(main.get_model("medium", batched=False), raw_model)
+                whisper_model.assert_called_once()
+                pipeline.assert_called_once_with(model=raw_model)
+        finally:
+            main._model_cache = original_cache
+
     def test_auto_language_maps_to_whisper_detection(self):
         self.assertIsNone(main.whisper_language("auto"))
         self.assertIsNone(main.whisper_language(""))

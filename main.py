@@ -1118,16 +1118,24 @@ def companion_logout(request: Request):
     return response
 
 
-def get_model(size: str):
-    """모델 캐시 — 같은 size 재사용 (메모리 절약)"""
+def get_model(size: str, *, batched: bool = True):
+    """모델 캐시 — 같은 size의 원본 모델을 공유한다.
+
+    실시간 부분 받아쓰기는 지연시간을 줄이기 위해 배치 파이프라인을 쓰지만,
+    저장되는 최종 받아쓰기는 원본 ``WhisperModel``을 사용한다. 배치
+    파이프라인은 짧은 무음으로 나뉜 파일에서 마지막 발화가 누락될 수 있다.
+    """
     if size not in ALLOWED_MODELS:
         size = DEFAULT_MODEL
     if size not in _model_cache:
         print(f"[AI PRONOTE] 모델 로드: {size} · CPU · int8 · cpu_threads=8")
         wm = WhisperModel(size, device=DEVICE, compute_type=COMPUTE_TYPE, cpu_threads=8, num_workers=1)
-        _model_cache[size] = BatchedInferencePipeline(model=wm)
+        _model_cache[size] = {
+            "raw": wm,
+            "batched": BatchedInferencePipeline(model=wm),
+        }
         print(f"[AI PRONOTE] {size} 준비 완료")
-    return _model_cache[size]
+    return _model_cache[size]["batched" if batched else "raw"]
 
 
 def generate_title(transcript: str, model_alias: str = "haiku",
@@ -1186,7 +1194,7 @@ def version_info():
         "build_note": BUILD_NOTE,
         "drive_master": "Drive/SUNNY_TEAM/AI_PRONOTE/source_v1.3/",
         "github": "https://github.com/nextsunny-ai/ai-pronote",
-        "release": "https://github.com/nextsunny-ai/ai-pronote/releases/tag/v1.5.0-beta13-20260920.3",
+        "release": "https://github.com/nextsunny-ai/ai-pronote/releases/tag/v1.5.0-beta13-20260920.4",
     }
 
 
@@ -2744,7 +2752,7 @@ def _run_transcription(upload_path: Path, filename: str, job_id: str,
 
     try:
         report(2, "받아쓰기 모델 준비 중")
-        m = get_model(model)
+        m = get_model(model, batched=False)
         t_start = time.time()
         # 한국어 정확도 개선 + 환각·반복 억제 (2026-07-14 실측 반영).
         #   no_repeat_ngram_size/repetition_penalty = "한 번에 한 번에…" 루프 차단
@@ -2752,7 +2760,6 @@ def _run_transcription(upload_path: Path, filename: str, job_id: str,
         selected_language = whisper_language(language)
         tx_kwargs = dict(
             beam_size=max(1, min(int(beam_size), 5)),
-            batch_size=8,
             vad_filter=True,
             vad_parameters=dict(min_silence_duration_ms=500),
             no_repeat_ngram_size=3,
@@ -2772,7 +2779,7 @@ def _run_transcription(upload_path: Path, filename: str, job_id: str,
             except TypeError:
                 iterator, pass_info = m.transcribe(
                     str(upload_path), language=pass_language,
-                    beam_size=tx_kwargs["beam_size"], batch_size=8,
+                    beam_size=tx_kwargs["beam_size"],
                 )
             pass_segments = []
             previous = None
