@@ -4,13 +4,13 @@ AI PRONOTE는 Mac·Windows에서 회의 음성 또는 카메라 영상+음성을
 
 ## 빠른 시작
 
-1. macOS 12 이상 또는 Windows 10/11(64비트), Python 3.10~3.12와 인터넷 연결을 준비합니다.
+1. macOS 12 이상 또는 Windows 10/11(64비트), Python 3.12 64비트와 인터넷 연결을 준비합니다.
 2. 압축을 쓰기 가능한 로컬 폴더에 완전히 풉니다. OneDrive/Google Drive 동기화 중인 폴더는 피하는 편이 안전합니다.
 3. Mac은 `mac/1_FIRST_SETUP.command`, Windows는 `1_FIRST_SETUP.cmd`를 한 번 실행합니다.
-4. Mac은 `mac/AI PRONOTE.app`, Windows는 `3_START_AI_PRONOTE.vbs`를 실행합니다.
+4. Mac은 `mac/AI PRONOTE.app`, Windows는 설치가 만든 바탕화면 `AI PRONOTE` 아이콘을 실행합니다.
 5. 처음에는 짧은 비민감 음성으로 업로드→작업함→결과→다운로드를 확인합니다.
 
-데이터는 기본적으로 앱 폴더의 `data_v15`에 저장됩니다. API 키는 OS 자격 증명 저장소를 사용하는 공식 BYOK 흐름만 권장합니다. iPad는 앱 파일을 설치하는 방식이 아니라 Windows companion에 HTTPS로 접속해 홈 화면에 추가하는 PWA 방식입니다.
+데이터는 Windows의 `%LOCALAPPDATA%\AI_PRONOTE\v1.5\data`, Mac의 `~/Library/Application Support/AI_PRONOTE/v1.5/data`에 저장됩니다. API 키는 OS 자격 증명 저장소를 사용하는 공식 BYOK 흐름만 권장합니다. iPad는 앱 파일을 설치하는 방식이 아니라 Windows companion에 HTTPS로 접속해 홈 화면에 추가하는 PWA 방식입니다.
 
 ## 정식 연동과 실험 기능
 
