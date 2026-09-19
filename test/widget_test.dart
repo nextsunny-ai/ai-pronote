@@ -14,7 +14,7 @@ void main() {
     expect(find.text('버전 1.0'), findsOneWidget);
     expect(find.text('새 노트'), findsOneWidget);
     expect(find.text('회의 녹음'), findsOneWidget);
-    expect(find.text('최근 노트'), findsOneWidget);
+    expect(find.text('내 노트'), findsOneWidget);
   });
 
   testWidgets('새 노트에서 스타일러스 획을 그리고 자동 저장한다', (tester) async {
@@ -189,5 +189,54 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('previous-page')));
     await tester.pump();
     expect(find.text('1/2 페이지'), findsOneWidget);
+  });
+
+  testWidgets('보관함에서 제목으로 노트를 검색한다', (tester) async {
+    final repository = MemoryNoteRepository();
+    await repository.save(
+      NoteDocument(
+        id: 'design-note',
+        title: '디자인 회의',
+        updatedAt: DateTime(2026, 9, 19),
+      ),
+    );
+    await repository.save(
+      NoteDocument(
+        id: 'budget-note',
+        title: '예산 검토',
+        updatedAt: DateTime(2026, 9, 18),
+      ),
+    );
+    await tester.pumpWidget(PronoteApp(repository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const ValueKey('note-search')), '디자인');
+    await tester.pump();
+
+    expect(find.text('디자인 회의'), findsOneWidget);
+    expect(find.text('예산 검토'), findsNothing);
+  });
+
+  testWidgets('편집기에서 바꾼 노트 제목을 자동 저장한다', (tester) async {
+    final repository = MemoryNoteRepository();
+    await repository.save(
+      NoteDocument(
+        id: 'rename-note',
+        title: '제목 없는 노트',
+        updatedAt: DateTime(2026, 9, 19),
+      ),
+    );
+    await tester.pumpWidget(PronoteApp(repository: repository));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('제목 없는 노트'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('note-title-field')),
+      '신제품 회의',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect((await repository.list()).single.title, '신제품 회의');
   });
 }

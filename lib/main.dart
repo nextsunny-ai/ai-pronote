@@ -179,6 +179,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<NoteDocument>> _notes = widget.repository.list();
+  String _query = '';
 
   Future<void> _newNote() async {
     final note = NoteDocument(
@@ -295,9 +296,18 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 28),
             Text(
-              '최근 노트',
+              '내 노트',
               style: Theme.of(context).textTheme.titleLarge
                   ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            SearchBar(
+              key: const ValueKey('note-search'),
+              hintText: '노트 제목 검색',
+              leading: const Icon(Icons.search_rounded),
+              elevation: const WidgetStatePropertyAll(0),
+              backgroundColor: const WidgetStatePropertyAll(Colors.white),
+              onChanged: (value) => setState(() => _query = value.trim()),
             ),
             const SizedBox(height: 12),
             Expanded(
@@ -305,26 +315,102 @@ class _HomeScreenState extends State<HomeScreen> {
                 future: _notes,
                 builder: (context, snapshot) {
                   final notes = snapshot.data ?? const [];
+                  final visible = notes
+                      .where(
+                        (note) => note.title.toLowerCase().contains(
+                          _query.toLowerCase(),
+                        ),
+                      )
+                      .toList(growable: false);
                   if (notes.isEmpty) {
                     return const Align(
                       alignment: Alignment.topLeft,
                       child: Text('아직 저장된 노트가 없습니다.'),
                     );
                   }
-                  return ListView.separated(
-                    itemCount: notes.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) => Card(
-                      child: ListTile(
-                        onTap: () => _openNote(notes[index]),
-                        leading: const Icon(Icons.description_outlined),
-                        title: Text(notes[index].title),
-                        subtitle: Text('${notes[index].strokes.length}개 필기 획'),
+                  if (visible.isEmpty) {
+                    return const Align(
+                      alignment: Alignment.topLeft,
+                      child: Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Text('검색 결과가 없습니다.'),
                       ),
+                    );
+                  }
+                  return GridView.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 330,
+                          mainAxisExtent: 150,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                    itemCount: visible.length,
+                    itemBuilder: (context, index) => _NoteLibraryCard(
+                      note: visible[index],
+                      onTap: () => _openNote(visible[index]),
                     ),
                   );
                 },
               ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _NoteLibraryCard extends StatelessWidget {
+  const _NoteLibraryCard({required this.note, required this.onTap});
+
+  final NoteDocument note;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(18),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xfff1efe8),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: const Icon(Icons.edit_note_rounded),
+                ),
+                const Spacer(),
+                Text(
+                  '${note.pages.length}페이지',
+                  style: Theme.of(context).textTheme.labelMedium
+                      ?.copyWith(color: const Color(0xff77746d)),
+                ),
+              ],
+            ),
+            const Spacer(),
+            Text(
+              note.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${note.updatedAt.year}.${note.updatedAt.month.toString().padLeft(2, '0')}.${note.updatedAt.day.toString().padLeft(2, '0')}',
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: const Color(0xff77746d)),
             ),
           ],
         ),
@@ -522,6 +608,7 @@ class NoteEditor extends StatefulWidget {
 
 class _NoteEditorState extends State<NoteEditor> {
   late NoteDocument _note = widget.initialNote;
+  late final TextEditingController _titleController;
   InkStroke? _active;
   InkTool _tool = InkTool.pen;
   int _inkColor = 0xff1c1d1a;
@@ -531,6 +618,12 @@ class _NoteEditorState extends State<NoteEditor> {
   final List<List<InkStroke>> _redoHistory = [];
   bool _fingerDrawingEnabled = false;
   int _currentPageIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: _note.title);
+  }
 
   List<InkStroke> get _currentStrokes => _note.pages[_currentPageIndex].strokes;
 
@@ -671,6 +764,7 @@ class _NoteEditorState extends State<NoteEditor> {
   void dispose() {
     _saveTimer?.cancel();
     widget.repository.save(_note);
+    _titleController.dispose();
     super.dispose();
   }
 
@@ -680,7 +774,25 @@ class _NoteEditorState extends State<NoteEditor> {
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(_note.title),
+          SizedBox(
+            width: 240,
+            child: TextField(
+              key: const ValueKey('note-title-field'),
+              controller: _titleController,
+              maxLines: 1,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+              decoration: const InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+              ),
+              onChanged: (value) {
+                final title = value.trim().isEmpty ? '제목 없는 노트' : value;
+                _note = _note.copyWith(title: title, updatedAt: DateTime.now());
+                _scheduleSave();
+              },
+            ),
+          ),
           Text(
             '${_currentPageIndex + 1}/${_note.pages.length} 페이지',
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
