@@ -130,6 +130,9 @@ class UpdateContractTests(unittest.TestCase):
             runtime = prepare_version_runtime(root, version, runner=successful_runner)
             self.assertTrue((runtime / ".runtime-complete.json").is_file())
             self.assertEqual(len(calls), 4)
+            temporary_runtime = Path(calls[0][3])
+            self.assertLessEqual(len(temporary_runtime.name), 16)
+            self.assertNotIn(version, temporary_runtime.name)
             self.assertEqual(prepare_version_runtime(root, version, runner=lambda *_a, **_k: self.fail()), runtime)
 
     def test_failed_version_runtime_never_becomes_visible(self):
