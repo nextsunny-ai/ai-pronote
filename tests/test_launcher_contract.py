@@ -19,6 +19,8 @@ class LauncherContractTests(unittest.TestCase):
         self.assertIn("AppActivate", launcher)
         self.assertIn("version conflict", lowered)
         self.assertIn("AbandonedMutexException", launcher)
+        self.assertIn("Select-AvailablePort", launcher)
+        self.assertIn("8796..8815", launcher)
 
     def test_hidden_vbs_wrapper_targets_new_launcher_only(self):
         wrapper = (ROOT / "start_v15.vbs").read_text(encoding="utf-8")

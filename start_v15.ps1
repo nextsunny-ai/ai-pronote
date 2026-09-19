@@ -18,6 +18,23 @@ function Get-Health {
     }
 }
 
+function Select-AvailablePort {
+    foreach ($candidate in 8796..8815) {
+        $listener = $null
+        try {
+            $listener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, $candidate)
+            $listener.Start()
+            $listener.Stop()
+            $script:Port = $candidate
+            $script:BaseUrl = "http://${HostAddress}:${candidate}"
+            return $true
+        } catch {
+            if ($listener) { try { $listener.Stop() } catch {} }
+        }
+    }
+    return $false
+}
+
 function Show-AppWindow {
     $matching = Get-CimInstance Win32_Process -Filter "Name = 'chrome.exe'" -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -and $_.CommandLine.Contains("--app=$BaseUrl") } |
@@ -62,11 +79,15 @@ try {
     $health = Get-Health
     if ($health) {
         if ($health.version -ne $ExpectedVersion) {
-            Show-VersionConflict ([string]$health.version)
-            exit 2
+            if (-not (Select-AvailablePort)) {
+                Show-VersionConflict ([string]$health.version)
+                exit 2
+            }
+            $health = $null
+        } else {
+            Show-AppWindow
+            exit 0
         }
-        Show-AppWindow
-        exit 0
     }
 
     Add-Type -AssemblyName System.Windows.Forms
