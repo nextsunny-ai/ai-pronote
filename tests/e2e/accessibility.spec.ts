@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-const views = ['home', 'mynotes', 'library', 'admin'] as const;
+const views = ['home', 'mynotes', 'library', 'result', 'dict', 'copilot', 'admin'] as const;
 
 test.describe('WCAG 2.1 AA 출시 스모크', () => {
   for (const view of views) {
