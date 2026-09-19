@@ -40,6 +40,27 @@ Future<void> _openExistingNote(WidgetTester tester, String title) async {
 }
 
 void main() {
+  for (final size in const [Size(834, 1194), Size(1194, 834)]) {
+    testWidgets(
+      'iPad ${size.width.toInt()}x${size.height.toInt()}에서 노트 캔버스와 도구가 안전하게 열린다',
+      (tester) async {
+        await tester.binding.setSurfaceSize(size);
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final repository = MemoryNoteRepository();
+        await tester.pumpWidget(PronoteApp(repository: repository));
+        await _openNewNote(tester);
+
+        final canvas = find.byKey(const ValueKey('ink-canvas'));
+        expect(canvas, findsOneWidget);
+        expect(tester.getSize(canvas).width, greaterThan(size.width * .85));
+        expect(tester.getSize(canvas).height, greaterThan(size.height * .45));
+        expect(find.byKey(const ValueKey('paper-style-menu')), findsOneWidget);
+        expect(find.byKey(const ValueKey('add-sticky')), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets('노트를 다른 앱에서 열 수 있는 문서로 내보낸다', (tester) async {
     final repository = MemoryNoteRepository();
     final exporter = _RecordingNoteExporter();
@@ -106,9 +127,9 @@ void main() {
     await tester.pumpWidget(PronoteApp(repository: repository));
     await _openNewNote(tester);
 
-    expect(find.text('펜'), findsOneWidget);
-    expect(find.text('형광펜'), findsOneWidget);
-    expect(find.text('지우개'), findsOneWidget);
+    expect(find.byKey(const ValueKey('tool-pen')), findsOneWidget);
+    expect(find.byKey(const ValueKey('tool-highlighter')), findsOneWidget);
+    expect(find.byKey(const ValueKey('tool-eraser')), findsOneWidget);
     expect(find.byKey(const ValueKey('ink-canvas')), findsOneWidget);
 
     final canvas = find.byKey(const ValueKey('ink-canvas'));
@@ -183,7 +204,7 @@ void main() {
     await pen.down(center - const Offset(20, 0));
     await pen.moveTo(center + const Offset(20, 0));
     await pen.up();
-    await tester.tap(find.text('지우개'));
+    await tester.tap(find.byKey(const ValueKey('tool-eraser')));
     await tester.pump();
     final eraser = await tester.createGesture(
       pointer: 10,
@@ -474,7 +495,7 @@ void main() {
     await pencil.up();
     await tester.pump(const Duration(milliseconds: 400));
 
-    await tester.tap(find.text('올가미'));
+    await tester.tap(find.byKey(const ValueKey('tool-lasso')));
     await tester.pump();
     final lasso = await tester.createGesture(
       pointer: 15,

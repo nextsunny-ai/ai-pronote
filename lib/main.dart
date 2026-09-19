@@ -3166,26 +3166,58 @@ class _NoteEditorState extends State<NoteEditor> {
           child: Row(
             children: [
               SegmentedButton<InkTool>(
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: InkTool.pen,
-                    label: Text('펜'),
-                    icon: Icon(Icons.edit_outlined),
+                    label: MediaQuery.sizeOf(context).width >= 1024
+                        ? const Text('펜')
+                        : null,
+                    icon: const Tooltip(
+                      message: '펜',
+                      child: Icon(
+                        Icons.edit_outlined,
+                        key: ValueKey('tool-pen'),
+                      ),
+                    ),
                   ),
                   ButtonSegment(
                     value: InkTool.highlighter,
-                    label: Text('형광펜'),
-                    icon: Icon(Icons.border_color_outlined),
+                    label: MediaQuery.sizeOf(context).width >= 1024
+                        ? const Text('형광펜')
+                        : null,
+                    icon: const Tooltip(
+                      message: '형광펜',
+                      child: Icon(
+                        Icons.border_color_outlined,
+                        key: ValueKey('tool-highlighter'),
+                      ),
+                    ),
                   ),
                   ButtonSegment(
                     value: InkTool.eraser,
-                    label: Text('지우개'),
-                    icon: Icon(Icons.auto_fix_normal_outlined),
+                    label: MediaQuery.sizeOf(context).width >= 1024
+                        ? const Text('지우개')
+                        : null,
+                    icon: const Tooltip(
+                      message: '지우개',
+                      child: Icon(
+                        Icons.auto_fix_normal_outlined,
+                        key: ValueKey('tool-eraser'),
+                      ),
+                    ),
                   ),
                   ButtonSegment(
                     value: InkTool.lasso,
-                    label: Text('올가미'),
-                    icon: Icon(Icons.gesture_rounded),
+                    label: MediaQuery.sizeOf(context).width >= 1024
+                        ? const Text('올가미')
+                        : null,
+                    icon: const Tooltip(
+                      message: '올가미',
+                      child: Icon(
+                        Icons.gesture_rounded,
+                        key: ValueKey('tool-lasso'),
+                      ),
+                    ),
                   ),
                 ],
                 selected: {_tool},
