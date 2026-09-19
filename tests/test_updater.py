@@ -209,6 +209,7 @@ class UpdateContractTests(unittest.TestCase):
                 archive.writestr("AI_PRONOTE/updater.py", "ok")
                 archive.writestr("AI_PRONOTE/requirements-lock-windows.txt", "fastapi==1")
                 archive.writestr("AI_PRONOTE/requirements-lock-mac.txt", "fastapi==1")
+                archive.writestr("AI_PRONOTE/start_v15.ps1", "start")
                 archive.writestr("AI_PRONOTE/3_START_AI_PRONOTE.vbs", "' start")
                 archive.writestr("AI_PRONOTE/static/index.html", "ok")
             digest = hashlib.sha256(package.read_bytes()).hexdigest()

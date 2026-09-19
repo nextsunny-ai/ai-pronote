@@ -16,7 +16,7 @@ $RootFiles = @(
     '.env.example', '1_FIRST_SETUP.cmd', '2_AI_LOGIN.cmd', '3_START_AI_PRONOTE.vbs',
     'AI_PRONOTE_사용설명서.md', 'README.md', 'README_v15.md', 'SECURITY.md',
     'diarize.py', 'generate_meeting_report.py', 'icon_v15_pro_note.ico',
-    'install_external_beta.ps1', 'main.py', 'postprocess.py', 'pronote_p0.py',
+    'install_external_beta.ps1', 'launch_managed_windows.ps1', 'main.py', 'postprocess.py', 'pronote_p0.py',
     'pronote_drive_watcher.py', 'provider_api.py', 'requirements-lock.txt', 'requirements.txt',
     'secure_credentials.py', 'stable_launcher.py', 'start_v15.ps1', 'start_v15.vbs',
     'start_v15_server_only.ps1', 'start_v15_server_only.vbs', 'start_ipad_companion.ps1',

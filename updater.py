@@ -157,7 +157,7 @@ def stage_update_archive(archive_path: Path, expected_sha256: str, target: Path)
         roots = [item for item in temporary.iterdir() if item.is_dir()]
         package_root = roots[0] if len(roots) == 1 else temporary
         platform_lock = "requirements-lock-windows.txt" if sys.platform == "win32" else "requirements-lock-mac.txt"
-        platform_launcher = "3_START_AI_PRONOTE.vbs" if sys.platform == "win32" else "mac/3_START_AI_PRONOTE.command"
+        platform_launcher = "start_v15.ps1" if sys.platform == "win32" else "mac/3_START_AI_PRONOTE.command"
         required = (
             "main.py", "pronote_p0.py", "provider_api.py", "secure_credentials.py", "updater.py",
             platform_lock, platform_launcher, "static/index.html",

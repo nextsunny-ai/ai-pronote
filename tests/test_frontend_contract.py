@@ -145,11 +145,13 @@ class FrontendContractTests(unittest.TestCase):
     def test_external_beta_uses_an_isolated_python_environment(self):
         installer = (ROOT / "install_external_beta.ps1").read_text(encoding="utf-8")
         launcher = (ROOT / "start_v15.ps1").read_text(encoding="utf-8")
-        self.assertIn("-m venv", installer)
-        self.assertIn("requirements-lock.txt", installer)
+        self.assertIn("prepare_version_runtime", installer)
+        self.assertIn("requirements-lock-windows.txt", installer)
+        self.assertIn("설치 버전 이름이 올바르지 않습니다", installer)
         self.assertIn("venvArchitecture", installer)
         self.assertIn("amd64|x86_64", installer)
-        self.assertIn(".venv\\Scripts\\python.exe", installer)
+        self.assertIn("runtime\\versions", installer)
+        self.assertIn("Scripts\\python.exe", installer)
         self.assertIn("PRONOTE_SHARED_VENV", launcher)
         self.assertIn("Scripts\\pythonw.exe", launcher)
         self.assertNotIn("2_CLAUDE_LOGIN.cmd", installer)
@@ -159,7 +161,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("if (-not $SkipShortcut)", installer)
         self.assertIn("WindowsPowerShell\\v1.0\\powershell.exe", installer)
         self.assertIn("-WindowStyle Hidden", installer)
-        self.assertIn("start_v15.ps1", installer)
+        self.assertIn("launch_managed_windows.ps1", installer)
         self.assertNotIn("$shortcut.TargetPath = Join-Path $Root '3_START_AI_PRONOTE.vbs'", installer)
 
     def test_permanent_delete_clears_server_and_browser_namespaces(self):

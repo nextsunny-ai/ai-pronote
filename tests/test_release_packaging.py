@@ -18,6 +18,7 @@ class ReleasePackagingContractTests(unittest.TestCase):
             "secure_credentials.py",
             "requirements-lock.txt",
             "install_external_beta.ps1",
+            "launch_managed_windows.ps1",
             "static",
             "mac",
         ):
