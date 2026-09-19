@@ -142,17 +142,22 @@ _update_prepare_lock = threading.Lock()
 
 
 def _managed_update_ready() -> bool:
+    active_version = read_active_version(UPDATE_INSTALL_ROOT)
+    if not active_version:
+        return False
     runtime_python = (
-        UPDATE_INSTALL_ROOT / "runtime" / ".venv" / "Scripts" / "pythonw.exe"
+        UPDATE_INSTALL_ROOT / "runtime" / "versions" / active_version / "Scripts" / "pythonw.exe"
         if UPDATE_PLATFORM == "windows"
-        else UPDATE_INSTALL_ROOT / "runtime" / ".venv" / "bin" / "python"
+        else UPDATE_INSTALL_ROOT / "runtime" / "versions" / active_version / "bin" / "python"
     )
+    runtime_marker = UPDATE_INSTALL_ROOT / "runtime" / "versions" / active_version / ".runtime-complete.json"
     return all(
         path.is_file()
         for path in (
             UPDATE_INSTALL_ROOT / "stable_launcher.py",
             UPDATE_INSTALL_ROOT / "updater.py",
             runtime_python,
+            runtime_marker,
         )
     )
 

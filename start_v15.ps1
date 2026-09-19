@@ -159,7 +159,12 @@ try {
     $env:PRONOTE_HOST = $HostAddress
     $env:PRONOTE_PORT = [string]$Port
     $env:PRONOTE_DATA_DIR = $DataDir
-    $python = Join-Path $ProjectDir '.venv\Scripts\pythonw.exe'
+    $VenvRoot = if (-not [string]::IsNullOrWhiteSpace($env:PRONOTE_SHARED_VENV)) {
+        $env:PRONOTE_SHARED_VENV
+    } else {
+        Join-Path $ProjectDir '.venv'
+    }
+    $python = Join-Path $VenvRoot 'Scripts\pythonw.exe'
     if (-not (Test-Path -LiteralPath $python)) {
         throw "처음 설치가 필요합니다. 1_FIRST_SETUP.cmd를 먼저 실행하세요."
     }

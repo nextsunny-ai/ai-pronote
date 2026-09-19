@@ -1,5 +1,7 @@
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -138,6 +140,27 @@ class UpdateApiTests(unittest.TestCase):
         self.assertFalse(data["restart_required"])
         activate.assert_not_called()
         runtime.assert_not_called()
+
+    def test_managed_update_requires_active_version_runtime_and_marker(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            version = "v1.5.0-beta13.20260919"
+            runtime = root / "runtime" / "versions" / version
+            executable = runtime / (
+                "Scripts/pythonw.exe" if main.UPDATE_PLATFORM == "windows" else "bin/python"
+            )
+            executable.parent.mkdir(parents=True)
+            executable.write_text("runtime", encoding="utf-8")
+            (runtime / ".runtime-complete.json").write_text("{}", encoding="utf-8")
+            (root / "stable_launcher.py").write_text("launcher", encoding="utf-8")
+            (root / "updater.py").write_text("updater", encoding="utf-8")
+            with (
+                patch.object(main, "UPDATE_INSTALL_ROOT", root),
+                patch.object(main, "read_active_version", return_value=version),
+            ):
+                self.assertTrue(main._managed_update_ready())
+                (runtime / ".runtime-complete.json").unlink()
+                self.assertFalse(main._managed_update_ready())
 
 
 if __name__ == "__main__":
