@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'processing/file_processing_job_repository.dart';
 import 'processing/local_meeting_processing_gateway.dart';
 import 'recording/audio_recorder_gateway.dart';
 import 'recording/device_audio_recorder.dart';
@@ -50,6 +51,7 @@ Future<void> main() async {
               baseUri: Uri.parse('http://127.0.0.1:8795'),
             )
           : null,
+      processingJobRepository: FileProcessingJobRepository(documents),
       currentVersion: packageInfo.version,
       updateChecker: const RemoteUpdateChecker(
         'https://nextsunny-ai.github.io/ai-pronote/mobile-update.json',
@@ -68,6 +70,7 @@ class PronoteApp extends StatelessWidget {
     this.recorder = const DisabledAudioRecorderGateway(),
     this.videoRecorderFactory,
     this.processingGateway,
+    this.processingJobRepository,
     this.recordingDirectoryProvider,
     this.recordingValidator,
     this.currentVersion = '1.0.0',
@@ -79,6 +82,7 @@ class PronoteApp extends StatelessWidget {
   final AudioRecorderGateway recorder;
   final VideoRecorderGateway Function()? videoRecorderFactory;
   final MeetingProcessingGateway? processingGateway;
+  final ProcessingJobRepository? processingJobRepository;
   final Future<Directory> Function()? recordingDirectoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
   final String currentVersion;
@@ -106,6 +110,7 @@ class PronoteApp extends StatelessWidget {
         recorder: recorder,
         videoRecorderFactory: videoRecorderFactory,
         processingGateway: processingGateway,
+        processingJobRepository: processingJobRepository,
         recordingDirectoryProvider: recordingDirectoryProvider,
         recordingValidator: recordingValidator,
         displayVersion: _displayVersion(currentVersion),
@@ -192,6 +197,7 @@ class HomeScreen extends StatefulWidget {
     required this.recorder,
     this.videoRecorderFactory,
     this.processingGateway,
+    this.processingJobRepository,
     this.recordingDirectoryProvider,
     this.recordingValidator,
     required this.displayVersion,
@@ -201,6 +207,7 @@ class HomeScreen extends StatefulWidget {
   final AudioRecorderGateway recorder;
   final VideoRecorderGateway Function()? videoRecorderFactory;
   final MeetingProcessingGateway? processingGateway;
+  final ProcessingJobRepository? processingJobRepository;
   final Future<Directory> Function()? recordingDirectoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
   final String displayVersion;
@@ -297,6 +304,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           recorder: widget.recorder,
                           repository: widget.repository,
                           processingGateway: widget.processingGateway,
+                          processingJobRepository:
+                              widget.processingJobRepository,
                           directoryProvider: widget.recordingDirectoryProvider,
                           recordingValidator: widget.recordingValidator,
                         ),
@@ -322,6 +331,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   .call(),
                           repository: widget.repository,
                           processingGateway: widget.processingGateway,
+                          processingJobRepository:
+                              widget.processingJobRepository,
                         ),
                       ),
                     );
@@ -851,6 +862,7 @@ class RecordingScreen extends StatefulWidget {
     required this.recorder,
     required this.repository,
     this.processingGateway,
+    this.processingJobRepository,
     this.directoryProvider,
     this.recordingValidator,
   });
@@ -858,6 +870,7 @@ class RecordingScreen extends StatefulWidget {
   final AudioRecorderGateway recorder;
   final NoteRepository repository;
   final MeetingProcessingGateway? processingGateway;
+  final ProcessingJobRepository? processingJobRepository;
   final Future<Directory> Function()? directoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
 
@@ -974,6 +987,14 @@ class _RecordingScreenState extends State<RecordingScreen> {
     });
     try {
       final job = await gateway.submitTranscription(path);
+      await widget.processingJobRepository?.save(
+        ProcessingJobRecord(
+          jobId: job.id,
+          recordingPath: path,
+          createdAt: DateTime.now(),
+          status: job.status,
+        ),
+      );
       if (!mounted) return;
       setState(() {
         _message = '받아쓰기 작업을 시작했습니다.\n작업번호 ${job.id}';
@@ -1163,6 +1184,7 @@ class VideoRecordingScreen extends StatefulWidget {
     required this.recorder,
     required this.repository,
     this.processingGateway,
+    this.processingJobRepository,
     this.directoryProvider,
     this.recordingValidator,
   });
@@ -1170,6 +1192,7 @@ class VideoRecordingScreen extends StatefulWidget {
   final VideoRecorderGateway recorder;
   final NoteRepository repository;
   final MeetingProcessingGateway? processingGateway;
+  final ProcessingJobRepository? processingJobRepository;
   final Future<Directory> Function()? directoryProvider;
   final Future<bool> Function(String path)? recordingValidator;
 
@@ -1298,6 +1321,14 @@ class _VideoRecordingScreenState extends State<VideoRecordingScreen> {
     });
     try {
       final job = await gateway.submitTranscription(path);
+      await widget.processingJobRepository?.save(
+        ProcessingJobRecord(
+          jobId: job.id,
+          recordingPath: path,
+          createdAt: DateTime.now(),
+          status: job.status,
+        ),
+      );
       if (!mounted) return;
       setState(() {
         _message = '받아쓰기 작업을 시작했습니다.\n작업번호 ${job.id}';
