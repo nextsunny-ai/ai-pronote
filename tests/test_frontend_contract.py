@@ -156,6 +156,10 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("-gt 12", installer)
         self.assertIn("[switch]$SkipShortcut", installer)
         self.assertIn("if (-not $SkipShortcut)", installer)
+        self.assertIn("WindowsPowerShell\\v1.0\\powershell.exe", installer)
+        self.assertIn("-WindowStyle Hidden", installer)
+        self.assertIn("start_v15.ps1", installer)
+        self.assertNotIn("$shortcut.TargetPath = Join-Path $Root '3_START_AI_PRONOTE.vbs'", installer)
 
     def test_permanent_delete_clears_server_and_browser_namespaces(self):
         self.assertIn("fetch('/api/data/purge'", HTML)

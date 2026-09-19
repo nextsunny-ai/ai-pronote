@@ -47,7 +47,13 @@ if (-not $SkipShortcut) {
     $shortcutPath = Join-Path $ShortcutDirectory 'AI PRONOTE.lnk'
     $shortcutShell = New-Object -ComObject WScript.Shell
     $shortcut = $shortcutShell.CreateShortcut($shortcutPath)
-    $shortcut.TargetPath = Join-Path $Root '3_START_AI_PRONOTE.vbs'
+    $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if (-not (Test-Path -LiteralPath $powershell -PathType Leaf)) {
+        throw "Windows PowerShell 실행 파일을 찾을 수 없습니다: $powershell"
+    }
+    $launcher = Join-Path $Root 'start_v15.ps1'
+    $shortcut.TargetPath = $powershell
+    $shortcut.Arguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $launcher + '"'
     $shortcut.WorkingDirectory = $Root
     $shortcut.IconLocation = (Join-Path $Root 'icon_v15_pro_note.ico') + ',0'
     $shortcut.Description = 'AI PRONOTE — 노트와 녹음을 함께'
