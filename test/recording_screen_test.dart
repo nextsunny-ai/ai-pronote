@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:ai_pronote_app/main.dart';
 import 'package:ai_pronote_app/notes/note_repository.dart';
 import 'package:ai_pronote_app/processing/local_meeting_processing_gateway.dart';
+import 'package:ai_pronote_app/processing/transcript_exporter.dart';
 import 'package:ai_pronote_app/processing/file_processing_job_repository.dart';
 import 'package:ai_pronote_app/recording/audio_recorder_gateway.dart';
 import 'package:flutter/material.dart';
@@ -145,12 +146,15 @@ void main() {
     final processing = FakeMeetingProcessingGateway();
     final jobs = FakeProcessingJobRepository();
     final notes = MemoryNoteRepository();
+    final exports = await Directory.systemTemp.createTemp('pronote-export-ui-');
+    addTearDown(() => exports.delete(recursive: true));
     await tester.pumpWidget(
       PronoteApp(
         repository: notes,
         recorder: recorder,
         processingGateway: processing,
         processingJobRepository: jobs,
+        transcriptExporter: TranscriptExporter(() async => exports),
         recordingDirectoryProvider: () async => Directory.systemTemp,
         recordingValidator: (_) async => true,
       ),
@@ -178,6 +182,10 @@ void main() {
     await tester.tap(find.text('노트로 저장'));
     await tester.pumpAndSettle();
     expect((await notes.list()).single.body, '테스트 받아쓰기');
+    expect(find.text('텍스트 파일 저장'), findsOneWidget);
+    await tester.tap(find.text('텍스트 파일 저장'));
+    await tester.pumpAndSettle();
+    expect(exports.listSync().whereType<File>(), hasLength(1));
   });
 
   testWidgets('녹음 중 회의 노트를 열어 필기를 계속할 수 있다', (tester) async {
