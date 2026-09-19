@@ -1085,6 +1085,7 @@ test.describe('AI 연결 구분', () => {
   });
 
   test('공식 AI 선택·동의·키 연결을 저장하되 API 키는 브라우저에 남기지 않는다', async ({ page }) => {
+    await mockBackend(page);
     await openApp(page);
     await openNavView(page, 'admin');
     await page.locator('#officialProviderSelect').selectOption('gemini');
