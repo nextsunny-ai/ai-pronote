@@ -144,7 +144,7 @@ class UpdateApiTests(unittest.TestCase):
     def test_managed_update_requires_active_version_runtime_and_marker(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            version = "v1.5.0-beta13.20260920.1"
+            version = "v1.5.0-beta13.20260920.2"
             runtime = root / "runtime" / "versions" / version
             executable = runtime / (
                 "Scripts/pythonw.exe" if main.UPDATE_PLATFORM == "windows" else "bin/python"

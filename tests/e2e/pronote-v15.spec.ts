@@ -540,6 +540,8 @@ test.describe('필기 저장·복원 계약', () => {
 
     await page.locator('#mynoteBlockContent').fill('자동저장 1초 전에도 보존되어야 하는 수정 본문입니다.');
     await openNavView(page, 'home');
+    await expect(page.locator('body')).not.toHaveClass(/mynote-fullpage-active/);
+    await expect(page.locator('#view-home')).toBeInViewport();
     await openNavView(page, 'result-mynote');
     await expect(page.locator('#mynoteBlockContent')).toContainText('자동저장 1초 전에도 보존되어야 하는 수정 본문입니다.');
 
@@ -1151,7 +1153,7 @@ test.describe('버전 표시와 자동 업데이트 안내', () => {
     await mockBackend(page);
     let prepared = false;
     await page.route('**/api/health', route => route.fulfill({
-      status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok', version: 'v1.5.0-beta13.20260920.1' })
+      status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok', version: 'v1.5.0-beta13.20260920.2' })
     }));
     await page.route('**/api/update/status', route => route.fulfill({
       status: 200, contentType: 'application/json', body: JSON.stringify({
@@ -1166,7 +1168,7 @@ test.describe('버전 표시와 자동 업데이트 안내', () => {
       });
     });
     await openApp(page);
-    await expect(page.locator('#appVersionLabel')).toContainText('v1.5.0-beta13.20260920.1');
+    await expect(page.locator('#appVersionLabel')).toContainText('v1.5.0-beta13.20260920.2');
     await expect(page.locator('#updateAvailableModal')).toHaveClass(/open/);
     await expect(page.locator('#updateAvailableVersion')).toContainText('1.5.0-beta13.20260921');
     expect(prepared).toBeFalsy();

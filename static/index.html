@@ -4422,6 +4422,14 @@ if ('serviceWorker' in navigator) {
 
 <script>
   function switchView(target) {
+    // A standalone note uses a body-level full-page layout. Clear that layout
+    // before entering every other view so Home and list screens cannot remain
+    // pushed below the viewport after leaving the note editor.
+    if (target !== 'result-mynote') {
+      document.body.classList.remove('mynote-fullpage-active');
+      document.getElementById('view-result')?.classList.remove('mynote-fullpage');
+      document.getElementById('mynoteBlock')?.classList.remove('fullpage');
+    }
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     let viewId, postMode;
     if (target === 'dict') viewId = 'view-dictation-solo';
