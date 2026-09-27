@@ -17,7 +17,7 @@ class DownloadPageAccuracyTests(unittest.TestCase):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
         self.assertIn("iPad·휴대폰", html)
-        self.assertIn("v1.5.0-beta13.20260920.11", html)
+        self.assertIn("v1.5.0-beta13.20260920.12", html)
         self.assertIn("WINDOWS 10 / 11", html)
         self.assertIn("14.4 MB", html)
         self.assertIn("㈜써니엔터테인먼트", html)
@@ -26,7 +26,7 @@ class DownloadPageAccuracyTests(unittest.TestCase):
         self.assertNotIn("Mac용 내려받기", html)
         self.assertNotIn("v1.5.0-beta11-20260919", html)
         self.assertNotIn("현재 공개 베타 내려받기", html)
-        self.assertNotIn("href=\"AI_PRONOTE_v1.5.0-beta13.20260920.11.zip\"", html)
+        self.assertNotIn("href=\"AI_PRONOTE_v1.5.0-beta13.20260920.12.zip\"", html)
 
     def test_mobile_copy_does_not_claim_independent_app_release(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
