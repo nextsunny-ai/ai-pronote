@@ -24,7 +24,8 @@ test.describe('WCAG 2.1 AA 출시 스모크', () => {
 
   test('확인창은 키보드 초점을 가두고 닫힌 뒤 시작 위치로 돌려준다', async ({ page }) => {
     await page.goto('/');
-    const trigger = page.locator('#jobCenterToggle');
+    const trigger = page.locator('#navStartMeeting');
+    await expect(trigger).toBeVisible();
     await trigger.focus();
     await page.evaluate(() => {
       const api = window as typeof window & {
@@ -69,8 +70,8 @@ test.describe('WCAG 2.1 AA 출시 스모크', () => {
       await expect(menu).toBeVisible();
       await menu.click();
       await expect(page.locator('.sidebar')).toBeInViewport();
-      await page.locator('.nav-item[data-demo="result-mynote"]').click();
-      await expect(page.locator('#mynoteBlock')).toBeVisible();
+      await page.locator('.nav-item[data-demo="mynotes"]').click();
+      await expect(page.locator('#view-mynotes')).toBeVisible();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(overflow).toBeLessThanOrEqual(1);
     });
