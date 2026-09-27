@@ -32,7 +32,12 @@ async function mockBackend(page: Page, options?: { jobs?: unknown[]; providers?:
     if (url.pathname === '/api/jobs') return json(options?.jobs ?? []);
     if (url.pathname === '/api/results') return json([]);
     if (url.pathname === '/api/pending') return json([]);
-    if (url.pathname === '/api/auth/config') return json({ auth_enabled: false });
+    if (url.pathname === '/api/auth/config') return json({
+      auth_enabled: false,
+      bypassAuth: true,
+      supabaseUrl: 'https://e2e.invalid',
+      supabaseAnonKey: 'e2e-public-anon-key'
+    });
     if (url.pathname === '/api/llm/status') return json({ available: false, provider: 'none' });
     const credentialMatch = url.pathname.match(/^\/api\/v15\/providers\/(openai|gemini|anthropic)\/credential$/);
     if (credentialMatch && route.request().method() === 'POST') {
@@ -1634,10 +1639,10 @@ test.describe('카메라 회의 녹화·보존 계약', () => {
     await page.waitForTimeout(1200);
     await page.evaluate(() => {
       const db = window.__pronoteDB;
-      const originalPut = db.put.bind(db);
-      db.put = async (record: { source?: string }) => {
+      const originalPutOwned = db.putOwned.bind(db);
+      db.putOwned = async (record: { source?: string }, ownerUid: string) => {
         if (record.source === 'recorded') throw new Error('synthetic quota exceeded');
-        return originalPut(record);
+        return originalPutOwned(record, ownerUid);
       };
     });
     const downloadPromise = page.waitForEvent('download');
@@ -1664,10 +1669,10 @@ test.describe('카메라 회의 녹화·보존 계약', () => {
     await page.waitForTimeout(1200);
     await page.evaluate(() => {
       const db = window.__pronoteDB;
-      const originalPut = db.put.bind(db);
-      db.put = async (record: { source?: string }) => {
+      const originalPutOwned = db.putOwned.bind(db);
+      db.putOwned = async (record: { source?: string }, ownerUid: string) => {
         if (record.source === 'recorded' || record.source === 'recorded-video') throw new Error('synthetic quota exceeded');
-        return originalPut(record);
+        return originalPutOwned(record, ownerUid);
       };
       window.__pronoteRecording.stop();
     });
@@ -1678,7 +1683,7 @@ test.describe('카메라 회의 녹화·보존 계약', () => {
       __pronoteEmergencyRecoveries?: Array<{ filename: string }>;
     }).__pronoteEmergencyRecoveries?.map(item => item.filename) || []);
     expect(recoveryNames).toHaveLength(2);
-    expect(recoveryNames).toContain('영상 음성 동시 복구 (화면 영상).webm');
+    expect(recoveryNames).toContain('영상 음성 동시 복구 (카메라 영상).webm');
     expect(recoveryNames.some(name => /^회의_영상 음성 동시 복구_.*\.(mp3|webm|m4a)$/.test(name))).toBeTruthy();
   });
 
@@ -1798,16 +1803,16 @@ test.describe('카메라 회의 녹화·보존 계약', () => {
 
     await page.evaluate(() => {
       const db = window.__pronoteDB;
-      const originalPut = db.put.bind(db);
+      const originalPutOwned = db.putOwned.bind(db);
       let releaseFinal!: () => void;
       const gate = new Promise<void>(resolve => { releaseFinal = resolve; });
       (window as typeof window & { __releaseVideoFinal?: () => void; __videoFinalWaiting?: boolean }).__releaseVideoFinal = releaseFinal;
-      db.put = async (record: { source?: string }) => {
+      db.putOwned = async (record: { source?: string }, ownerUid: string) => {
         if (record.source === 'recorded-video') {
           (window as typeof window & { __videoFinalWaiting?: boolean }).__videoFinalWaiting = true;
           await gate;
         }
-        return originalPut(record);
+        return originalPutOwned(record, ownerUid);
       };
     });
 
