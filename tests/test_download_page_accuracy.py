@@ -6,34 +6,33 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DownloadPageAccuracyTests(unittest.TestCase):
-    def test_ai_connection_copy_names_real_connection_methods(self):
+    def test_ai_connection_copy_matches_current_single_selection_flow(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
-        self.assertIn("OpenAI·Gemini·Anthropic 공식 API(BYOK)", html)
-        self.assertIn("Claude·ChatGPT/Codex 계정 로그인도 실험 기능", html)
-        self.assertNotIn("Gemini 연결은 공식 실행 경로를 준비 중", html)
-        self.assertNotIn("Gemini 연결은 준비 중", html)
+        self.assertIn("Claude 또는 ChatGPT 중 하나를 선택", html)
+        self.assertIn("Gemini는 준비 중", html)
+        self.assertNotIn("동시에 연결", html)
 
     def test_platform_copy_scopes_current_beta_without_unverified_mac_download(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
-        self.assertIn("iPad·휴대폰 사용", html)
-        self.assertIn("BETA 13 최종 확인 중", html)
-        self.assertIn("1_FIRST_SETUP.cmd", html)
-        self.assertIn("setup_mac.command", html)
-        self.assertIn("현재는 독립 설치 앱이 아닙니다", html)
-        self.assertIn("MACOS · 최신 후보 검증 중", html)
-        self.assertGreaterEqual(html.count("aria-disabled=\"true\""), 2)
+        self.assertIn("iPad·휴대폰", html)
+        self.assertIn("v1.5.0-beta13.20260920.10", html)
+        self.assertIn("WINDOWS 10 / 11", html)
+        self.assertIn("14.4 MB", html)
+        self.assertIn("㈜써니엔터테인먼트", html)
+        self.assertIn("대표 승인 전 검토 후보", html)
+        self.assertGreaterEqual(html.count("disabled"), 2)
         self.assertNotIn("Mac용 내려받기", html)
         self.assertNotIn("v1.5.0-beta11-20260919", html)
         self.assertNotIn("현재 공개 베타 내려받기", html)
-        self.assertNotIn("휴대폰·iPad 사용</strong> · 별도 앱을 내려받는 방식이 아닙니다", html)
+        self.assertNotIn("href=\"AI_PRONOTE_v1.5.0-beta13.20260920.10.zip\"", html)
 
-    def test_login_free_transcription_is_scoped_to_desktop_beta(self):
+    def test_mobile_copy_does_not_claim_independent_app_release(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
-        self.assertIn("현재 Windows 외부 테스트에서는", html)
-        self.assertNotIn("네. 일반 녹음, 영상 녹화, 기본 받아쓰기와 필기는", html)
+        self.assertIn("독립 설치 앱은 별도 검증 후 제공", html)
+        self.assertNotIn("App Store에서 다운로드", html)
 
 
 if __name__ == "__main__":
