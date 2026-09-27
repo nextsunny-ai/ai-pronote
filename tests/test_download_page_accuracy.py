@@ -17,7 +17,7 @@ class DownloadPageAccuracyTests(unittest.TestCase):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
         self.assertIn("iPad·휴대폰", html)
-        self.assertIn("v1.5.0-beta13.20260920.15", html)
+        self.assertIn("v1.5.0-beta13.20260920.16", html)
         self.assertIn("WINDOWS 10 / 11", html)
         self.assertIn("14.4 MB", html)
         self.assertIn("㈜써니엔터테인먼트", html)
