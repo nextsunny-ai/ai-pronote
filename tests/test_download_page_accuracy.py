@@ -17,7 +17,7 @@ class DownloadPageAccuracyTests(unittest.TestCase):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
         self.assertIn("iPad·휴대폰", html)
-        self.assertIn("v1.5.0-beta13.20260920.12", html)
+        self.assertIn("v1.5.0-beta13.20260920.13", html)
         self.assertIn("WINDOWS 10 / 11", html)
         self.assertIn("14.4 MB", html)
         self.assertIn("㈜써니엔터테인먼트", html)
@@ -26,13 +26,20 @@ class DownloadPageAccuracyTests(unittest.TestCase):
         self.assertNotIn("Mac용 내려받기", html)
         self.assertNotIn("v1.5.0-beta11-20260919", html)
         self.assertNotIn("현재 공개 베타 내려받기", html)
-        self.assertNotIn("href=\"AI_PRONOTE_v1.5.0-beta13.20260920.12.zip\"", html)
+        self.assertNotRegex(html, r'href="[^"]+\.zip"')
 
     def test_mobile_copy_does_not_claim_independent_app_release(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
         self.assertIn("독립 설치 앱은 별도 검증 후 제공", html)
         self.assertNotIn("App Store에서 다운로드", html)
+
+    def test_account_copy_matches_local_only_storage_boundary(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("이 기기의 자료를 사용자별로 구분", html)
+        self.assertIn("클라우드 동기화는 준비 중", html)
+        self.assertNotIn("내 자료와 구독을 관리", html)
 
 
 if __name__ == "__main__":
