@@ -61,6 +61,8 @@ test.describe('WCAG 2.1 AA 출시 스모크', () => {
   for (const size of [
     { name: '휴대폰 세로', width: 390, height: 844 },
     { name: '아이패드 세로', width: 768, height: 1024 },
+    { name: '아이패드 가로', width: 1180, height: 820 },
+    { name: '소형 노트북', width: 1056, height: 720 },
     { name: '노트북 200% 확대 대응', width: 640, height: 450 },
   ]) {
     test(`${size.name}에서 메뉴와 노트가 화면 밖으로 밀리지 않는다`, async ({ page }) => {
@@ -74,6 +76,39 @@ test.describe('WCAG 2.1 AA 출시 스모크', () => {
       await expect(page.locator('#view-mynotes')).toBeVisible();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(overflow).toBeLessThanOrEqual(1);
+    });
+  }
+
+  for (const size of [
+    { name: '휴대폰 세로', width: 390, height: 844, columns: 1 },
+    { name: '아이패드 세로', width: 820, height: 1180, columns: 2 },
+    { name: '아이패드 가로', width: 1180, height: 820, columns: 2 },
+    { name: '소형 노트북', width: 1056, height: 720, columns: 2 },
+  ]) {
+    test(`${size.name} 홈 핵심 동작이 잘리지 않고 ${size.columns}열로 재배치된다`, async ({ page }) => {
+      await page.setViewportSize({ width: size.width, height: size.height });
+      await page.goto('/');
+
+      const quickActions = page.locator('.home-action-layout > div > .quick-card');
+      await expect(quickActions).toHaveCount(4);
+      const layout = await page.evaluate(() => {
+        const viewport = document.documentElement.clientWidth;
+        const cards = Array.from(document.querySelectorAll<HTMLElement>('.home-action-layout > div > .quick-card'));
+        const rows = new Set(cards.map((card) => Math.round(card.getBoundingClientRect().top)));
+        const allInside = cards.every((card) => {
+          const rect = card.getBoundingClientRect();
+          return rect.left >= 0 && rect.right <= viewport + 1;
+        });
+        return {
+          overflow: document.documentElement.scrollWidth - viewport,
+          columns: cards.length / rows.size,
+          allInside,
+        };
+      });
+
+      expect(layout.overflow).toBeLessThanOrEqual(1);
+      expect(layout.allInside).toBe(true);
+      expect(layout.columns).toBe(size.columns);
     });
   }
 });
