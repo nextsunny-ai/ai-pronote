@@ -138,9 +138,23 @@ async function installSyntheticCameraAndMicrophone(page: Page) {
 }
 
 async function openNavView(page: Page, demo: string) {
-  const menu = page.locator('#mobileMenuBtn');
-  if (await menu.isVisible()) await menu.click();
-  await page.locator(`.nav-item[data-demo="${demo}"]`).click();
+  if (demo === 'result-mynote') {
+    await page.waitForFunction(() => typeof window.__pronoteSwitchMyNoteMeeting === 'function');
+    await page.evaluate(async () => {
+      const id = localStorage.getItem('ai_pronote.current_view_meeting.v1');
+      if (id) await window.__pronoteSwitchMyNoteMeeting?.(id);
+      window.switchView?.('result-mynote');
+      window.__pronoteShowMyNoteFullPage?.();
+    });
+    return;
+  }
+  await page.evaluate(target => window.switchView?.(target), demo);
+}
+
+async function openSyntheticMeetingResult(page: Page) {
+  await openNavView(page, 'library');
+  await page.locator(`.library-card[data-item-id="${syntheticMeeting.id}"]`).click({ position: { x: 120, y: 30 } });
+  await expect(page.locator('#view-result')).toHaveClass(/active/);
 }
 
 test.beforeAll(() => fs.mkdirSync(artifactRoot, { recursive: true }));
@@ -153,9 +167,9 @@ test.describe('v1.5 핵심 발견성과 반응형', () => {
     await expect(page.locator('#newMeetingBtn')).toBeVisible();
     await expect(page.locator('#newMeetingBtn')).toContainText('녹음 시작');
     await expect(page.locator('#homeUploadCard')).toBeVisible();
-    await expect(page.locator('#homeUploadCard')).toContainText('파일로 회의록 만들기');
+    await expect(page.locator('#homeUploadCard')).toContainText('파일 가져오기');
     await expect(page.locator('[data-demo="library"]').first()).toBeAttached();
-    await expect(page.getByTestId('job-center-toggle')).toBeVisible();
+    await expect(page.getByTestId('job-center-toggle')).toBeHidden();
     await page.screenshot({ path: path.join(artifactRoot, `${testInfo.project.name}-home.png`), fullPage: true });
   });
 
@@ -172,7 +186,8 @@ test.describe('v1.5 핵심 발견성과 반응형', () => {
   test('회의록 생성 화면에서도 기존 작업을 유지한 채 이어서 녹음을 시작한다', async ({ page }) => {
     await seedSyntheticMeeting(page);
     await openApp(page);
-    await page.evaluate(() => window.switchView?.('result'));
+    await openSyntheticMeetingResult(page);
+    await page.locator('details.result-more-actions > summary').click();
     await expect(page.locator('#resultContinueRecordingBtn')).toBeVisible();
     await page.evaluate(() => {
       window.__pronoteResult?.render?.();
@@ -199,13 +214,13 @@ test.describe('v1.5 핵심 발견성과 반응형', () => {
     await expect(page.locator('#view-library')).toHaveClass(/active/);
     await expect(page.locator('#scenarioModal')).toHaveClass(/open/);
     await expect(page.getByRole('heading', { name: '어떤 문서로 정리할까요?' })).toBeVisible();
-    await expect(page.locator('#scenarioConfirm')).toHaveText('받아쓰기·회의록 만들기');
+    await expect(page.locator('#scenarioConfirm')).toHaveText('받아쓰기 + AI 회의록');
     await expect(page.locator('#scenarioGrid')).toContainText('회의록');
     await expect(page.locator('#scenarioGrid')).toContainText('강의 노트');
     await expect(page.locator('#scenarioLanguage')).toHaveValue('ko');
     await page.locator('#scenarioCancel').click();
     await expect(page.locator('#libraryUploadBtn')).toBeVisible();
-    await expect(page.locator('#libraryUploadBtn')).toHaveText('파일로 회의록 만들기');
+    await expect(page.locator('#libraryUploadBtn')).toHaveText('파일 가져오기');
   });
 
   test('가져온 해외 회의 파일은 혼용언어 선택을 저장하고 받아쓰기에 전달한다', async ({ page }) => {
@@ -219,7 +234,7 @@ test.describe('v1.5 핵심 발견성과 반응형', () => {
     const transcriptionRequest = page.waitForRequest(request =>
       new URL(request.url()).pathname === '/api/transcribe' && request.method() === 'POST'
     );
-    await page.locator('#scenarioConfirm').click();
+    await page.locator('#scenarioTranscribeOnly').click();
     const request = await transcriptionRequest;
     expect(request.postData() || '').toContain('name="language"');
     expect(request.postData() || '').toContain('auto');
@@ -260,12 +275,9 @@ test.describe('v1.5 핵심 발견성과 반응형', () => {
     await expect(page.locator('#scenarioModal')).not.toHaveClass(/open/);
   });
 
-  test('빈 작업함은 무응답 대신 명확한 빈 상태를 보인다', async ({ page }) => {
+  test('빈 작업함은 불필요한 고정 버튼을 표시하지 않는다', async ({ page }) => {
     await openApp(page);
-    await page.getByTestId('job-center-toggle').click();
-    await expect(page.getByTestId('job-center')).toHaveAttribute('aria-hidden', 'false');
-    await expect(page.locator('#jobCenterList')).toContainText('진행 중인 작업이 없습니다');
-    await page.getByRole('button', { name: '작업함 닫기' }).click();
+    await expect(page.getByTestId('job-center-toggle')).toBeHidden();
     await expect(page.getByTestId('job-center')).toHaveAttribute('aria-hidden', 'true');
   });
 
@@ -304,26 +316,15 @@ test.describe('v1.5 핵심 발견성과 반응형', () => {
     await expect(page.locator('#view-result #info')).not.toContainText('[Speaker 1]');
   });
 
-  test('설치본 데이터 삭제는 범위를 정확히 알리고 브라우저 데이터를 정리한다', async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem('ai_pronote.trash.v1', '[{"id":"private"}]');
-      localStorage.setItem('pronote_claude_override', 'legacy');
-    });
+  test('데이터 삭제는 위험 작업 안에 접고 계정 확인을 요구한다', async ({ page }) => {
     await openApp(page);
     await openNavView(page, 'admin');
-    await page.locator('#view-admin .admin-card[data-admin="account"]').click();
-    const deleteButton = page.locator('#acctDelete');
-    await expect(deleteButton).toHaveText('이 기기의 AI PRONOTE 데이터 영구 삭제');
-    await deleteButton.click();
-    const firstConfirm = page.getByRole('dialog', { name: '이 기기의 데이터 영구 삭제' });
-    await expect(firstConfirm).toBeVisible();
-    await firstConfirm.getByRole('button', { name: '삭제 계속' }).click();
-    const finalConfirm = page.getByRole('dialog', { name: '마지막 확인' });
-    await expect(finalConfirm).toBeVisible();
-    await finalConfirm.getByRole('button', { name: '영구 삭제' }).click();
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('ai_pronote.trash.v1'))).toBeNull();
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('pronote_claude_override'))).toBeNull();
-    await expect(deleteButton).not.toHaveAttribute('aria-busy', 'true');
+    await page.locator('#view-admin .admin-card[data-admin="privacy"]').click();
+    await expect(page.locator('#privacyDeleteOptions')).toBeHidden();
+    await page.locator('#adminModalBody details > summary').click();
+    await expect(page.locator('#privacyDeleteOptions')).toBeVisible();
+    await page.locator('#privacyDeleteOptions').click();
+    await expect(page.locator('#toast')).toContainText('로그인한 계정에서 삭제 옵션');
   });
 
   test('안전한 진단정보는 회의 내용·제목·파일명·비밀정보 없이 내려받는다', async ({ page }) => {
@@ -364,7 +365,7 @@ test.describe('작업함 상태와 오류 복구', () => {
     await expect(page.locator('[data-job-id="e2e-running"]')).toContainText('42%');
     await expect(page.locator('[data-job-id="e2e-running"]')).toContainText('약 3분 남음');
     await expect(page.locator('[data-job-id="e2e-error"]')).toContainText('지원하지 않는 오디오');
-    await expect(page.locator('[data-job-id="e2e-error"] button')).toHaveText('다시 시도');
+    await expect(page.locator('[data-job-id="e2e-error"] button')).toHaveText('작업 다시 시작');
   });
 });
 
@@ -436,7 +437,10 @@ test.describe('라이브러리 재열기 회귀', () => {
       if (url.pathname === '/api/results/legacy%2Fresult-%EC%8B%A4%ED%8C%A8') return json({ detail: 'temporary' }, 503);
       if (url.pathname === '/api/health') return json({ status: 'ok', version: 'v1.5.0-p0' });
       if (url.pathname === '/api/jobs' || url.pathname === '/api/pending') return json([]);
-      if (url.pathname === '/api/auth/config') return json({ auth_enabled: false });
+      if (url.pathname === '/api/auth/config') return json({
+        auth_enabled: false, bypassAuth: true,
+        supabaseUrl: 'https://e2e.invalid', supabaseAnonKey: 'e2e-public-anon-key'
+      });
       if (url.pathname === '/api/llm/status') return json({ available: false, provider: 'none' });
       if (url.pathname === '/api/v15/providers') return json({ providers: [], experimental_cli: false });
       return json({ detail: 'not found' }, 404);
@@ -471,9 +475,9 @@ test.describe('라이브러리 재열기 회귀', () => {
     expect(restored.transcribed).toBe(true);
     expect(restored.transcript).toContain('구버전 결과 복구');
     expect(restored.hasBlob).toBe(true);
-    await card.getByRole('button', { name: /회의록/ }).click();
-    await expect(page.locator('#scenarioModal')).toHaveClass(/open/);
-    await expect(page.getByRole('heading', { name: '어떤 문서로 정리할까요?' })).toBeVisible();
+    await card.getByRole('button', { name: /원문 보기/ }).click();
+    await expect(page.locator('#view-result')).toHaveClass(/active/);
+    await expect(page.locator('[data-result-target="transcript"]')).toHaveAttribute('aria-pressed', 'true');
   });
 });
 
@@ -491,7 +495,8 @@ test.describe('회의 결과 주요 행동', () => {
       });
     });
     await openApp(page);
-    await page.evaluate(() => window.switchView?.('result'));
+    await openSyntheticMeetingResult(page);
+    await page.locator('details.result-more-actions > summary').click();
     await expect(page.locator('#resultEditBtn')).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('#view-result .result-title')).toHaveAttribute('contenteditable', 'false');
     await page.locator('#resultEditBtn').click();
@@ -591,6 +596,10 @@ test.describe('필기 저장·복원 계약', () => {
     await expect(page.locator('#mynoteSaveState')).toContainText('저장됨', { timeout: 3000 });
 
     for (const format of ['txt', 'md', 'html', 'png', 'native']) {
+      const more = page.locator('details.mynote-toolbar-menu').filter({ has: page.locator('summary[aria-label="노트 더보기"]') });
+      if (!await more.evaluate((element: HTMLDetailsElement) => element.open)) {
+        await more.locator('summary').click();
+      }
       const downloadPromise = page.waitForEvent('download');
       await page.locator('#mynoteExportSelect').selectOption(format);
       const download = await downloadPromise;
@@ -602,6 +611,10 @@ test.describe('필기 저장·복원 계약', () => {
       Object.defineProperty(navigator, 'share', { configurable: true, value: undefined });
       Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { (window as typeof window & { __sharedNote?: string }).__sharedNote = value; } } });
     });
+    const more = page.locator('details.mynote-toolbar-menu').filter({ has: page.locator('summary[aria-label="노트 더보기"]') });
+    if (!await more.evaluate((element: HTMLDetailsElement) => element.open)) {
+      await more.locator('summary').click();
+    }
     await page.locator('#mynoteShareBtn').click();
     expect(await page.evaluate(() => (window as typeof window & { __sharedNote?: string }).__sharedNote)).toContain('문서 저장과 보내기 점검 본문');
   });
@@ -654,6 +667,7 @@ test.describe('필기 저장·복원 계약', () => {
       }]);
     });
     await openNavView(page, 'result-mynote');
+    await page.locator('summary[aria-label="노트 더보기"]').click();
     await expect(page.locator('#mynoteBackupAllBtn')).toBeVisible();
     const downloadPromise = page.waitForEvent('download');
     await page.locator('#mynoteBackupAllBtn').click();
@@ -740,6 +754,7 @@ test.describe('필기 저장·복원 계약', () => {
     await page.locator('#homeNoteOnlyCard').click();
     await expect(page.locator('#view-result')).toHaveClass(/active/);
     await page.locator('#mynoteBlockContent').fill(Array.from({ length: 170 }, (_, i) => `길이 점검 문장 ${i}`).join('\n'));
+    await page.locator('summary[aria-label="노트 더보기"]').click();
     await page.locator('#mynoteExportSelect').selectOption('png');
     await expect(page.locator('#toast')).toContainText('PDF 또는 HTML');
   });
@@ -758,6 +773,7 @@ test.describe('필기 저장·복원 계약', () => {
     });
     const finalLine = '마지막 줄도 반드시 포함';
     await page.locator('#mynoteBlockContent').fill([...Array.from({ length: 20 }, (_, i) => `본문 ${i}`), finalLine].join('\n'));
+    await page.locator('summary[aria-label="노트 더보기"]').click();
     const downloadPromise = page.waitForEvent('download');
     await page.locator('#mynoteExportSelect').selectOption('png');
     await downloadPromise;
@@ -1079,22 +1095,23 @@ test.describe('AI 연결 구분', () => {
     await mockBackend(page);
     await openApp(page);
     await openNavView(page, 'admin');
-    await expect(page.getByRole('heading', { name: 'AI 연결 · 개인 API 키' })).toBeVisible();
-    await expect(page.locator('#officialProviderSelect')).toContainText('OpenAI (ChatGPT API)');
-    await expect(page.locator('#officialProviderSelect')).toContainText('Google Gemini API');
-    await expect(page.locator('#officialProviderSelect')).toContainText('Anthropic (Claude API)');
+    await expect(page.getByRole('heading', { name: 'AI 계정' })).toBeVisible();
+    await expect(page.locator('#aiAccountSelect')).toContainText('Claude');
+    await expect(page.locator('#aiAccountSelect')).toContainText('ChatGPT');
+    await expect(page.locator('#aiAccountSelect')).toContainText('Gemini');
     await expect(page.locator('#providerConsent')).not.toBeChecked();
-    await expect(page.locator('#experimentalCliPanel')).toBeVisible();
-    await expect(page.locator('#experimentalCliStatuses')).toContainText('Codex CLI (실험)');
-    await expect(page.locator('#experimentalCliStatuses')).toContainText('Claude CLI (실험)');
-    await expect(page.locator('#experimentalCliStatuses')).not.toContainText('Gemini CLI (실험)');
-    await expect(page.locator('#experimentalCliStatuses')).toContainText(/로그인 필요|미설치/);
+    await page.getByText('개발자용 연결', { exact: true }).click();
+    await expect(page.locator('#officialProviderSelect')).toContainText('OpenAI API');
+    await expect(page.locator('#officialProviderSelect')).toContainText('Google Gemini API');
+    await expect(page.locator('#officialProviderSelect')).toContainText('Anthropic API');
+    await expect(page.locator('#experimentalCliPanel')).toBeHidden();
   });
 
   test('공식 AI 선택·동의·키 연결을 저장하되 API 키는 브라우저에 남기지 않는다', async ({ page }) => {
     await mockBackend(page);
     await openApp(page);
     await openNavView(page, 'admin');
+    await page.getByText('개발자용 연결', { exact: true }).click();
     await page.locator('#officialProviderSelect').selectOption('gemini');
     await page.locator('#providerConsent').check();
     await page.locator('#officialApiKey').fill('private-e2e-key-value');
@@ -1173,7 +1190,7 @@ test.describe('버전 표시와 자동 업데이트 안내', () => {
       });
     });
     await openApp(page);
-    await expect(page.locator('#appVersionLabel')).toContainText('v1.5.0-beta13.20260920.4');
+    await expect(page.locator('#appVersionLabel')).toHaveText('AI PRONOTE 1.0');
     await expect(page.locator('#updateAvailableModal')).toHaveClass(/open/);
     await expect(page.locator('#updateAvailableVersion')).toContainText('1.5.0-beta13.20260921');
     expect(prepared).toBeFalsy();
