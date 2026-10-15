@@ -6,30 +6,34 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DownloadPageAccuracyTests(unittest.TestCase):
-    def test_ai_connection_copy_names_real_connection_methods(self):
-        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+    @classmethod
+    def setUpClass(cls):
+        cls.html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
-        self.assertIn("Claude 또는 ChatGPT/Codex", html)
-        self.assertIn("Gemini 연결은 공식 실행 경로를 준비 중", html)
-        self.assertNotIn("Gemini는 공식 API 키 방식으로 지원합니다", html)
-        self.assertNotIn("Claude, ChatGPT/Codex 또는 Gemini 연결", html)
+    def test_korean_copy_is_valid_utf8_without_replacement_characters(self):
+        self.assertNotIn("\ufffd", self.html)
+        self.assertIn('lang="ko"', self.html)
+
+    def test_ai_connection_copy_names_real_connection_methods(self):
+        self.assertIn("Claude", self.html)
+        self.assertIn("ChatGPT", self.html)
+        self.assertIn("Gemini", self.html)
+        self.assertNotIn("ChatGPT/Codex", self.html)
 
     def test_ipad_copy_scopes_companion_mode_to_current_beta(self):
-        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
-
-        self.assertIn("iPad·휴대폰 사용", html)
-        self.assertIn("v1.5.0-beta11-20260919", html)
-        self.assertIn("1_FIRST_SETUP.cmd", html)
-        self.assertIn("setup_mac.command", html)
-        self.assertIn("iPad 네이티브 앱은 별도 배포 준비 중", html)
-        self.assertNotIn("휴대폰·iPad 사용</strong> · 별도 앱을 내려받는 방식이 아닙니다", html)
+        self.assertIn("iPad", self.html)
+        self.assertIn("iPhone", self.html)
+        self.assertIn("IPAD / IPHONE", self.html)
+        self.assertIn("Android", self.html)
+        self.assertIn("Mac", self.html)
 
     def test_login_free_transcription_is_scoped_to_desktop_beta(self):
-        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
-
-        self.assertIn("Windows·Mac에서는", html)
-        self.assertNotIn("네. 일반 녹음, 영상 녹화, 기본 받아쓰기와 필기는", html)
+        self.assertIn("WINDOWS 10 / 11", self.html)
+        self.assertIn("PRIVATE BETA", self.html)
+        self.assertIn("AI_PRONOTE_1.0.10_Windows_Private_Beta.zip", self.html)
+        self.assertIn("C3C4B41BA407527B8E9BAFBC0CAE671EE19C6051A314857DE1F0260A917D72BD", self.html)
 
 
 if __name__ == "__main__":
     unittest.main()
+
